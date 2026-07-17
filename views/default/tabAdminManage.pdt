@@ -7,6 +7,12 @@
         </div>
     <?php } ?>
 
+    <?php if (($service_fields->virtfusion_restart_required ?? 'false') === 'true') { ?>
+        <div class="alert alert-warning">
+            <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.restart_recommended', true)); ?>
+        </div>
+    <?php } ?>
+
     <?php if (isset($server_info)) { ?>
         <div class="row">
             <div class="col-md-6 service-info">

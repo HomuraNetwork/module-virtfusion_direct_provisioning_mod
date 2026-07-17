@@ -110,5 +110,20 @@ The following configurable option names map directly to the current VirtFusion c
 
 Build and post-create options retained from the previous customized module include `virtfusion-ssh_keys`, `virtfusion-vnc`, `virtfusion-email`, `virtfusion-swap`, `virtfusion-backup_plan_id`, and `virtfusion-cpu_throttle`.
 
+### Service upgrades and downgrades
+
+Blesta's normal Service Changes flow calculates proration, validates the requested change before invoicing, and applies the module change after payment when queued service changes are enabled.
+
+- `memory` is updated through `PUT /servers/{serverId}/modify/memory`.
+- `cpuCores` is updated through `PUT /servers/{serverId}/modify/cpuCores`.
+- `traffic` is updated through `PUT /servers/{serverId}/modify/traffic`.
+- `additional_bandwidth` remains an additive allowance on top of the selected VirtFusion package traffic.
+- Blesta/VirtFusion package changes can upgrade or downgrade CPU, memory, traffic, and other package resources.
+- A package downgrade never shrinks the primary disk. The current disk size is retained while the other package resources are changed.
+- Primary disk growth is supported through a VirtFusion package change. The current API does not expose an arbitrary disk-size modification endpoint, so changing a `storage` configurable option after creation is rejected before an invoice is generated.
+- Custom `virtfusion-port_speed` values are preserved across package changes. Editing a custom port speed after creation is rejected because the current API does not expose a documented network-speed modification endpoint.
+
+Package, memory, and CPU changes set a persistent restart recommendation instead of forcing an immediate reboot. The recommendation is cleared after a successful restart from the module's Manage tab.
+
 ### Reselling bandwidth
 The traffic (bandwidth) management feature requires VirtFusion version 6 or later.

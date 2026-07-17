@@ -70,6 +70,19 @@ $lang['VirtfusionDirectProvisioningMod.!error.meta[default_ipv4].valid'] = 'Inva
 $lang['VirtfusionDirectProvisioningMod.!error.meta[package_id].valid'] = 'Invalid package id.';
 $lang['VirtfusionDirectProvisioningMod.!error.server_id.valid'] = 'Invalid server ID.';
 $lang['VirtfusionDirectProvisioningMod.!error.label.valid'] = 'Invalid service label.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.numeric'] = 'The %1$s configurable option must be numeric.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.memory.minimum'] = 'Memory must be at least 256 MB.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu.minimum'] = 'CPU cores must be at least 1.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum'] = 'Traffic must be zero or greater.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.port_speed.edit'] = 'VirtFusion does not provide a documented API for changing a custom port speed after creation. Change to a VirtFusion package with the required network speed instead.';
+$lang['VirtfusionDirectProvisioningMod.!error.storage.downgrade'] = 'Primary disk storage cannot be reduced.';
+$lang['VirtfusionDirectProvisioningMod.!error.storage.package_required'] = 'VirtFusion only exposes primary disk expansion through a package change. Disk growth cannot be applied from a storage configurable option; select a larger package without changing this option.';
+$lang['VirtfusionDirectProvisioningMod.!error.resource.current'] = 'The current VirtFusion server resources could not be retrieved.';
+$lang['VirtfusionDirectProvisioningMod.!error.resource.memory'] = 'VirtFusion did not accept the memory change.';
+$lang['VirtfusionDirectProvisioningMod.!error.resource.cpu'] = 'VirtFusion did not accept the CPU core change.';
+$lang['VirtfusionDirectProvisioningMod.!error.resource.traffic'] = 'VirtFusion did not accept the traffic allowance change.';
+$lang['VirtfusionDirectProvisioningMod.!error.package.target'] = 'The target VirtFusion package could not be retrieved.';
+$lang['VirtfusionDirectProvisioningMod.!error.package.change'] = 'VirtFusion did not accept the package change.';
 
 // Client Errors
 $lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
@@ -101,6 +114,7 @@ $lang['VirtfusionDirectProvisioningMod.tabManage.reset_password'] = 'Reset Passw
 $lang['VirtfusionDirectProvisioningMod.tabManage.vnc_console'] = 'VNC Console';
 $lang['VirtfusionDirectProvisioningMod.tabManage.action_success'] = 'The action was successful.';
 $lang['VirtfusionDirectProvisioningMod.tabManage.reset_password_success'] = 'The action was successful. The new password is:';
+$lang['VirtfusionDirectProvisioningMod.restart_recommended'] = 'The server resources were changed. A restart is recommended to apply all changes.';
 
 
 // Manage IP Address

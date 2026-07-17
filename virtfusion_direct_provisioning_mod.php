@@ -119,6 +119,79 @@ class VirtfusionDirectProvisioningMod extends Module
         return $service_fields;
     }
 
+    private function apiRequestSucceeded($request, array $status_codes)
+    {
+        return isset($request['info']['http_code'])
+            && in_array((int) $request['info']['http_code'], $status_codes, true);
+    }
+
+    private function getPrimaryStorage($server_data)
+    {
+        foreach (($server_data->data->storage ?? []) as $storage) {
+            if (!empty($storage->primary)) {
+                return (int) $storage->capacity;
+            }
+        }
+
+        if (isset($server_data->data->settings->resources->storage)) {
+            return (int) $server_data->data->settings->resources->storage;
+        }
+
+        return null;
+    }
+
+    private function getServiceConfigOptionValue($service, $option_name)
+    {
+        foreach (($service->options ?? []) as $option) {
+            if (($option->option_name ?? null) !== $option_name) {
+                continue;
+            }
+
+            return ($option->option_type ?? null) === 'quantity'
+                ? ($option->qty ?? null)
+                : ($option->value ?? $option->option_value ?? null);
+        }
+
+        return null;
+    }
+
+    private function requestedPortSpeed(array $config_options)
+    {
+        foreach (self::PORT_SPEED_OPTIONS as $option_name) {
+            if (array_key_exists($option_name, $config_options)) {
+                return $config_options[$option_name];
+            }
+        }
+
+        return null;
+    }
+
+    private function currentPortSpeed($service)
+    {
+        foreach (self::PORT_SPEED_OPTIONS as $option_name) {
+            $value = $this->getServiceConfigOptionValue($service, $option_name);
+            if ($value !== null) {
+                return $value;
+            }
+        }
+
+        return null;
+    }
+
+    private function setRestartRecommended($service_id, $recommended)
+    {
+        if (empty($service_id)) {
+            return;
+        }
+
+        Loader::loadModels($this, ['Services']);
+        $this->Services->editField($service_id, [
+            'key' => 'virtfusion_restart_required',
+            'value' => $recommended ? 'true' : 'false',
+            'encrypted' => false
+        ]);
+    }
+
     private function moduleHasOwnedData($module_id)
     {
         foreach (['module_rows', 'module_groups', 'module_meta', 'packages'] as $table) {
@@ -1293,7 +1366,29 @@ class VirtfusionDirectProvisioningMod extends Module
         if ($vars['use_module'] == 'true') {
             // we need the api
             if ($module_row = $this->getModuleRow()) {
-                $this->updateTraffic($module_row, $service_fields, $package, $vars['configoptions']['additional_bandwidth'] ?? 0);
+                $config_options = $vars['configoptions'] ?? [];
+                if (array_key_exists('traffic', $config_options)) {
+                    $data = $this->updatePrimaryTraffic(
+                        $module_row,
+                        $service_fields,
+                        $config_options['traffic']
+                    );
+                    if (!empty($data['errors']['err_msg'])) {
+                        $this->Input->setErrors(['api' => ['response' => $data['errors']['err_msg']]]);
+                        return;
+                    }
+                } elseif (array_key_exists('additional_bandwidth', $config_options)) {
+                    $data = $this->updateTraffic(
+                        $module_row,
+                        $service_fields,
+                        $package,
+                        $config_options['additional_bandwidth']
+                    );
+                    if (!empty($data['errors']['err_msg'])) {
+                        $this->Input->setErrors(['api' => ['response' => $data['errors']['err_msg']]]);
+                        return;
+                    }
+                }
                 
                 $data = $this->adjustIpAddresses($module_row, $service_fields, $vars);
 
@@ -1326,7 +1421,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         // Return all the service fields
-        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_backup_plan_id', 'virtfusion_vnc', 'virtfusion_cpu_throttle'];
+        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_backup_plan_id', 'virtfusion_vnc', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
         $encrypted_fields = ['virtfusion_password'];
         $return = [];
         foreach ($fields as $field) {
@@ -1535,7 +1630,149 @@ class VirtfusionDirectProvisioningMod extends Module
     public function validateServiceEdit($service, array $vars = null)
     {
         $this->Input->setRules($this->getServiceRules($vars, true, null));
-        return $this->Input->validates($vars);
+        if (!$this->Input->validates($vars)) {
+            return false;
+        }
+
+        if (($vars['use_module'] ?? 'true') !== 'true') {
+            return true;
+        }
+
+        $config_options = $vars['configoptions'] ?? [];
+        foreach (['memory', 'cpuCores', 'traffic', 'storage'] as $option_name) {
+            if (isset($config_options[$option_name])
+                && $config_options[$option_name] !== ''
+                && !is_numeric($config_options[$option_name])) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        $option_name => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.numeric', true, $option_name)
+                    ]
+                ]);
+                return false;
+            }
+        }
+
+        if (isset($config_options['memory']) && $config_options['memory'] !== ''
+            && (int) $config_options['memory'] < 256) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    'memory' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.memory.minimum', true)
+                ]
+            ]);
+            return false;
+        }
+
+        if (isset($config_options['cpuCores']) && $config_options['cpuCores'] !== ''
+            && (int) $config_options['cpuCores'] < 1) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    'cpuCores' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.cpu.minimum', true)
+                ]
+            ]);
+            return false;
+        }
+
+        if (isset($config_options['traffic']) && $config_options['traffic'] !== ''
+            && (int) $config_options['traffic'] < 0) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    'traffic' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum', true)
+                ]
+            ]);
+            return false;
+        }
+
+        $requested_port_speed = $this->requestedPortSpeed($config_options);
+        if ($requested_port_speed !== null
+            && (string) $requested_port_speed !== (string) $this->currentPortSpeed($service)) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    'port_speed' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.port_speed.edit', true)
+                ]
+            ]);
+            return false;
+        }
+
+        $package_changed = isset($vars['pricing_id']) && $vars['pricing_id'] != $service->pricing_id;
+        if (!array_key_exists('storage', $config_options) && !$package_changed) {
+            return true;
+        }
+
+        $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
+        if (!isset($service_fields->virtfusion_server_id)) {
+            return true;
+        }
+
+        $row = $this->getModuleRow($service->module_row_id ?? null);
+        if (!$row) {
+            $this->Input->setErrors([
+                'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.module_row.missing', true)]
+            ]);
+            return false;
+        }
+
+        $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+        $server_request = $api->get_query('servers/' . $service_fields->virtfusion_server_id);
+        if (!$this->apiRequestSucceeded($server_request, [200])) {
+            $this->Input->setErrors([
+                'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)]
+            ]);
+            return false;
+        }
+
+        $server_data = json_decode($server_request['response']);
+        $current_storage = $this->getPrimaryStorage($server_data);
+        $package_storage = null;
+        if ($package_changed) {
+            Loader::loadModels($this, ['Packages']);
+            $target_package = $this->Packages->getByPricingId($vars['pricing_id']);
+            $target_package_id = $target_package
+                ? ($target_package->meta->package_id ?? null)
+                : null;
+
+            if (!$target_package_id) {
+                $this->Input->setErrors([
+                    'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.package.target', true)]
+                ]);
+                return false;
+            }
+
+            $package_request = $api->get_query('packages/' . $target_package_id);
+            if (!$this->apiRequestSucceeded($package_request, [200])) {
+                $this->Input->setErrors([
+                    'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.package.target', true)]
+                ]);
+                return false;
+            }
+
+            $package_data = json_decode($package_request['response']);
+            $package_storage = isset($package_data->data->primaryStorage)
+                ? (int) $package_data->data->primaryStorage
+                : null;
+        }
+
+        if (isset($config_options['storage']) && $config_options['storage'] !== '' && $current_storage !== null) {
+            $requested_storage = (int) $config_options['storage'];
+            if ($requested_storage < $current_storage) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'storage' => Language::_('VirtfusionDirectProvisioningMod.!error.storage.downgrade', true)
+                    ]
+                ]);
+                return false;
+            }
+
+            if ($requested_storage > $current_storage) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'storage' => Language::_('VirtfusionDirectProvisioningMod.!error.storage.package_required', true)
+                    ]
+                ]);
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -1614,50 +1851,79 @@ class VirtfusionDirectProvisioningMod extends Module
                 $server_api = new VirtfusionServer($api);
 
                 $server_info = $api->get_query("servers/$server_id");
-                $this->log($row->meta->hostname . '| client get server', serialize($server_info), 'output', $server_info['info']['http_code'] == 200);
+                $this->log(
+                    $row->meta->hostname . '| client get server',
+                    serialize($server_info),
+                    'output',
+                    $this->apiRequestSucceeded($server_info, [200])
+                );
 
-                if (isset($server_info['info']) && $server_info['info']['http_code'] == '200') {
+                if ($this->apiRequestSucceeded($server_info, [200])) {
                     $server_data = json_decode($server_info['response']);
-
-                    // get old primary storage
-                    $primary_storage = null;
-                    $new_primary_storage = null;
-
-                    foreach ($server_data->data->storage as $storage) {
-                        if ($storage->primary) {
-                            $primary_storage = $storage->capacity;
-                        }
-                    }
+                    $primary_storage = $this->getPrimaryStorage($server_data);
 
                     $new_pkg_id = $package_to->meta->package_id;
                     $pkg_response = $api->get_query("packages/$new_pkg_id");
-                    $this->log($row->meta->hostname . '| client get pkg', serialize($pkg_response), 'output', $pkg_response['info']['http_code'] == 200);
+                    $this->log(
+                        $row->meta->hostname . '| client get pkg',
+                        serialize($pkg_response),
+                        'output',
+                        $this->apiRequestSucceeded($pkg_response, [200])
+                    );
 
-                    // issue geting pkg data, log and exit
-                    if (isset($pkg_response['info']) && $pkg_response['info']['http_code'] != 200) {
-                        $this->Input->setErrors(['api' => ['response' => 'Error:' . $pkg_response['info']['http_code'] . ' Could not upgrade server.']]);
+                    if (!$this->apiRequestSucceeded($pkg_response, [200])) {
+                        $this->Input->setErrors([
+                            'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.package.target', true)]
+                        ]);
                         return null;
                     }
 
                     $pkg_data = json_decode($pkg_response['response']);
-                    $new_primary_storage = $pkg_data->data->primaryStorage;
+                    $new_primary_storage = isset($pkg_data->data->primaryStorage)
+                        ? (int) $pkg_data->data->primaryStorage
+                        : null;
 
-                    // cannot downgrade
-                    if (is_null($primary_storage) || $primary_storage > $new_primary_storage) {
-                        $this->log($row->meta->hostname . '| client upgrade storage', 'possible downgrade attempt', 'output', false);
-                        $this->Input->setErrors(['api' => ['response' => 'Error:Storage Could not upgrade server.']]);
+                    if ($primary_storage === null || $new_primary_storage === null) {
+                        $this->Input->setErrors([
+                            'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)]
+                        ]);
                         return null;
                     }
 
                     $api->loadCommand('virtfusion_server');
                     $server_api = new VirtfusionServer($api);
 
-                    $server_pkg_data = $server_api->changePkg($server_id, $new_pkg_id);
-                    $server_response = json_decode($server_pkg_data['response']);
-                    $this->log($row->meta->hostname . '| client upgrade server', serialize($server_pkg_data), 'output', $server_pkg_data['info']['http_code'] == 200);
+                    $package_changes = [
+                        'backupPlan' => $this->getServiceConfigOptionValue(
+                            $service,
+                            'virtfusion-backup_plan_id'
+                        ) === null,
+                        'cpu' => $this->getServiceConfigOptionValue($service, 'cpuCores') === null,
+                        'memory' => $this->getServiceConfigOptionValue($service, 'memory') === null,
+                        'primaryDiskReadIOPS' => true,
+                        'primaryDiskReadThroughput' => true,
+                        'primaryDiskSize' => $this->getServiceConfigOptionValue($service, 'storage') === null
+                            && $new_primary_storage >= $primary_storage,
+                        'primaryDiskWriteIOPS' => true,
+                        'primaryDiskWriteThroughput' => true,
+                        'primaryNetworkInboundSpeed' => $this->currentPortSpeed($service) === null,
+                        'primaryNetworkOutboundSpeed' => $this->currentPortSpeed($service) === null,
+                        'primaryNetworkTraffic' => $this->getServiceConfigOptionValue($service, 'traffic') === null
+                            && $this->getServiceConfigOptionValue($service, 'additional_bandwidth') === null
+                    ];
+                    $server_pkg_data = $server_api->changePkg($server_id, $new_pkg_id, $package_changes);
+                    $server_response = json_decode($server_pkg_data['response'] ?? '');
+                    $this->log(
+                        $row->meta->hostname . '| client upgrade server',
+                        serialize($server_pkg_data),
+                        'output',
+                        $this->apiRequestSucceeded($server_pkg_data, [200])
+                    );
 
-                    if ($server_pkg_data['info']['http_code'] != '200') {
-                        $msg = isset($server_response->errors) ? implode('<br />', $server_response->errors) : 'Error:' . $server_pkg_data['info']['http_code'] . ' Could not upgrade server.';
+                    if (!$this->apiRequestSucceeded($server_pkg_data, [200])) {
+                        $msg = isset($server_response->errors)
+                            ? implode('<br />', $server_response->errors)
+                            : Language::_('VirtfusionDirectProvisioningMod.!error.package.change', true);
 
                         $this->Input->setErrors(['api' => ['response' => $msg]]);
                         return null;
@@ -1670,17 +1936,30 @@ class VirtfusionDirectProvisioningMod extends Module
                     $current_traffic = (int)($server_data->data->settings->resources->traffic ?? 0);
 
                     if ($current_traffic > $package_traffic_from) {
-                        // git diff, rest handled in update traffic
                         $additional_traffic = $current_traffic - $package_traffic_from;
-                        $this->updateTraffic($row, $service_fields, $package_to, $additional_traffic);
+                        $traffic_result = $this->updateTraffic(
+                            $row,
+                            $service_fields,
+                            $package_to,
+                            $additional_traffic
+                        );
+                        if (!empty($traffic_result['errors']['err_msg'])) {
+                            $this->Input->setErrors([
+                                'api' => ['response' => $traffic_result['errors']['err_msg']]
+                            ]);
+                            return null;
+                        }
                     }
-                    
-                    // auto reboot
-                    $restart_data = $server_api->powerAction($server_id, 'restart');
-                    $this->log($row->meta->hostname . '| client restart server', serialize($restart_data), 'output', $restart_data['info']['http_code'] == 200);
+
+                    return [[
+                        'key' => 'virtfusion_restart_required',
+                        'value' => 'true',
+                        'encrypted' => 0
+                    ]];
                 } else {
-                    $this->log($row->meta->hostname . '| client get server', serialize($server_info), 'output', $server_info['info']['http_code'] == 200);
-                    $this->Input->setErrors(['api' => ['response' => $server_info['info']['http_code']]]);
+                    $this->Input->setErrors([
+                        'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)]
+                    ]);
                     return null;
                 }
             } catch (\Throwable $e) {
@@ -1866,6 +2145,10 @@ class VirtfusionDirectProvisioningMod extends Module
                 if (!$success) {
                     $this->Input->setErrors(['api' => ['response' => 'The power action was unsuccessful.']]);
                     return null;
+                }
+
+                if ($action === 'restart') {
+                    $this->setRestartRecommended($service->id, false);
                 }
 
                 return Language::_('VirtfusionDirectProvisioningMod.tabManage.action_success', true);
@@ -2300,30 +2583,79 @@ class VirtfusionDirectProvisioningMod extends Module
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
 
-        // get server
-        $vf_server_request = $server_api->get( $service_fields->virtfusion_server_id );
-        $vf_server_data = json_decode($vf_server_request['response'] ?? []);
-        
-        // get pkg
-        $vf_pkg_request = $server_api->getPkg( $package->meta->package_id );
-        $vf_pkg_data = json_decode($vf_pkg_request['response'] ?? []);
-
-
-        $current_traffic = (int)($vf_server_data->data->settings->resources->traffic ?? 0);
-        $package_traffic = (int)($vf_pkg_data->data->traffic);
-        $additional_traffic = (int)($additional_traffic ?? 0);
-
-        $response = null;
-        // reset if going down to zero
-        if ($additional_traffic == 0 && $current_traffic - $package_traffic !== $additional_traffic) {
-            $response = $server_api->modifyPrimaryTraffic( $service_fields->virtfusion_server_id, [ 'traffic' => $package_traffic ] );
-        } else if ($current_traffic - $package_traffic !== $additional_traffic) {
-            // do package traffic + additional so we dont have to worry about plus/minus
-            $new_traffic = $package_traffic + $additional_traffic;
-            $response = $server_api->modifyPrimaryTraffic( $service_fields->virtfusion_server_id, [ 'traffic' => $new_traffic ] );
+        $vf_server_request = $server_api->get($service_fields->virtfusion_server_id);
+        $vf_pkg_request = $server_api->getPkg($package->meta->package_id);
+        if (!$this->apiRequestSucceeded($vf_server_request, [200])
+            || !$this->apiRequestSucceeded($vf_pkg_request, [200])) {
+            return [
+                'errors' => [
+                    'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)
+                ]
+            ];
         }
 
-        return $response;
+        $vf_server_data = json_decode($vf_server_request['response']);
+        $vf_pkg_data = json_decode($vf_pkg_request['response']);
+        $package_traffic = (int) ($vf_pkg_data->data->traffic ?? 0);
+        $additional_traffic = (int)($additional_traffic ?? 0);
+
+        return $this->updatePrimaryTraffic(
+            $module_row,
+            $service_fields,
+            $package_traffic + $additional_traffic,
+            $vf_server_data
+        );
+    }
+
+    private function updatePrimaryTraffic($module_row, $service_fields, $traffic, $server_data = null)
+    {
+        if (!is_numeric($traffic) || (int) $traffic < 0) {
+            return [
+                'errors' => [
+                    'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum', true)
+                ]
+            ];
+        }
+
+        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api->loadCommand('virtfusion_server');
+        $server_api = new VirtfusionServer($api);
+        $server_id = $service_fields->virtfusion_server_id;
+
+        if ($server_data === null) {
+            $server_request = $server_api->get($server_id);
+            if (!$this->apiRequestSucceeded($server_request, [200])) {
+                return [
+                    'errors' => [
+                        'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)
+                    ]
+                ];
+            }
+            $server_data = json_decode($server_request['response']);
+        }
+
+        $traffic = (int) $traffic;
+        $current_traffic = (int) ($server_data->data->settings->resources->traffic ?? 0);
+        if ($current_traffic === $traffic) {
+            return ['errors' => ['err_msg' => '']];
+        }
+
+        $response = $server_api->modifyPrimaryTraffic($server_id, ['traffic' => $traffic]);
+        $success = $this->apiRequestSucceeded($response, [200, 201, 204]);
+        $this->log(
+            $module_row->meta->hostname . '| modify traffic',
+            serialize($response),
+            'output',
+            $success
+        );
+
+        return [
+            'errors' => [
+                'err_msg' => $success
+                    ? ''
+                    : Language::_('VirtfusionDirectProvisioningMod.!error.resource.traffic', true)
+            ]
+        ];
     }
 
     private function applyConfigurableServerOptions($module_row, $service_fields, array $vars)
@@ -2343,7 +2675,66 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_api = new VirtfusionServer($api);
         $server_id = $service_fields->virtfusion_server_id;
 
-        if (isset($vars['configoptions']['virtfusion-backup_plan_id'])) {
+        $resource_options = array_intersect_key(
+            $vars['configoptions'],
+            array_flip(['memory', 'cpuCores'])
+        );
+        if (!empty($resource_options)) {
+            $server_request = $server_api->get($server_id);
+            if (!$this->apiRequestSucceeded($server_request, [200])) {
+                return [
+                    'service_fields' => $updated_fields,
+                    'errors' => [
+                        'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.resource.current', true)
+                    ]
+                ];
+            }
+
+            $server_data = json_decode($server_request['response']);
+            $current_resources = $server_data->data->settings->resources ?? new stdClass();
+
+            if (isset($resource_options['memory']) && $resource_options['memory'] !== '') {
+                $memory = (int) $resource_options['memory'];
+                if ((int) ($current_resources->memory ?? 0) !== $memory) {
+                    $request = $server_api->modifyMemory($server_id, $memory);
+                    $success = $this->apiRequestSucceeded($request, [201]);
+                    $this->log(
+                        $module_row->meta->hostname . '| modify memory',
+                        serialize($request),
+                        'output',
+                        $success
+                    );
+
+                    if (!$success) {
+                        $err_msg = Language::_('VirtfusionDirectProvisioningMod.!error.resource.memory', true);
+                    } else {
+                        $updated_fields['virtfusion_restart_required'] = 'true';
+                    }
+                }
+            }
+
+            if (!$err_msg && isset($resource_options['cpuCores']) && $resource_options['cpuCores'] !== '') {
+                $cpu_cores = (int) $resource_options['cpuCores'];
+                if ((int) ($current_resources->cpuCores ?? 0) !== $cpu_cores) {
+                    $request = $server_api->modifyCpuCores($server_id, $cpu_cores);
+                    $success = $this->apiRequestSucceeded($request, [201]);
+                    $this->log(
+                        $module_row->meta->hostname . '| modify CPU cores',
+                        serialize($request),
+                        'output',
+                        $success
+                    );
+
+                    if (!$success) {
+                        $err_msg = Language::_('VirtfusionDirectProvisioningMod.!error.resource.cpu', true);
+                    } else {
+                        $updated_fields['virtfusion_restart_required'] = 'true';
+                    }
+                }
+            }
+        }
+
+        if (!$err_msg && isset($vars['configoptions']['virtfusion-backup_plan_id'])) {
             $backup_plan_id = trim((string) $vars['configoptions']['virtfusion-backup_plan_id']);
 
             if ($backup_plan_id !== '' && is_numeric($backup_plan_id)) {

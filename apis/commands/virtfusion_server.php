@@ -74,6 +74,24 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/modify/cpuThrottle', 'PUT', $vars);
     }
 
+    public function modifyMemory($serverId, $memory)
+    {
+        return $this->api->submit(
+            'servers/' . $serverId . '/modify/memory',
+            'PUT',
+            ['memory' => (int) $memory]
+        );
+    }
+
+    public function modifyCpuCores($serverId, $cores)
+    {
+        return $this->api->submit(
+            'servers/' . $serverId . '/modify/cpuCores',
+            'PUT',
+            ['cores' => (int) $cores]
+        );
+    }
+
     public function fetchToken($serverId, $clientId, array $vars)
     {
         return $this->api->submit('users/' . $clientId . '/serverAuthenticationTokens/' . $serverId, 'POST', $vars);
