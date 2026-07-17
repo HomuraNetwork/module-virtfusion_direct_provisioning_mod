@@ -4,10 +4,10 @@
     <thead>
         <tr>
             <th><i class="bi bi-arrow-up"></i></th>
-            <th><?php $this->_('VirtfusionDirectProvisioning.service_info.server_id'); ?></th>
-            <th><?php $this->_('VirtfusionDirectProvisioning.service_info.main_ip'); ?></th>
-            <th><?php $this->_('VirtfusionDirectProvisioning.service_info.base_ips'); ?></th>
-            <th><?php $this->_('VirtfusionDirectProvisioning.service_info.extra_ips'); ?></th>
+            <th><?php $this->_('VirtfusionDirectProvisioningMod.service_info.server_id'); ?></th>
+            <th><?php $this->_('VirtfusionDirectProvisioningMod.service_info.main_ip'); ?></th>
+            <th><?php $this->_('VirtfusionDirectProvisioningMod.service_info.base_ips'); ?></th>
+            <th><?php $this->_('VirtfusionDirectProvisioningMod.service_info.extra_ips'); ?></th>
         </tr>
     </thead>
     <tbody>

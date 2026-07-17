@@ -54,6 +54,26 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/power/' . $action, 'POST');
     }
 
+    public function resetPassword($serverId, array $vars)
+    {
+        return $this->api->submit('servers/' . $serverId . '/resetPassword', 'POST', $vars);
+    }
+
+    public function setVnc($serverId, $action)
+    {
+        return $this->api->submit('servers/' . $serverId . '/vnc', 'POST', ['action' => $action]);
+    }
+
+    public function setBackupPlan($serverId, $planId)
+    {
+        return $this->api->submit('servers/' . $serverId . '/backups/plan/' . (int) $planId, 'PUT');
+    }
+
+    public function modifyCpuThrottle($serverId, array $vars)
+    {
+        return $this->api->submit('servers/' . $serverId . '/modify/cpuThrottle', 'PUT', $vars);
+    }
+
     public function fetchToken($serverId, $clientId, array $vars)
     {
         return $this->api->submit('users/' . $clientId . '/serverAuthenticationTokens/' . $serverId, 'POST', $vars);

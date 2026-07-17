@@ -39,9 +39,9 @@
                         $this->Form->fieldHidden('can_remove', $this->Html->ifSet($ip_table->editable));
                         ?>
                     <a class="manage text-danger" href="#" rel="<?php $this->_(
-                        'VirtfusionDirectProvisioning.ipAddresses.remove',
+                        'VirtfusionDirectProvisioningMod.ipAddresses.remove',
                     ); ?>">
-                        <?php $this->_('VirtfusionDirectProvisioning.ipAddresses.remove'); ?>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>
                     </a>
                     <?php $this->Form->end();
                     } ?>
@@ -64,8 +64,8 @@
                     <?php if ($this->Html->ifSet($is_admin)) {
                         $this->Form->create(null, ['class' => 'mt-3']);
                         $this->Form->fieldSubmit(
-                            'refresh_ipv6',
-                            $this->_('VirtfusionDirectProvisioning.ipAddresses.ipv6_refresh', true),
+                            'refresh_ips',
+                            $this->_('VirtfusionDirectProvisioningMod.ipAddresses.refresh', true),
                             ['class' => 'btn btn-success'],
                         );
                         $this->Form->end();

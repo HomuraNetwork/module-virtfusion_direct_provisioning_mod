@@ -2,9 +2,9 @@
     <table class="table table-curved table-striped">
         <tr>
             <td class="fixed_small center border_none"><i class="fas fa-level-up-alt fa-rotate-90"></i></td>
-            <td><?php $this->_('VirtfusionDirectProvisioning.service_info.main_ip'); ?></td>
-            <td><?php $this->_('VirtfusionDirectProvisioning.service_info.base_ips'); ?></td>
-            <td><?php $this->_('VirtfusionDirectProvisioning.service_info.extra_ips'); ?></td>
+            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.main_ip'); ?></td>
+            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.base_ips'); ?></td>
+            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.extra_ips'); ?></td>
         </tr>
         <tr>
             <td></td>

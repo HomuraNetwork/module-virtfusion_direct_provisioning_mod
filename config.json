@@ -1,17 +1,21 @@
 {
-    "version": "2.1.1",
-    "name": "VirtfusionDirectProvisioning.name",
-    "description": "VirtfusionDirectProvisioning.description",
+    "version": "2.1.1.1",
+    "name": "VirtfusionDirectProvisioningMod.name",
+    "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
+        {
+            "name": "Homura Network",
+            "url": "https://github.com/HomuraNetwork/module-virtfusion_direct_provisioning_mod"
+        },
         {
             "name": "VirtFusion",
             "url": "https://virtfusion.com/"
         }
     ],
     "module": {
-        "row": "VirtfusionDirectProvisioning.module_row",
-        "rows": "VirtfusionDirectProvisioning.module_row_plural",
-        "group": "VirtfusionDirectProvisioning.module_group",
+        "row": "VirtfusionDirectProvisioningMod.module_row",
+        "rows": "VirtfusionDirectProvisioningMod.module_row_plural",
+        "group": "VirtfusionDirectProvisioningMod.module_group",
         "row_key": "name"
     },
     "service": {

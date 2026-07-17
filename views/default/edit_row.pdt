@@ -12,19 +12,19 @@ $this->Widget->setLinkButtons([
 ]);
 
 $this->Form->create(null, ['class' => 'disable-on-submit']);
-$this->Widget->create($this->_('VirtfusionDirectProvisioning.edit_row.box_title', true));
+$this->Widget->create($this->_('VirtfusionDirectProvisioningMod.edit_row.box_title', true));
 ?>
 
 <div class="mb-3">
     <label for="name" class="form-label">
-        <?php $this->_('VirtfusionDirectProvisioning.row_meta.name'); ?>
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.name'); ?>
     </label>
     <?php $this->Form->fieldText('name', $vars->name ?? null, ['id' => 'name', 'class' => 'form-control']); ?>
 </div>
 
 <div class="mb-3">
     <label for="hostname" class="form-label">
-        <?php $this->_('VirtfusionDirectProvisioning.row_meta.hostname'); ?>
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.hostname'); ?>
     </label>
     <?php $this->Form->fieldText('hostname', $vars->hostname ?? null, [
         'id' => 'hostname',
@@ -34,7 +34,7 @@ $this->Widget->create($this->_('VirtfusionDirectProvisioning.edit_row.box_title'
 
 <div class="mb-3">
     <label for="api_token" class="form-label">
-        <?php $this->_('VirtfusionDirectProvisioning.row_meta.api_token'); ?>
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.api_token'); ?>
     </label>
     <?php $this->Form->fieldTextarea('api_token', $vars->api_token ?? null, [
         'id' => 'api_token',
@@ -44,7 +44,7 @@ $this->Widget->create($this->_('VirtfusionDirectProvisioning.edit_row.box_title'
 
 <?php $this->Widget->footer(); ?>
 <div class="d-flex justify-content-end">
-    <?php $this->Form->fieldSubmit('save', $this->_('VirtfusionDirectProvisioning.edit_row.edit_btn', true), [
+    <?php $this->Form->fieldSubmit('save', $this->_('VirtfusionDirectProvisioningMod.edit_row.edit_btn', true), [
         'class' => 'btn btn-primary',
     ]); ?>
 </div>

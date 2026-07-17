@@ -1,12 +1,16 @@
 {
-    "name": "blesta/virtfusion_direct_provisioning",
-    "description": "The VirtFusion Blesta Direct Provisioning module is a simple module that can create, terminate, suspend and unsuspend servers with a direct login bridge between Blesta and VirtFusion.",
+    "name": "homuranetwork/virtfusion_direct_provisioning_mod",
+    "description": "A compatibility-focused VirtFusion provisioning module with pre-build, configurable resources, migration, and server management extensions.",
     "license": "proprietary",
     "type": "blesta-module",
     "require": {
         "blesta/composer-installer": "~1.0"
     },
     "authors": [
+        {
+            "name": "Homura Network",
+            "homepage": "https://github.com/HomuraNetwork/module-virtfusion_direct_provisioning_mod"
+        },
         {
             "name": "VirtFusion",
             "homepage": "https://docs.virtfusion.com/integrations/blesta"

@@ -1,0 +1,146 @@
+<?php
+/**
+ * en_us language for the VirtFusion Direct Provisioning module.
+ */
+// Basics
+$lang['VirtfusionDirectProvisioningMod.name'] = 'VirtFusion Direct Provisioning Mod';
+$lang['VirtfusionDirectProvisioningMod.description'] = 'A compatibility-focused VirtFusion provisioning module with pre-build, configurable resources, migration, and server management extensions.';
+$lang['VirtfusionDirectProvisioningMod.module_row'] = 'Server';
+$lang['VirtfusionDirectProvisioningMod.module_row_plural'] = 'Servers';
+$lang['VirtfusionDirectProvisioningMod.module_group'] = 'Server Group';
+
+$lang['Virtfusion.back_to_manage'] = 'Back';
+
+// Module management
+$lang['VirtfusionDirectProvisioningMod.add_module_row'] = 'Add Server';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_title'] = 'Servers';
+
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_heading.name'] = 'Name';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_heading.hostname'] = 'Hostname';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_heading.api_token'] = 'API Token';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_heading.options'] = 'Options';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows.edit'] = 'Edit';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows.delete'] = 'Delete';
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows.confirm_delete'] = 'Are you sure you want to delete this Server';
+
+$lang['VirtfusionDirectProvisioningMod.manage.module_rows_no_results'] = 'There are no Servers.';
+
+$lang['VirtfusionDirectProvisioningMod.sync.heading'] = 'Official Module Data Sync';
+$lang['VirtfusionDirectProvisioningMod.sync.description'] = 'Move module rows, groups, packages, and module metadata between the official module and this mod. Existing services keep the same module row IDs and remote servers are not changed.';
+$lang['VirtfusionDirectProvisioningMod.sync.from_official'] = 'Sync from official';
+$lang['VirtfusionDirectProvisioningMod.sync.to_official'] = 'Sync to official';
+$lang['VirtfusionDirectProvisioningMod.sync.open_destination'] = 'Open destination module';
+$lang['VirtfusionDirectProvisioningMod.sync.confirm.from_official'] = 'Move all official VirtFusion module ownership to this mod?';
+$lang['VirtfusionDirectProvisioningMod.sync.confirm.to_official'] = 'Move all mod ownership back to the official VirtFusion module?';
+$lang['VirtfusionDirectProvisioningMod.sync.success.from_official'] = 'Official module data now belongs to the mod. Existing services continue using their original module row IDs.';
+$lang['VirtfusionDirectProvisioningMod.sync.success.to_official'] = 'Mod data now belongs to the official module. Existing services continue using their original module row IDs.';
+$lang['VirtfusionDirectProvisioningMod.sync.error.modules_missing'] = 'Both the official module and the mod must be installed for synchronization.';
+$lang['VirtfusionDirectProvisioningMod.sync.error.destination_not_empty'] = 'The destination module already owns rows, groups, packages, or metadata. Synchronization was stopped to avoid merging data.';
+$lang['VirtfusionDirectProvisioningMod.sync.error.database'] = 'The database synchronization failed and was rolled back.';
+
+$lang['VirtfusionDirectProvisioningMod.order_options.first'] = 'First';
+
+// Add row
+$lang['VirtfusionDirectProvisioningMod.add_row.box_title'] = 'VirtFusion Direct Provisioning Mod - Add Server';
+$lang['VirtfusionDirectProvisioningMod.add_row.add_btn'] = 'Add Server';
+
+
+// Edit row
+$lang['VirtfusionDirectProvisioningMod.edit_row.box_title'] = 'VirtFusion Direct Provisioning Mod - Edit Server';
+$lang['VirtfusionDirectProvisioningMod.edit_row.edit_btn'] = 'Update Server';
+
+
+// Row meta
+$lang['VirtfusionDirectProvisioningMod.row_meta.name'] = 'Name';
+$lang['VirtfusionDirectProvisioningMod.row_meta.hostname'] = 'Hostname';
+$lang['VirtfusionDirectProvisioningMod.row_meta.api_token'] = 'API Token';
+
+
+
+
+// Errors
+$lang['VirtfusionDirectProvisioningMod.!error.name.empty'] = 'Please enter a valid name';
+$lang['VirtfusionDirectProvisioningMod.!error.hostname.empty'] = 'Please enter a valid Hostname';
+$lang['VirtfusionDirectProvisioningMod.!error.api_token.empty'] = 'Please enter API Token';
+$lang['VirtfusionDirectProvisioningMod.!error.hostname.valid'] = 'Invalid Hostname';
+$lang['VirtfusionDirectProvisioningMod.!error.api_token.valid'] = 'Invalid API Token';
+$lang['VirtfusionDirectProvisioningMod.!error.module_row.missing'] = 'An internal error occurred. The module row is unavailable.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta[hypervisor_group_id].valid'] = 'Invalid Hypervisor Group ID.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta[default_ipv4].valid'] = 'Invalid number of IPv4 addresses.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta[package_id].valid'] = 'Invalid package id.';
+$lang['VirtfusionDirectProvisioningMod.!error.server_id.valid'] = 'Invalid server ID.';
+$lang['VirtfusionDirectProvisioningMod.!error.label.valid'] = 'Invalid service label.';
+
+// Client Errors
+$lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
+
+// Service info
+$lang['VirtfusionDirectProvisioningMod.service_info.server_id'] = 'Server ID';
+$lang['VirtfusionDirectProvisioningMod.service_info.main_ip'] = 'Main IP Address';
+$lang['VirtfusionDirectProvisioningMod.service_info.base_ips'] = 'Base IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.service_info.extra_ips'] = 'Extra IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.service_info.label'] = 'Label';
+
+// Service Fields
+$lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';
+$lang['VirtfusionDirectProvisioningMod.service_fields.label'] = 'Label';
+
+
+// Manage
+$lang['VirtfusionDirectProvisioningMod.tabManage'] = 'Manage';
+$lang['VirtfusionDirectProvisioningMod.tabManage.header'] = 'Manage';
+$lang['VirtfusionDirectProvisioningMod.tabManage.submit'] = 'Submit';
+$lang['VirtfusionDirectProvisioningMod.tabManage.actions'] = 'Actions';
+$lang['VirtfusionDirectProvisioningMod.tabManage.manage'] = 'Manage Server';
+$lang['VirtfusionDirectProvisioningMod.tabManage.manage_as_client'] = 'Manage Server as Client';
+$lang['VirtfusionDirectProvisioningMod.tabManage.boot'] = 'Boot';
+$lang['VirtfusionDirectProvisioningMod.tabManage.restart'] = 'Restart';
+$lang['VirtfusionDirectProvisioningMod.tabManage.shutdown'] = 'Shutdown';
+$lang['VirtfusionDirectProvisioningMod.tabManage.poweroff'] = 'Power Off';
+$lang['VirtfusionDirectProvisioningMod.tabManage.reset_password'] = 'Reset Password';
+$lang['VirtfusionDirectProvisioningMod.tabManage.vnc_console'] = 'VNC Console';
+$lang['VirtfusionDirectProvisioningMod.tabManage.action_success'] = 'The action was successful.';
+$lang['VirtfusionDirectProvisioningMod.tabManage.reset_password_success'] = 'The action was successful. The new password is:';
+
+
+// Manage IP Address
+$lang['VirtfusionDirectProvisioningMod.ipAddresses'] = 'IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.header'] = 'IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.main'] = 'Main IP Address';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.base'] = 'Base IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.extra'] = 'Additional IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.ipv6'] = 'IPv6 Address';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.add'] = 'Add IP';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove'] = 'Remove IP';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.submit'] = 'Submit';
+
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.ipv6_refresh'] = 'Refresh IPv6';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.refresh'] = 'Refresh IP Addresses';
+
+// Package Fields
+$lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
+$lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
+$lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
+$lang['VirtfusionDirectProvisioningMod.package_fields.backup_plan_id'] = 'Backup Plan ID';
+$lang['VirtfusionDirectProvisioningMod.package_fields.backup_plan_id.help_text'] = 'Optional. Use 0 to remove a backup plan when supplied as a configurable option.';
+$lang['VirtfusionDirectProvisioningMod.package_fields.auto_build'] = 'Auto build';
+$lang['VirtfusionDirectProvisioningMod.package_fields.auto_build.yes'] = 'Yes';
+$lang['VirtfusionDirectProvisioningMod.package_fields.auto_build.no'] = 'No';
+$lang['VirtfusionDirectProvisioningMod.package_fields.auto_build.help_text'] = 'When disabled, Blesta will create the VirtFusion server only and skip the build step. Hostname is only collected when auto build is enabled.';
+$lang['VirtfusionDirectProvisioningMod.package_fields.port_speed'] = 'Default Port Speed';
+$lang['VirtfusionDirectProvisioningMod.package_fields.port_speed.help_text'] = 'Optional. Applies the same network speed to inbound and outbound traffic in kB/s. The virtfusion-port_speed configurable option overrides this value.';
+$lang['VirtfusionDirectProvisioningMod.package_fields.os_id'] = 'Default Operating System ID';
+$lang['VirtfusionDirectProvisioningMod.package_fields.os_id.help_text'] = 'The OS ID is located in `media/templates`. Once you select a template, the ID is the last number in the url.';
+
+// Option Fields
+$lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'additional_num_ips';
+
+// Client Fields
+$lang['VirtfusionDirectProvisioningMod.option_fields.hostname.label'] = 'Hostname';
+$lang['VirtfusionDirectProvisioningMod.option_fields.hostname.tooltip'] = 'Please enter the name of your server using a fully qualified domain name. For example server.mydomain.com or web.mydomain.com';
+
+$lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses'] = 'Extra IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses.tooltip'] = 'This field must be selecting if downgrading the number of extra IPs.';
+
+
+// Cron Tasks

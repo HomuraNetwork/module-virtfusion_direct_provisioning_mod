@@ -1,30 +1,38 @@
-# VirtFusion Direct Provisioning
+# VirtFusion Direct Provisioning Mod
 
-The VirtFusion Blesta Direct Provisioning module is a simple module that can create, terminate, suspend and unsuspend servers with a direct login bridge between Blesta and VirtFusion.
+This module tracks the official VirtFusion Blesta module while keeping a separate module identity so Blesta's official updater cannot overwrite local extensions. It targets Blesta 6.0.0-b4 and VirtFusion's current v1 API as documented at `https://docs.virtfusion.com/api/openapi.yaml`.
 
 ## Install the Module
 
 1. You can install the module via composer:
 
     ```
-    composer require blesta/virtfusion_direct_provisioning
+    composer require homuranetwork/virtfusion_direct_provisioning_mod
     ```
 
-2. OR upload the source code to a /components/modules/virtfusion_direct_provisioning/ directory within
+2. OR upload the source code to a /components/modules/virtfusion_direct_provisioning_mod/ directory within
    your Blesta installation path.
 
    For example:
 
     ```
-    /var/www/html/blesta/components/modules/virtfusion_direct_provisioning/
+    /var/www/html/blesta/components/modules/virtfusion_direct_provisioning_mod/
     ```
 
 3. Log in to your admin Blesta account and navigate to
 > Settings > Modules
 
-4. Find the VirtFusion Blesta Direct Provisioning module and click the "Install" button to install it
+4. Find **VirtFusion Direct Provisioning Mod** and click the **Install** button.
 
-5. You're done!
+5. If replacing the official module, open the mod's management page and run **Sync from official**.
+
+## Migrating existing services
+
+The sync action moves local Blesta ownership for module rows, module groups, packages, and module metadata from the official module ID to the mod module ID in one transaction. Existing services continue to use the same `module_row_id`, and no VirtFusion API create, update, or delete call is made.
+
+After a successful **Sync from official**, the official module no longer owns the migrated packages or rows and can be disabled or uninstalled. **Sync to official** reverses the ownership move. The destination must be empty to prevent an accidental merge.
+
+Both current `virtfusion_server_id` service fields and legacy `server_id` fields are supported.
 
 # Setting up VirtFusion Package Option
 This module supports usage of default OS that you can set per package
@@ -32,6 +40,10 @@ When creating a new package, after selecting `Server Group` you will have an opt
 Follow the help text to find that Tempalate ID.
 
 ***This option will be overriden by `virtfusion-os_template` config option***
+
+### Automatic build
+
+Set **Auto build** to **No** in the Blesta package's module options to create the VirtFusion server without calling `/servers/{serverId}/build`. In this mode a hostname and OS template are not required. The returned server ID is still stored so the service can be managed and built later.
 
 ## Configuring package options
 ### Operating System
@@ -73,6 +85,30 @@ If dynamic hypervisor group is not set,
 it will use defualt from that package module option
 
 ***Package option **Type** has only been tested with dropwdown!***
+
+### Port speed
+
+Create a Blesta configurable option named:
+
+```
+virtfusion-port_speed
+```
+
+Its numeric value is sent to both `networkSpeedInbound` and `networkSpeedOutbound` when the server is created. VirtFusion defines the unit as kB/s. The aliases `virtfusion_port_speed` and `port_speed` are accepted for compatibility. If the combined option is present, it overrides separately supplied `networkSpeedInbound` and `networkSpeedOutbound` values. A fixed default can also be set with the package's **Default Port Speed** module field.
+
+### Other create-time resource options
+
+The following configurable option names map directly to the current VirtFusion create-server API:
+
+- `storage`, `traffic`, `memory`, `cpuCores`
+- `networkSpeedInbound`, `networkSpeedOutbound`
+- `storageProfile`, `networkProfile`
+- `firewallRulesets`, `hypervisorAssetGroups` (array or comma-separated IDs)
+- `additionalStorage1Enable`, `additionalStorage2Enable`
+- `additionalStorage1Profile`, `additionalStorage2Profile`
+- `additionalStorage1Capacity`, `additionalStorage2Capacity`
+
+Build and post-create options retained from the previous customized module include `virtfusion-ssh_keys`, `virtfusion-vnc`, `virtfusion-email`, `virtfusion-swap`, `virtfusion-backup_plan_id`, and `virtfusion-cpu_throttle`.
 
 ### Reselling bandwidth
 The traffic (bandwidth) management feature requires VirtFusion version 6 or later.
