@@ -26,7 +26,7 @@ Do not rename the module directory.
 
 Install this module without uninstalling the official module, then open its management page and select **Sync from official**.
 
-The sync moves the existing VirtFusion module rows, groups, and packages to this module. Existing services keep the same `module_row_id` and VirtFusion server ID, so they remain manageable without being recreated.
+The sync moves the existing VirtFusion module rows, groups, and packages to this module. Existing services keep the same `module_row_id` and VirtFusion server ID, so they remain manageable without being recreated. Service IP fields are converted to the destination module's expected layout in either direction.
 
 After checking an existing service's Manage page, the official module may be disabled. **Sync to official** reverses the change if you need to move the packages and module configuration back.
 
@@ -188,6 +188,14 @@ IP addresses, refresh, and eligible additional-IP removal are contained in the M
 The administrator link opens the configured VirtFusion admin server URL and does not create a client login session. The client link may use VirtFusion's client login bridge.
 
 The traffic reset date shown by the module comes from VirtFusion. Changing the Blesta renewal date or granting extra service days does not change that VirtFusion date.
+
+### Blesta Advanced Options
+
+Blesta 5.11 and later add an **Advanced Options** tab to every non-canceled service. This is a Blesta maintenance feature, not a module configuration page. It edits service dates and raw Service Fields without the normal module workflow, so the values should normally be left unchanged. Access can be limited under **Settings > System > Staff > Staff Groups** by disabling **Advanced Edit Service** for the relevant staff group.
+
+This module stores the primary IPv4 address in `virtfusion_primary_ipv4`, all remaining IPv4 addresses in `virtfusion_secondary_ipv4`, and provisioning state in `virtfusion_build_state`. IPv4 quantities are calculated from the address list. Updating to version `2026.07.18.6` migrates the older IP and build-status fields automatically.
+
+If a package welcome email uses the official module's old IP tags, replace `{service.virtfusion_ip}` with `{service.virtfusion_primary_ipv4}` and `{service.virtfusion-base_ips}` with `{service.virtfusion_secondary_ipv4}`.
 
 ## Links
 

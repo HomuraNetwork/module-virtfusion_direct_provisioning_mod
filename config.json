@@ -1,5 +1,5 @@
 {
-    "version": "2026.07.18.5",
+    "version": "2026.07.18.6",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -40,8 +40,8 @@
             "virtfusion_server_id",
             "virtfusion_hostname",
             "virtfusion_password",
-            "virtfusion_ip",
-            "virtfusion-base_ips",
+            "virtfusion_primary_ipv4",
+            "virtfusion_secondary_ipv4",
             "virtfusion_ipv6_cidr",
             "virtfusion_parent_server_id",
             "virtfusion_traffic_block_gb",

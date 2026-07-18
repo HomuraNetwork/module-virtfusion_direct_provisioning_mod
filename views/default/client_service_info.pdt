@@ -1,22 +1,24 @@
-<div class="table-responsive">
-    <table class="table table-curved table-striped">
-        <tr>
-            <td class="fixed_small center border_none"><i class="fas fa-level-up-alt fa-rotate-90"></i></td>
-            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.main_ip'); ?></td>
-            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.base_ips'); ?></td>
-            <td><?php $this->_('VirtfusionDirectProvisioningMod.service_info.extra_ips'); ?></td>
-        </tr>
-        <tr>
-            <td></td>
-            <td><?php echo isset($service_fields->virtfusion_ip)
-                ? $this->Html->safe($service_fields->virtfusion_ip)
-                : null; ?></td>
-            <td><?php echo isset($service_fields->{'virtfusion-base_ips'})
-                ? $this->Html->safe($service_fields->{'virtfusion-base_ips'})
-                : null; ?></td>
-            <td><?php echo isset($service_fields->{'additional_num_ips'})
-                ? $this->Html->safe($service_fields->{'additional_num_ips'})
-                : null; ?></td>
-        </tr>
-    </table>
+<?php
+$primary_ipv4 = $ip_data->ip_addresses['main'][0] ?? null;
+$ipv6 = $ip_data->ip_addresses['ipv6'][0] ?? null;
+?>
+<?php if ($primary_ipv4 || $ipv6) { ?>
+<div class="card border-0 bg-light mb-3">
+    <div class="card-body py-3">
+        <div class="row g-3">
+            <?php if ($primary_ipv4) { ?>
+            <div class="col-md-6">
+                <div class="text-muted small mb-1"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.main_ip'); ?></div>
+                <code><?php echo $this->Html->safe($primary_ipv4); ?></code>
+            </div>
+            <?php } ?>
+            <?php if ($ipv6) { ?>
+            <div class="col-md-6">
+                <div class="text-muted small mb-1"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6'); ?></div>
+                <code><?php echo $this->Html->safe($ipv6); ?></code>
+            </div>
+            <?php } ?>
+        </div>
+    </div>
 </div>
+<?php } ?>

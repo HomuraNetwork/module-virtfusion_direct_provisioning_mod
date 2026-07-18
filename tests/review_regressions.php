@@ -5,6 +5,15 @@ class Module
     public function log()
     {
     }
+
+    public function serviceFieldsToObject(array $fields)
+    {
+        $values = new stdClass();
+        foreach ($fields as $field) {
+            $values->{$field->key} = $field->value;
+        }
+        return $values;
+    }
 }
 
 class Language
@@ -130,6 +139,89 @@ foreach (['TRAFFIC_BLOCK_OPERATION_FIELD', 'RESOURCE_CHANGE_OPERATION_FIELD'] as
         $constant_name . ' must fit Blesta service_fields.key.'
     );
 }
+foreach (['PRIMARY_IPV4_FIELD', 'SECONDARY_IPV4_FIELD', 'BUILD_STATE_FIELD'] as $constant_name) {
+    assertSameValue(
+        true,
+        strlen($module_reflection->getReflectionConstant($constant_name)->getValue()) <= 32,
+        $constant_name . ' must fit Blesta service_fields.key.'
+    );
+}
+
+$legacy_network_fields = (object) [
+    'virtfusion_ip' => '192.0.2.10',
+    'virtfusion-base_ips' => '192.0.2.11',
+    'additional_num_ips' => '192.0.2.12,192.0.2.13',
+    'virtfusion_ipv4_quantity' => '4',
+    'virtfusion_build_status' => 'built'
+];
+$normalized_network_fields = callPrivate($module, 'normalizeLegacyServiceFields', [$legacy_network_fields]);
+assertSameValue(
+    '192.0.2.10',
+    $normalized_network_fields->virtfusion_primary_ipv4,
+    'The legacy main IPv4 field must migrate to the canonical primary field.'
+);
+assertSameValue(
+    '192.0.2.11,192.0.2.12,192.0.2.13',
+    $normalized_network_fields->virtfusion_secondary_ipv4,
+    'Legacy base and additional IPv4 fields must merge without losing addresses.'
+);
+assertSameValue(
+    'built',
+    $normalized_network_fields->virtfusion_build_state,
+    'The legacy build status must migrate to the canonical build state.'
+);
+$network_groups = callPrivate($module, 'ipv4AddressGroups', [
+    $normalized_network_fields,
+    (object) ['meta' => (object) ['default_ipv4' => 2]]
+]);
+assertSameValue(['192.0.2.10'], $network_groups['main'], 'The first IPv4 address must be primary.');
+assertSameValue(['192.0.2.11'], $network_groups['base'], 'Package-provided secondary IPv4 must remain base.');
+assertSameValue(
+    ['192.0.2.12', '192.0.2.13'],
+    $network_groups['extra'],
+    'IPv4 addresses beyond the package default must be treated as extras.'
+);
+$legacy_service = (object) ['fields' => [
+    (object) ['key' => 'virtfusion_server_id', 'value' => '42', 'encrypted' => 0],
+    (object) ['key' => 'virtfusion_ip', 'value' => '192.0.2.10', 'encrypted' => 0],
+    (object) ['key' => 'virtfusion-base_ips', 'value' => '192.0.2.11', 'encrypted' => 0],
+    (object) ['key' => 'additional_num_ips', 'value' => '192.0.2.12,192.0.2.13', 'encrypted' => 0],
+    (object) ['key' => 'virtfusion_ipv4_quantity', 'value' => '4', 'encrypted' => 0],
+    (object) ['key' => 'virtfusion_build_status', 'value' => 'built', 'encrypted' => 0],
+    (object) ['key' => 'virtfusion_password', 'value' => 'secret', 'encrypted' => 1]
+]];
+$canonical_meta = callPrivate($module, 'canonicalServiceMeta', [$legacy_service]);
+$canonical_meta = array_column($canonical_meta, null, 'key');
+assertSameValue(false, isset($canonical_meta['additional_num_ips']), 'Migration must remove the legacy extra-IP key.');
+assertSameValue(false, isset($canonical_meta['virtfusion_ipv4_quantity']), 'Migration must remove the redundant IPv4 count.');
+assertSameValue(false, isset($canonical_meta['virtfusion_build_status']), 'Migration must remove the legacy build-status key.');
+assertSameValue(
+    '192.0.2.10',
+    $canonical_meta['virtfusion_primary_ipv4']['value'],
+    'Migration must retain the primary IPv4 address.'
+);
+assertSameValue(
+    '192.0.2.11,192.0.2.12,192.0.2.13',
+    $canonical_meta['virtfusion_secondary_ipv4']['value'],
+    'Migration must retain every secondary IPv4 address.'
+);
+assertSameValue(1, $canonical_meta['virtfusion_password']['encrypted'], 'Migration must preserve encryption metadata.');
+$mod_service = (object) [
+    'package' => (object) ['meta' => (object) ['default_ipv4' => 2]],
+    'fields' => [
+        (object) ['key' => 'virtfusion_server_id', 'value' => '42', 'encrypted' => 0],
+        (object) ['key' => 'virtfusion_primary_ipv4', 'value' => '192.0.2.10', 'encrypted' => 0],
+        (object) ['key' => 'virtfusion_secondary_ipv4', 'value' => '192.0.2.11,192.0.2.12', 'encrypted' => 0],
+        (object) ['key' => 'virtfusion_build_state', 'value' => 'built', 'encrypted' => 0]
+    ]
+];
+$official_meta = callPrivate($module, 'officialServiceMeta', [$mod_service]);
+$official_meta = array_column($official_meta, null, 'key');
+assertSameValue('192.0.2.10', $official_meta['virtfusion_ip']['value'], 'Official sync must restore main IPv4.');
+assertSameValue('192.0.2.11', $official_meta['virtfusion-base_ips']['value'], 'Official sync must restore base IPv4.');
+assertSameValue('192.0.2.12', $official_meta['additional_num_ips']['value'], 'Official sync must restore extra IPv4.');
+assertSameValue(false, isset($official_meta['virtfusion_primary_ipv4']), 'Official sync must remove the mod IP key.');
+assertSameValue('built', $official_meta['virtfusion_build_state']['value'], 'Official sync must preserve safe mod state for rollback.');
 
 assertSameValue(false, callPrivate($module, 'shouldAutoBuild'), 'Auto build must use the safe disabled default.');
 assertSameValue(

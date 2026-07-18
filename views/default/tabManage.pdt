@@ -1,8 +1,28 @@
+<?php
+$server_available = isset($server_info);
+$tasks_locked = $server_available && !empty($server_info->tasks_active);
+$running = $server_available && isset($server_info->power) ? (bool) $server_info->power : null;
+$power_locked = !$server_available || !empty($server_info->has_active_tasks) || $running === null;
+$confirm_power = Language::_('VirtfusionDirectProvisioningMod.confirm.power', true);
+$confirm_password = Language::_('VirtfusionDirectProvisioningMod.confirm.reset_password', true);
+$empty_value = '—';
+
+$memory_display = $empty_value;
+if ($server_available && isset($server_info->memory) && is_numeric($server_info->memory)) {
+    $memory_gb = (float) $server_info->memory / 1024;
+    $memory_display = rtrim(rtrim(number_format($memory_gb, 2, '.', ''), '0'), '.') . ' GB';
+}
+$latest_backup = $server_available && !empty($server_info->latest_backup->created)
+    ? $this->Date->cast($server_info->latest_backup->created, 'date_time')
+    : $empty_value;
+$traffic_reset = $server_available && !empty($server_info->traffic_reset)
+    ? $this->Date->cast($server_info->traffic_reset, 'date_time')
+    : $empty_value;
+?>
+
 <div id="tabManage">
     <?php if (!empty($message)) { ?>
-        <div class="alert alert-info">
-            <?php echo $this->Html->safe($message); ?>
-        </div>
+        <div class="alert alert-info"><?php echo $this->Html->safe($message); ?></div>
     <?php } ?>
 
     <?php if (($service_fields->virtfusion_restart_required ?? 'false') === 'true') { ?>
@@ -10,68 +30,115 @@
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.restart_recommended', true)); ?>
         </div>
     <?php } ?>
-    <?php if (($service_fields->virtfusion_build_status ?? '') === 'failed_or_unknown') { ?>
+    <?php if (($service_fields->virtfusion_build_state ?? '') === 'failed_or_unknown') { ?>
         <div class="alert alert-warning">
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_reconciliation_required', true)); ?>
         </div>
     <?php } ?>
-
-    <?php if (!empty($server_info->tasks_active)) { ?>
+    <?php if ($tasks_locked) { ?>
         <div class="alert alert-info">
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.pending', true)); ?>
-            <?php if (!empty($server_info->pending_tasks)) { ?>
-                <?php echo $this->Html->safe(implode(', ', $server_info->pending_tasks)); ?>
-            <?php } ?>
+            <?php echo !empty($server_info->pending_tasks)
+                ? $this->Html->safe(implode(', ', $server_info->pending_tasks))
+                : $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.active', true)); ?>
         </div>
     <?php } ?>
 
-    <?php if (isset($server_info)) { ?>
-        <div class="row">
-            <div class="col-md-6 service-info">
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.label', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->name ?? 'None'); ?></h4>
-                <label>CPU</label>
-                <h4><?php echo $this->Html->safe($server_info->cpu ?? 'None'); ?></h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.package', true)); ?></label>
-                <h4><?php echo $this->Html->safe($package->name ?? 'None'); ?></h4>
-                <label>RAM</label>
-                <h4><?php echo $this->Html->safe($server_info->memory ?? 'None'); ?> MB</h4>
-                <label>Disk</label>
-                <h4><?php echo $this->Html->safe($server_info->disk ?? 'None'); ?> GB</h4>
-            </div>
-            <div class="col-md-6 service-info">
-                <label>Transfer</label>
-                <h4><?php echo $this->Html->safe($server_info->traffic ?? 'None'); ?> GB</h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_resets', true)); ?></label>
-                <h4><?php echo !empty($server_info->traffic_reset)
-                    ? $this->Html->safe($this->Date->cast($server_info->traffic_reset, 'date_time'))
-                    : 'None'; ?></h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_used', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->traffic_used ?? 'None'); ?> GB</h4>
-                <?php if (isset($server_info->traffic_percent)) { ?>
-                    <div class="progress mb-3"><div class="progress-bar" style="width: <?php echo (float) $server_info->traffic_percent; ?>%">
-                        <?php echo $this->Html->safe($server_info->traffic_percent); ?>%
-                    </div></div>
-                <?php } ?>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_blocks', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->traffic_blocks ?? 0); ?> GB</h4>
-                <label>Status</label>
-                <h4><?php echo $this->Html->safe($server_info->status ?? 'None'); ?></h4>
-                <label>IPv4</label>
-                <h4><?php echo $this->Html->safe($server_info->ipv4 ?? 'None'); ?></h4>
-                <label>IPv6</label>
-                <h4><?php echo $this->Html->safe($server_info->ipv6 ?? 'None'); ?></h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.port_speed', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->network_in ?? 'None'); ?> / <?php echo $this->Html->safe($server_info->network_out ?? 'None'); ?></h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.backups', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->backup_count ?? 0); ?> — <?php echo !empty($server_info->latest_backup->created)
-                    ? $this->Html->safe($this->Date->cast($server_info->latest_backup->created, 'date_time'))
-                    : 'None'; ?></h4>
-                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.backup_plan', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->backup_plan ?? 'None'); ?></h4>
+    <?php if ($server_available) { ?>
+    <div class="row g-3 mb-3">
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><strong><?php $this->_('VirtfusionDirectProvisioningMod.service_info.overview'); ?></strong></div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.label'); ?></dt>
+                            <dd class="mb-0 text-end fw-semibold"><?php echo $this->Html->safe($server_info->name ?? $empty_value); ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.status'); ?></dt>
+                            <dd class="mb-0 text-end">
+                                <span class="badge <?php echo $running === true ? 'bg-success' : 'bg-secondary'; ?>">
+                                    <?php echo $this->Html->safe($server_info->status ?? $empty_value); ?>
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.package'); ?></dt>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($package->name ?? $empty_value); ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.backup_plan'); ?></dt>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($server_info->backup_plan ?? $empty_value); ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.latest_backup'); ?></dt>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($latest_backup); ?></dd>
+                        </div>
+                    </dl>
+                </div>
             </div>
         </div>
-        <hr>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><strong><?php $this->_('VirtfusionDirectProvisioningMod.service_info.resources'); ?></strong></div>
+                <div class="card-body">
+                    <dl class="mb-0">
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.cpu'); ?></dt>
+                            <dd class="mb-0 fw-semibold"><?php echo isset($server_info->cpu)
+                                ? $this->Html->safe($server_info->cpu) . ' vCPU'
+                                : $empty_value; ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.memory'); ?></dt>
+                            <dd class="mb-0 fw-semibold"><?php echo $this->Html->safe($memory_display); ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.disk'); ?></dt>
+                            <dd class="mb-0 fw-semibold"><?php echo isset($server_info->disk)
+                                ? $this->Html->safe($server_info->disk) . ' GB'
+                                : $empty_value; ?></dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.port_speed'); ?></dt>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($server_info->network_in ?? $empty_value); ?><br>
+                                <span class="text-muted small"><?php echo $this->Html->safe($server_info->network_out ?? $empty_value); ?></span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card h-100">
+                <div class="card-header"><strong><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic'); ?></strong></div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between gap-3 mb-2">
+                        <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_used'); ?></span>
+                        <strong><?php echo $this->Html->safe($server_info->traffic_used ?? 0); ?> / <?php echo $this->Html->safe($server_info->traffic ?? $empty_value); ?> GB</strong>
+                    </div>
+                    <?php if (isset($server_info->traffic_percent)) { ?>
+                        <div class="progress mb-4" style="height: 0.65rem;">
+                            <div class="progress-bar" role="progressbar" style="width: <?php echo (float) $server_info->traffic_percent; ?>%" aria-valuenow="<?php echo (float) $server_info->traffic_percent; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    <?php } ?>
+                    <dl class="mb-0">
+                        <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_blocks'); ?></dt>
+                            <dd class="mb-0"><?php echo $this->Html->safe($server_info->traffic_blocks ?? 0); ?> GB</dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_resets'); ?></dt>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($traffic_reset); ?></dd>
+                        </div>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
     <?php } ?>
 
     <?php if (isset($ip_data)) { ?>
@@ -84,100 +151,99 @@
                 </button>
             <?php $this->Form->end(); ?>
         </div>
-        <div class="card-body"><div class="row">
-            <?php foreach (['main', 'base', 'extra', 'ipv6'] as $ip_type) { ?>
-            <div class="col-md-6 mb-3">
-                <h6><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.' . $ip_type); ?></h6>
-                <?php $addresses = $ip_data->ip_addresses[$ip_type] ?? []; ?>
-                <?php if (empty($addresses)) { ?>
-                    <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
-                <?php } else { ?>
-                    <ul class="list-group list-group-flush">
-                    <?php foreach ($addresses as $address) { ?>
-                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                            <code><?php echo $this->Html->safe($address); ?></code>
-                            <?php if ($ip_type === 'extra' && !empty($ip_data->editable_options['extra'])) { ?>
-                                <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                                    <?php $this->Form->fieldHidden('ip_address', $address); ?>
-                                    <button type="submit" name="action" value="remove_ip" class="btn btn-sm btn-outline-danger" onclick="return confirm(<?php echo $this->Html->safe(json_encode($this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm', true))); ?>);">
-                                        <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>
-                                    </button>
-                                <?php $this->Form->end(); ?>
-                            <?php } ?>
-                        </li>
+        <div class="card-body">
+            <div class="row g-3">
+                <?php foreach (['main', 'base', 'extra', 'ipv6'] as $ip_type) { ?>
+                <div class="col-lg-3 col-md-6">
+                    <div class="text-muted small mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.' . $ip_type); ?></div>
+                    <?php $addresses = $ip_data->ip_addresses[$ip_type] ?? []; ?>
+                    <?php if (empty($addresses)) { ?>
+                        <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                    <?php } else { ?>
+                        <ul class="list-unstyled mb-0">
+                        <?php foreach ($addresses as $address) { ?>
+                            <li class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                                <code class="text-break"><?php echo $this->Html->safe($address); ?></code>
+                                <?php if ($ip_type === 'extra' && !empty($ip_data->editable_options['extra'])) { ?>
+                                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                                        <?php $this->Form->fieldHidden('ip_address', $address); ?>
+                                        <button type="submit" name="action" value="remove_ip" class="btn btn-sm btn-outline-danger" onclick="return confirm(<?php echo $this->Html->safe(json_encode($this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm', true))); ?>);">
+                                            <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>
+                                        </button>
+                                    <?php $this->Form->end(); ?>
+                                <?php } ?>
+                            </li>
+                        <?php } ?>
+                        </ul>
                     <?php } ?>
-                    </ul>
+                </div>
                 <?php } ?>
             </div>
-            <?php } ?>
-        </div></div>
+        </div>
     </div>
     <?php } ?>
 
-    <?php
-    $tasks_locked = !empty($server_info->tasks_active);
-    $running = isset($server_info->power) ? (bool) $server_info->power : null;
-    $power_locked = !empty($server_info->has_active_tasks) || $running === null;
-    $confirm_power = Language::_('VirtfusionDirectProvisioningMod.confirm.power', true);
-    $confirm_password = Language::_('VirtfusionDirectProvisioningMod.confirm.reset_password', true);
-    ?>
-    <h4><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.actions', true)); ?></h4>
-    <div class="row">
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
-                <button type="submit" name="action" value="manage" class="btn btn-primary w-100">
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.manage', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="boot" class="btn btn-outline-secondary w-100" <?php echo ($power_locked || $running === true) ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.boot', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="restart" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.restart', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="shutdown" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.shutdown', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="poweroff" class="btn btn-outline-danger w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.poweroff', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="resetpass" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_password)); ?>);" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.reset_password', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
-                <button type="submit" name="action" value="vnc" class="btn btn-outline-secondary w-100" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.vnc_console', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
-        <div class="col-md-3 mb-2">
-            <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
-                <button type="submit" name="action" value="manage" class="btn btn-outline-secondary w-100">
-                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.backups', true)); ?>
-                </button>
-            <?php $this->Form->end(); ?>
+    <div class="card">
+        <div class="card-header"><strong><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.actions'); ?></strong></div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                        <button type="submit" name="action" value="manage" class="btn btn-primary w-100">
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                        <button type="submit" name="action" value="manage" class="btn btn-outline-primary w-100">
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.backups'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <button type="submit" name="action" value="boot" class="btn btn-outline-secondary w-100" <?php echo ($power_locked || $running === true) ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.boot'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <button type="submit" name="action" value="restart" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.restart'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <button type="submit" name="action" value="shutdown" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.shutdown'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <button type="submit" name="action" value="poweroff" class="btn btn-outline-danger w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.poweroff'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <button type="submit" name="action" value="resetpass" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_password)); ?>);" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.reset_password'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <div class="col-sm-6 col-lg-3">
+                    <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                        <button type="submit" name="action" value="vnc" class="btn btn-outline-secondary w-100" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.vnc_console'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                </div>
+            </div>
         </div>
     </div>
 </div>
