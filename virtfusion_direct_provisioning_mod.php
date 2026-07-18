@@ -9,22 +9,14 @@ class VirtfusionDirectProvisioningMod extends Module
 {
     private const OFFICIAL_MODULE_CLASS = 'virtfusion_direct_provisioning';
     private const MOD_MODULE_CLASS = 'virtfusion_direct_provisioning_mod';
-    private const PORT_SPEED_OPTIONS = [
-        'virtfusion-port_speed',
-        'virtfusion_port_speed',
-        'port_speed'
-    ];
-    private const AUTO_BUILD_OPTIONS = [
-        'virtfusion-auto_build',
-        'virtfusion_auto_build',
-        'auto_build'
-    ];
+    private const AUTO_BUILD_OPTION = 'autoBuild';
+    private const NETWORK_SPEED_OPTION = 'networkSpeed';
+    private const ADDITIONAL_IPV4_OPTION = 'additionalIpv4';
+    private const ADDITIONAL_TRAFFIC_OPTION = 'additionalTraffic';
+    private const BACKUP_PLAN_OPTION = 'backupPlanId';
+    private const CPU_THROTTLE_OPTION = 'cpuThrottle';
     private const TRAFFIC_BLOCK_CAPABILITY = 'traffic_block';
-    private const TRAFFIC_BLOCK_GB_OPTIONS = [
-        'virtfusion-traffic_block_gb',
-        'virtfusion_traffic_block_gb',
-        'traffic_block_gb'
-    ];
+    private const TRAFFIC_BLOCK_AMOUNT_OPTION = 'amount';
     private const TRAFFIC_BLOCK_OPERATION_FIELD = 'virtfusion_traffic_block_operation';
     private const RESOURCE_CHANGE_OPERATION_FIELD = 'virtfusion_resource_change_operation';
 
@@ -66,19 +58,11 @@ class VirtfusionDirectProvisioningMod extends Module
         return new VirtfusionServer($api);
     }
 
-    private function shouldAutoBuild($package, array $config_options = [])
+    private function shouldAutoBuild(array $config_options = [])
     {
-        foreach (self::AUTO_BUILD_OPTIONS as $option_name) {
-            if (array_key_exists($option_name, $config_options)
-                && $config_options[$option_name] !== '') {
-                return $this->boolValue($config_options[$option_name]);
-            }
-        }
-
-        // Compatibility for packages created before Auto build moved to a
-        // configurable option. New package forms no longer write this meta key.
-        return !isset($package->meta->{'virtfusion-auto_build'})
-            || $package->meta->{'virtfusion-auto_build'} !== 'false';
+        return array_key_exists(self::AUTO_BUILD_OPTION, $config_options)
+            && $config_options[self::AUTO_BUILD_OPTION] !== ''
+            && $this->boolValue($config_options[self::AUTO_BUILD_OPTION]);
     }
 
     private function isTrafficBlockPackage($package)
@@ -91,20 +75,26 @@ class VirtfusionDirectProvisioningMod extends Module
         return $row && $this->boolValue($row->meta->traffic_blocks_enabled ?? false);
     }
 
-    private function getTrafficBlockAmount($package, array $config_options = [])
+    private function getTrafficBlockAmount(array $config_options = [])
     {
-        foreach (self::TRAFFIC_BLOCK_GB_OPTIONS as $option_name) {
-            if (isset($config_options[$option_name]) && $config_options[$option_name] !== '') {
-                return $this->validateOptionalPositiveInteger($config_options[$option_name])
-                    ? (int) $config_options[$option_name]
-                    : null;
-            }
-        }
-
-        $amount = $package->meta->{'virtfusion-traffic_block_gb'} ?? null;
+        $amount = $config_options[self::TRAFFIC_BLOCK_AMOUNT_OPTION] ?? null;
         return $amount !== null && $amount !== '' && $this->validateOptionalPositiveInteger($amount)
             ? (int) $amount
             : null;
+    }
+
+    private function getIpv4Quantity($package, array $config_options = [])
+    {
+        $default = (int) $package->meta->default_ipv4;
+        if (isset($config_options['ipv4']) && $config_options['ipv4'] !== '') {
+            return (int) $config_options['ipv4'];
+        }
+        if (isset($config_options[self::ADDITIONAL_IPV4_OPTION])
+            && $config_options[self::ADDITIONAL_IPV4_OPTION] !== '') {
+            return $default + (int) $config_options[self::ADDITIONAL_IPV4_OPTION];
+        }
+
+        return $default;
     }
 
     private function getPackagePricing($package, $pricing_id)
@@ -135,6 +125,8 @@ class VirtfusionDirectProvisioningMod extends Module
     private function applyCreateConfigOptions(array $request_params, array $config_options)
     {
         $integer_fields = [
+            'hypervisorId',
+            'ipv4',
             'storage',
             'traffic',
             'memory',
@@ -170,15 +162,13 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        foreach (self::PORT_SPEED_OPTIONS as $option_name) {
-            if (isset($config_options[$option_name]) && $config_options[$option_name] !== ''
-                && is_numeric($config_options[$option_name])) {
-                $port_speed = (int) $config_options[$option_name];
-                if ($port_speed >= 0) {
-                    $request_params['networkSpeedInbound'] = $port_speed;
-                    $request_params['networkSpeedOutbound'] = $port_speed;
-                }
-                break;
+        if (isset($config_options[self::NETWORK_SPEED_OPTION])
+            && $config_options[self::NETWORK_SPEED_OPTION] !== ''
+            && is_numeric($config_options[self::NETWORK_SPEED_OPTION])) {
+            $network_speed = (int) $config_options[self::NETWORK_SPEED_OPTION];
+            if ($network_speed >= 0) {
+                $request_params['networkSpeedInbound'] = $network_speed;
+                $request_params['networkSpeedOutbound'] = $network_speed;
             }
         }
 
@@ -410,7 +400,7 @@ class VirtfusionDirectProvisioningMod extends Module
     private function provisionTrafficBlock($package, array $vars, $parent_service)
     {
         $row = $this->getModuleRow();
-        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
+        $amount = $this->getTrafficBlockAmount($vars['configoptions'] ?? []);
         if (!$row || !$this->trafficBlocksEnabled($row)) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -687,7 +677,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $capabilities = $this->getProductAddonCapabilities($parent_package, $parent_service);
-        $amount = $this->getTrafficBlockAmount($addon_package, $config_options);
+        $amount = $this->getTrafficBlockAmount($config_options);
         if (!isset($capabilities[$capability]) || !$amount || $amount < 1) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -771,27 +761,29 @@ class VirtfusionDirectProvisioningMod extends Module
         return null;
     }
 
-    private function requestedPortSpeed(array $config_options)
+    private function configOptionValuesEqual($left, $right)
     {
-        foreach (self::PORT_SPEED_OPTIONS as $option_name) {
-            if (array_key_exists($option_name, $config_options)) {
-                return $config_options[$option_name];
+        $normalize = function ($value) {
+            if (is_array($value)) {
+                $value = array_map('strval', $value);
+                sort($value);
+                return json_encode($value);
             }
-        }
 
-        return null;
+            return (string) $value;
+        };
+
+        return $normalize($left) === $normalize($right);
     }
 
-    private function currentPortSpeed($service)
+    private function requestedNetworkSpeed(array $config_options)
     {
-        foreach (self::PORT_SPEED_OPTIONS as $option_name) {
-            $value = $this->getServiceConfigOptionValue($service, $option_name);
-            if ($value !== null) {
-                return $value;
-            }
-        }
+        return $config_options[self::NETWORK_SPEED_OPTION] ?? null;
+    }
 
-        return null;
+    private function currentNetworkSpeed($service)
+    {
+        return $this->getServiceConfigOptionValue($service, self::NETWORK_SPEED_OPTION);
     }
 
     private function setRestartRecommended($service_id, $recommended)
@@ -1486,19 +1478,6 @@ class VirtfusionDirectProvisioningMod extends Module
                 return [];
             }
 
-            // Preserve hidden compatibility metadata when an older package is
-            // edited. Configurable options override these values at service time.
-            foreach ([
-                'virtfusion-auto_build',
-                'virtfusion-default_os_template',
-                'virtfusion-traffic_block_gb'
-            ] as $legacy_key) {
-                if (!array_key_exists($legacy_key, $vars['meta'])
-                    && isset($package->meta->{$legacy_key})) {
-                    $vars['meta'][$legacy_key] = $package->meta->{$legacy_key};
-                }
-            }
-
             // Return all package meta fields
             foreach ($vars['meta'] as $key => $value) {
                 $meta[] = [
@@ -1543,14 +1522,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         if ($service_type === self::TRAFFIC_BLOCK_CAPABILITY) {
             return [
-                'meta[virtfusion-service_type]' => $service_type_rule,
-                'meta[virtfusion-traffic_block_gb]' => [
-                    'valid' => [
-                        'if_set' => true,
-                        'rule' => [[$this, 'validateOptionalPositiveInteger']],
-                        'message' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
-                    ]
-                ]
+                'meta[virtfusion-service_type]' => $service_type_rule
             ];
         }
 
@@ -1729,11 +1701,9 @@ class VirtfusionDirectProvisioningMod extends Module
         $checkbox_fields = [];
 
         $create_config_options = $vars['configoptions'] ?? [];
-        // Compatibility fallback for packages created before OS and Auto build
-        // moved to configurable options.
-        $virtfusion_os_id = $create_config_options['virtfusion-os_template']
-            ?? ($package->meta->{'virtfusion-default_os_template'} ?? null);
-        $auto_build = $this->shouldAutoBuild($package, $create_config_options);
+        $virtfusion_os_id = $create_config_options['operatingSystemId'] ?? null;
+        $auto_build = $this->shouldAutoBuild($create_config_options);
+        $ipv4_count = $this->getIpv4Quantity($package, $create_config_options);
         $domain = isset($vars['virtfusion_hostname']) ? trim($vars['virtfusion_hostname']) : '';
         $server_id = 0;
         $virtfusion_password = '';
@@ -1767,7 +1737,6 @@ class VirtfusionDirectProvisioningMod extends Module
 
         // Validate the service-specific fields
         $this->validateService($package, $vars);
-
         if ($this->Input->errors()) {
             return;
         }
@@ -1856,23 +1825,15 @@ class VirtfusionDirectProvisioningMod extends Module
 
                     $server_api = new VirtfusionServer($api);
 
-                    // override default hypervisor group ID if we have config option
-                    $hypervisor_group_id = $package->meta->hypervisor_group_id;
-                    if (isset($vars['configoptions']['dynamic_hypervisor_group_id'])) {
-                        $hypervisor_group_id = $vars['configoptions']['dynamic_hypervisor_group_id'];
-                    }
-
-                    $virtfusion_extra_ips = 0;
-                    if (isset($vars['configoptions']['additional_num_ips'])) {
-                        $virtfusion_extra_ips = $vars['configoptions']['additional_num_ips'];
-                        $this->log($row->meta->hostname . '| number of extra IPs', $virtfusion_extra_ips, 'input', true);
-                    }
-
-                    $ipv4_count = (int)$package->meta->default_ipv4 + (int)$virtfusion_extra_ips;
+                    $hypervisor_group_id = (int) $package->meta->hypervisor_group_id;
+                    $virtfusion_extra_ips = max(
+                        0,
+                        $ipv4_count - (int) $package->meta->default_ipv4
+                    );
 
                     $request_params = [
-                        'packageId' => $package->meta->package_id,
-                        'userId' => $data->data->id,
+                        'packageId' => (int) $package->meta->package_id,
+                        'userId' => (int) $data->data->id,
                         'hypervisorId' => $hypervisor_group_id,
                         'ipv4' => $ipv4_count,
                     ];
@@ -1880,13 +1841,13 @@ class VirtfusionDirectProvisioningMod extends Module
                     $request_params = $this->applyCreateConfigOptions($request_params, $create_config_options);
 
                     if (!array_key_exists('traffic', $create_config_options)
-                        && isset($create_config_options['additional_bandwidth'])
-                        && $create_config_options['additional_bandwidth'] !== '') {
-                        $additional_bandwidth = $create_config_options['additional_bandwidth'];
-                        if (!is_numeric($additional_bandwidth) || (int) $additional_bandwidth < 0) {
+                        && isset($create_config_options[self::ADDITIONAL_TRAFFIC_OPTION])
+                        && $create_config_options[self::ADDITIONAL_TRAFFIC_OPTION] !== '') {
+                        $additional_traffic = $create_config_options[self::ADDITIONAL_TRAFFIC_OPTION];
+                        if (!is_numeric($additional_traffic) || (int) $additional_traffic < 0) {
                             $this->Input->setErrors([
                                 'configoptions' => [
-                                    'additional_bandwidth' => Language::_(
+                                    self::ADDITIONAL_TRAFFIC_OPTION => Language::_(
                                         'VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum',
                                         true
                                     )
@@ -1909,11 +1870,11 @@ class VirtfusionDirectProvisioningMod extends Module
                         }
                         $package_data = json_decode((string) $package_request['response']);
                         $target_traffic = (int) ($package_data->data->traffic ?? 0)
-                            + (int) $additional_bandwidth;
+                            + (int) $additional_traffic;
                         if ($target_traffic > 999999999) {
                             $this->Input->setErrors([
                                 'configoptions' => [
-                                    'additional_bandwidth' => Language::_(
+                                    self::ADDITIONAL_TRAFFIC_OPTION => Language::_(
                                         'VirtfusionDirectProvisioningMod.!error.configoption.traffic.maximum',
                                         true
                                     )
@@ -1956,22 +1917,26 @@ class VirtfusionDirectProvisioningMod extends Module
                     if ($auto_build && is_numeric($virtfusion_os_id) && !empty($domain)) {
                         $server_name = substr($domain, 0, strrpos($domain, '.'));
                         $build_params = [
-                            'operatingSystemId' => $virtfusion_os_id,
+                            'operatingSystemId' => (int) $virtfusion_os_id,
                             'name' => $server_name,
                             'hostname' => $domain,
                             'ipv6' => true
                         ];
 
-                        if (!empty($vars['configoptions']['virtfusion-ssh_keys'])) {
-                            $build_params['sshKeys'] = $this->csvInts($vars['configoptions']['virtfusion-ssh_keys']);
+                        if (!empty($create_config_options['sshKeys'])) {
+                            $build_params['sshKeys'] = $this->csvInts($create_config_options['sshKeys']);
                         }
 
-                        if (isset($vars['configoptions']['virtfusion-email'])) {
-                            $build_params['email'] = $this->boolValue($vars['configoptions']['virtfusion-email']);
+                        if (isset($create_config_options['ipv6'])) {
+                            $build_params['ipv6'] = $this->boolValue($create_config_options['ipv6']);
                         }
 
-                        if (isset($vars['configoptions']['virtfusion-swap']) && $vars['configoptions']['virtfusion-swap'] !== '') {
-                            $build_params['swap'] = (float) $vars['configoptions']['virtfusion-swap'];
+                        if (isset($create_config_options['email'])) {
+                            $build_params['email'] = $this->boolValue($create_config_options['email']);
+                        }
+
+                        if (isset($create_config_options['swap']) && $create_config_options['swap'] !== '') {
+                            $build_params['swap'] = (float) $create_config_options['swap'];
                         }
 
                         $build_request = $server_api->build(
@@ -2032,7 +1997,7 @@ class VirtfusionDirectProvisioningMod extends Module
                             $this->apiRequestSucceeded($build_request, [200])
                         );
                     } elseif (!$auto_build) {
-                        $this->log($row->meta->hostname . '| build server', 'Skipped automatic build by package setting.', 'output', true);
+                        $this->log($row->meta->hostname . '| build server', 'Skipped automatic build by configuration.', 'output', true);
                     }
 
                     if ($hasError) {
@@ -2048,13 +2013,27 @@ class VirtfusionDirectProvisioningMod extends Module
                         );
                     }
 
-                    if (isset($vars['configoptions']['virtfusion-backup_plan_id'])) {
-                        $virtfusion_backup_plan_id = $vars['configoptions']['virtfusion-backup_plan_id'];
+                    if (isset($create_config_options[self::BACKUP_PLAN_OPTION])) {
+                        $virtfusion_backup_plan_id = $create_config_options[self::BACKUP_PLAN_OPTION];
                     }
 
                     if ($virtfusion_backup_plan_id !== '' && is_numeric($virtfusion_backup_plan_id)) {
                         $backup_request = $server_api->setBackupPlan($server_id, $virtfusion_backup_plan_id);
                         $this->log($row->meta->hostname . '| backup plan', serialize($backup_request), 'output', in_array($backup_request['info']['http_code'], [200, 201, 204]));
+                    }
+
+                    if (isset($create_config_options[self::CPU_THROTTLE_OPTION])
+                        && $create_config_options[self::CPU_THROTTLE_OPTION] !== ''
+                        && is_numeric($create_config_options[self::CPU_THROTTLE_OPTION])) {
+                        $cpu_throttle_request = $server_api->modifyCpuThrottle($server_id, [
+                            'percent' => (int) $create_config_options[self::CPU_THROTTLE_OPTION]
+                        ]);
+                        $this->log(
+                            $row->meta->hostname . '| cpu throttle',
+                            serialize($cpu_throttle_request),
+                            'output',
+                            $this->apiRequestSucceeded($cpu_throttle_request, [200, 201, 204])
+                        );
                     }
 
                 } else {
@@ -2081,6 +2060,11 @@ class VirtfusionDirectProvisioningMod extends Module
             [
                 'key' => 'virtfusion_build_status',
                 'value' => $virtfusion_build_status,
+                'encrypted' => 0
+            ],
+            [
+                'key' => 'virtfusion_ipv4_quantity',
+                'value' => $ipv4_count,
                 'encrypted' => 0
             ]
         ];
@@ -2167,9 +2151,8 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
-        $this->validateService($package, $vars);
-
-        if ($this->Input->errors()) {
+        $this->Input->setRules($this->getServiceRules($vars, true, $package));
+        if (!$this->Input->validates($vars)) {
             return;
         }
 
@@ -2195,7 +2178,7 @@ class VirtfusionDirectProvisioningMod extends Module
                     $vars[$field] = $value;
                 }
                 
-                $data = $this->adjustIpAddresses($module_row, $service_fields, $vars);
+                $data = $this->adjustIpAddresses($module_row, $service_fields, $vars, $package);
 
                 if (!empty($data['errors']['err_msg'])) {
                     // if not staff override error
@@ -2228,7 +2211,7 @@ class VirtfusionDirectProvisioningMod extends Module
         // Return all service fields because Blesta replaces, rather than merges,
         // module metadata after editService(). Operation journals are removed only
         // after the whole edit has completed successfully.
-        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_backup_plan_id', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
+        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_ipv4_quantity', 'virtfusion_backup_plan_id', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
         $encrypted_fields = ['virtfusion_password'];
         $overrides = [];
         foreach ($fields as $field) {
@@ -2447,13 +2430,179 @@ class VirtfusionDirectProvisioningMod extends Module
 
         if (!$this->isTrafficBlockPackage($package)) {
             $config_options = $vars['configoptions'] ?? [];
-            $os_template = $config_options['virtfusion-os_template']
-                ?? ($package->meta->{'virtfusion-default_os_template'} ?? null);
-            if ($this->shouldAutoBuild($package, $config_options)
+            foreach ([
+                'hypervisorId',
+                'ipv4',
+                self::ADDITIONAL_IPV4_OPTION,
+                'storage',
+                'traffic',
+                self::ADDITIONAL_TRAFFIC_OPTION,
+                'memory',
+                'cpuCores',
+                'networkSpeed',
+                'networkSpeedInbound',
+                'networkSpeedOutbound',
+                'storageProfile',
+                'networkProfile',
+                'additionalStorage1Profile',
+                'additionalStorage2Profile',
+                'additionalStorage1Capacity',
+                'additionalStorage2Capacity',
+                'backupPlanId',
+                'cpuThrottle'
+            ] as $option_name) {
+                if (($option_name === self::ADDITIONAL_IPV4_OPTION
+                        && isset($config_options['ipv4']) && $config_options['ipv4'] !== '')
+                    || ($option_name === self::ADDITIONAL_TRAFFIC_OPTION
+                        && isset($config_options['traffic']) && $config_options['traffic'] !== '')) {
+                    continue;
+                }
+                if (isset($config_options[$option_name])
+                    && $config_options[$option_name] !== ''
+                    && !is_numeric($config_options[$option_name])) {
+                    $this->Input->setErrors([
+                        'configoptions' => [
+                            $option_name => Language::_(
+                                'VirtfusionDirectProvisioningMod.!error.configoption.numeric',
+                                true,
+                                $option_name
+                            )
+                        ]
+                    ]);
+                    return false;
+                }
+            }
+
+            if (isset($config_options['ipv4']) && $config_options['ipv4'] !== ''
+                && (int) $config_options['ipv4'] < max(1, (int) $package->meta->default_ipv4)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'ipv4' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.ipv4.package_minimum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options['hypervisorId']) && $config_options['hypervisorId'] !== ''
+                && (int) $config_options['hypervisorId'] < 1) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'hypervisorId' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.hypervisor.minimum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options[self::ADDITIONAL_IPV4_OPTION])
+                && $config_options[self::ADDITIONAL_IPV4_OPTION] !== ''
+                && (!isset($config_options['ipv4']) || $config_options['ipv4'] === '')
+                && (int) $config_options[self::ADDITIONAL_IPV4_OPTION] < 0) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        self::ADDITIONAL_IPV4_OPTION => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.ipv4.additional_minimum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options[self::ADDITIONAL_TRAFFIC_OPTION])
+                && $config_options[self::ADDITIONAL_TRAFFIC_OPTION] !== ''
+                && (!isset($config_options['traffic']) || $config_options['traffic'] === '')
+                && (int) $config_options[self::ADDITIONAL_TRAFFIC_OPTION] < 0) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        self::ADDITIONAL_TRAFFIC_OPTION => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options['traffic']) && $config_options['traffic'] !== ''
+                && ((int) $config_options['traffic'] < 0 || (int) $config_options['traffic'] > 999999999)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'traffic' => Language::_(
+                            (int) $config_options['traffic'] < 0
+                                ? 'VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum'
+                                : 'VirtfusionDirectProvisioningMod.!error.configoption.traffic.maximum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options['memory']) && $config_options['memory'] !== ''
+                && (int) $config_options['memory'] < 256) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'memory' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.memory.minimum', true)
+                    ]
+                ]);
+                return false;
+            }
+
+            if (isset($config_options['cpuCores']) && $config_options['cpuCores'] !== ''
+                && ((int) $config_options['cpuCores'] < 1 || (int) $config_options['cpuCores'] > 600)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'cpuCores' => Language::_(
+                            (int) $config_options['cpuCores'] < 1
+                                ? 'VirtfusionDirectProvisioningMod.!error.configoption.cpu.minimum'
+                                : 'VirtfusionDirectProvisioningMod.!error.configoption.cpu.maximum',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            foreach (['networkSpeed', 'networkSpeedInbound', 'networkSpeedOutbound'] as $option_name) {
+                if (isset($config_options[$option_name]) && $config_options[$option_name] !== ''
+                    && (int) $config_options[$option_name] < 0) {
+                    $this->Input->setErrors([
+                        'configoptions' => [
+                            $option_name => Language::_(
+                                'VirtfusionDirectProvisioningMod.!error.configoption.network_speed.minimum',
+                                true
+                            )
+                        ]
+                    ]);
+                    return false;
+                }
+            }
+
+            if (isset($config_options['cpuThrottle']) && $config_options['cpuThrottle'] !== ''
+                && ((int) $config_options['cpuThrottle'] < 0 || (int) $config_options['cpuThrottle'] > 99)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'cpuThrottle' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.cpu_throttle.range',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
+
+            $os_template = $config_options['operatingSystemId'] ?? null;
+            if ($this->shouldAutoBuild($config_options)
                 && (!is_numeric($os_template) || (int) $os_template < 1)) {
                 $this->Input->setErrors([
                     'configoptions' => [
-                        'virtfusion-os_template' => Language::_(
+                        'operatingSystemId' => Language::_(
                             'VirtfusionDirectProvisioningMod.!error.configoption.os_template.required',
                             true
                         )
@@ -2474,7 +2623,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return false;
         }
 
-        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
+        $amount = $this->getTrafficBlockAmount($vars['configoptions'] ?? []);
         if (!$amount || $amount < 1) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -2506,7 +2655,53 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $config_options = $vars['configoptions'] ?? [];
-        foreach (['memory', 'cpuCores', 'traffic', 'additional_bandwidth', 'storage'] as $option_name) {
+        foreach ([
+            'autoBuild',
+            'operatingSystemId',
+            'sshKeys',
+            'ipv6',
+            'email',
+            'swap',
+            'hypervisorId',
+            'networkSpeed',
+            'networkSpeedInbound',
+            'networkSpeedOutbound',
+            'storageProfile',
+            'networkProfile',
+            'firewallRulesets',
+            'hypervisorAssetGroups',
+            'additionalStorage1Enable',
+            'additionalStorage2Enable',
+            'additionalStorage1Profile',
+            'additionalStorage2Profile',
+            'additionalStorage1Capacity',
+            'additionalStorage2Capacity'
+        ] as $option_name) {
+            if (array_key_exists($option_name, $config_options)
+                && !$this->configOptionValuesEqual(
+                    $config_options[$option_name],
+                    $this->getServiceConfigOptionValue($service, $option_name)
+                )) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        $option_name => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.create_only',
+                            true,
+                            $option_name
+                        )
+                    ]
+                ]);
+                return false;
+            }
+        }
+
+        foreach (['memory', 'cpuCores', 'traffic', self::ADDITIONAL_TRAFFIC_OPTION, 'storage', 'ipv4', self::ADDITIONAL_IPV4_OPTION] as $option_name) {
+            if (($option_name === self::ADDITIONAL_IPV4_OPTION
+                    && isset($config_options['ipv4']) && $config_options['ipv4'] !== '')
+                || ($option_name === self::ADDITIONAL_TRAFFIC_OPTION
+                    && isset($config_options['traffic']) && $config_options['traffic'] !== '')) {
+                continue;
+            }
             if (isset($config_options[$option_name])
                 && $config_options[$option_name] !== ''
                 && !is_numeric($config_options[$option_name])) {
@@ -2566,25 +2761,63 @@ class VirtfusionDirectProvisioningMod extends Module
             ]);
             return false;
         }
-        if (isset($config_options['additional_bandwidth']) && $config_options['additional_bandwidth'] !== ''
-            && (int) $config_options['additional_bandwidth'] < 0) {
+        if (isset($config_options[self::ADDITIONAL_TRAFFIC_OPTION])
+            && $config_options[self::ADDITIONAL_TRAFFIC_OPTION] !== ''
+            && (!isset($config_options['traffic']) || $config_options['traffic'] === '')
+            && (int) $config_options[self::ADDITIONAL_TRAFFIC_OPTION] < 0) {
             $this->Input->setErrors([
                 'configoptions' => [
-                    'additional_bandwidth' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum', true)
+                    self::ADDITIONAL_TRAFFIC_OPTION => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum', true)
                 ]
             ]);
             return false;
         }
 
-        $requested_port_speed = $this->requestedPortSpeed($config_options);
-        if ($requested_port_speed !== null
-            && (string) $requested_port_speed !== (string) $this->currentPortSpeed($service)) {
+        if (isset($config_options['ipv4']) && $config_options['ipv4'] !== ''
+            && (int) $config_options['ipv4'] < 1) {
             $this->Input->setErrors([
                 'configoptions' => [
-                    'port_speed' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.port_speed.edit', true)
+                    'ipv4' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.ipv4.minimum', true)
                 ]
             ]);
             return false;
+        }
+        if (isset($config_options[self::ADDITIONAL_IPV4_OPTION])
+            && $config_options[self::ADDITIONAL_IPV4_OPTION] !== ''
+            && (!isset($config_options['ipv4']) || $config_options['ipv4'] === '')
+            && (int) $config_options[self::ADDITIONAL_IPV4_OPTION] < 0) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    self::ADDITIONAL_IPV4_OPTION => Language::_(
+                        'VirtfusionDirectProvisioningMod.!error.configoption.ipv4.additional_minimum',
+                        true
+                    )
+                ]
+            ]);
+            return false;
+        }
+
+        $requested_network_speed = $this->requestedNetworkSpeed($config_options);
+        if ($requested_network_speed !== null
+            && (string) $requested_network_speed !== (string) $this->currentNetworkSpeed($service)) {
+            $this->Input->setErrors([
+                'configoptions' => [
+                    self::NETWORK_SPEED_OPTION => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.network_speed.edit', true)
+                ]
+            ]);
+            return false;
+        }
+        foreach (['networkSpeedInbound', 'networkSpeedOutbound'] as $option_name) {
+            if (array_key_exists($option_name, $config_options)
+                && (string) $config_options[$option_name]
+                    !== (string) $this->getServiceConfigOptionValue($service, $option_name)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        $option_name => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.network_speed.edit', true)
+                    ]
+                ]);
+                return false;
+            }
         }
 
         $package_changed = isset($vars['pricing_id']) && $vars['pricing_id'] != $service->pricing_id;
@@ -2696,8 +2929,9 @@ class VirtfusionDirectProvisioningMod extends Module
             ]
         ];
 
-        if (($package === null || !$this->isTrafficBlockPackage($package))
-            && ($package === null || $this->shouldAutoBuild($package, $vars['configoptions'] ?? []))) {
+        if (!$edit
+            && ($package === null || !$this->isTrafficBlockPackage($package))
+            && ($package === null || $this->shouldAutoBuild($vars['configoptions'] ?? []))) {
             $rules['virtfusion_hostname'] = [
                 'valid' => [
                     'rule' => [[$this, 'validateHostname']],
@@ -2801,7 +3035,7 @@ class VirtfusionDirectProvisioningMod extends Module
                     $package_changes = [
                         'backupPlan' => $this->getServiceConfigOptionValue(
                             $service,
-                            'virtfusion-backup_plan_id'
+                            self::BACKUP_PLAN_OPTION
                         ) === null,
                         'cpu' => $this->getServiceConfigOptionValue($service, 'cpuCores') === null,
                         'memory' => $this->getServiceConfigOptionValue($service, 'memory') === null,
@@ -2811,10 +3045,12 @@ class VirtfusionDirectProvisioningMod extends Module
                             && $new_primary_storage >= $primary_storage,
                         'primaryDiskWriteIOPS' => true,
                         'primaryDiskWriteThroughput' => true,
-                        'primaryNetworkInboundSpeed' => $this->currentPortSpeed($service) === null,
-                        'primaryNetworkOutboundSpeed' => $this->currentPortSpeed($service) === null,
+                        'primaryNetworkInboundSpeed' => $this->currentNetworkSpeed($service) === null
+                            && $this->getServiceConfigOptionValue($service, 'networkSpeedInbound') === null,
+                        'primaryNetworkOutboundSpeed' => $this->currentNetworkSpeed($service) === null
+                            && $this->getServiceConfigOptionValue($service, 'networkSpeedOutbound') === null,
                         'primaryNetworkTraffic' => $this->getServiceConfigOptionValue($service, 'traffic') === null
-                            && $this->getServiceConfigOptionValue($service, 'additional_bandwidth') === null
+                            && $this->getServiceConfigOptionValue($service, self::ADDITIONAL_TRAFFIC_OPTION) === null
                     ];
                     $server_pkg_data = $server_api->changePkg($server_id, $new_pkg_id, $package_changes);
                     $server_response = json_decode($server_pkg_data['response'] ?? '');
@@ -3181,7 +3417,8 @@ class VirtfusionDirectProvisioningMod extends Module
         $network_fields = [
             'virtfusion_ip' => $ip_addresses[0] ?? '',
             'virtfusion-base_ips' => implode(',', array_slice($ip_addresses, 1, $base_num)),
-            'additional_num_ips' => implode(',', array_slice($ip_addresses, $base_num + 1))
+            'additional_num_ips' => implode(',', array_slice($ip_addresses, $base_num + 1)),
+            'virtfusion_ipv4_quantity' => count($ip_addresses)
         ];
 
         if (isset($server_data->data->network->interfaces[0]->ipv6[0])) {
@@ -3793,7 +4030,7 @@ class VirtfusionDirectProvisioningMod extends Module
     ) {
         $requested = array_intersect_key(
             $config_options,
-            array_flip(['traffic', 'additional_bandwidth', 'memory', 'cpuCores'])
+            array_flip(['traffic', self::ADDITIONAL_TRAFFIC_OPTION, 'memory', 'cpuCores'])
         );
         if (empty($requested) || empty($service_fields->virtfusion_server_id)) {
             return ['service_fields' => [], 'errors' => ['err_msg' => '']];
@@ -3831,7 +4068,7 @@ class VirtfusionDirectProvisioningMod extends Module
             $targets = [];
             if (array_key_exists('traffic', $requested)) {
                 $targets['traffic'] = (int) $requested['traffic'];
-            } elseif (array_key_exists('additional_bandwidth', $requested)) {
+            } elseif (array_key_exists(self::ADDITIONAL_TRAFFIC_OPTION, $requested)) {
                 $package_request = $server_api->getPkg($package->meta->package_id);
                 if (!$this->apiRequestSucceeded($package_request, [200])) {
                     return [
@@ -3843,7 +4080,15 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
                 $package_data = json_decode((string) $package_request['response']);
                 $targets['traffic'] = (int) ($package_data->data->traffic ?? 0)
-                    + (int) $requested['additional_bandwidth'];
+                    + (int) $requested[self::ADDITIONAL_TRAFFIC_OPTION];
+            }
+            if (isset($targets['traffic']) && $targets['traffic'] > 999999999) {
+                return [
+                    'service_fields' => [],
+                    'errors' => [
+                        'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.traffic.maximum', true)
+                    ]
+                ];
             }
             if (array_key_exists('memory', $requested) && $requested['memory'] !== '') {
                 $targets['memory'] = (int) $requested['memory'];
@@ -4025,8 +4270,8 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_api = $this->getServerApiFromRow($module_row);
         $server_id = $service_fields->virtfusion_server_id;
 
-        if (!$err_msg && isset($vars['configoptions']['virtfusion-backup_plan_id'])) {
-            $backup_plan_id = trim((string) $vars['configoptions']['virtfusion-backup_plan_id']);
+        if (!$err_msg && isset($vars['configoptions'][self::BACKUP_PLAN_OPTION])) {
+            $backup_plan_id = trim((string) $vars['configoptions'][self::BACKUP_PLAN_OPTION]);
 
             if ($backup_plan_id !== '' && is_numeric($backup_plan_id)) {
                 $request = $server_api->setBackupPlan($server_id, $backup_plan_id);
@@ -4040,14 +4285,14 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if (!$err_msg && isset($vars['configoptions']['virtfusion-cpu_throttle'])) {
-            $percent = trim((string) $vars['configoptions']['virtfusion-cpu_throttle']);
+        if (!$err_msg && isset($vars['configoptions'][self::CPU_THROTTLE_OPTION])) {
+            $percent = trim((string) $vars['configoptions'][self::CPU_THROTTLE_OPTION]);
 
             if ($percent !== '' && is_numeric($percent)) {
                 $request = $server_api->modifyCpuThrottle($server_id, ['percent' => (int) $percent]);
-                $this->log($module_row->meta->hostname . '| cpu throttle', serialize($request), 'output', in_array($request['info']['http_code'], [200, 204]));
+                $this->log($module_row->meta->hostname . '| cpu throttle', serialize($request), 'output', in_array($request['info']['http_code'], [200, 201, 204]));
 
-                if (!in_array($request['info']['http_code'], [200, 204])) {
+                if (!in_array($request['info']['http_code'], [200, 201, 204])) {
                     $err_msg = 'There was an error while updating CPU throttle.';
                 } else {
                     $updated_fields['virtfusion_cpu_throttle'] = (int) $percent;
@@ -4068,7 +4313,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param array $vars An array of user supplied info to satisfy the request
      * @return null
      */
-    private function adjustIpAddresses($module_row, $service_fields, $vars)
+    private function adjustIpAddresses($module_row, $service_fields, $vars, $package)
     {
         $edit_qty = 0;
         $current_qty = 0;
@@ -4090,10 +4335,42 @@ class VirtfusionDirectProvisioningMod extends Module
             $current_qty = count($extra_ips);
         }
 
-        // Get the new updated count
-        if (isset($vars['configoptions']['additional_num_ips'])) {
-            $edit_qty = (int) $vars['configoptions']['additional_num_ips'];
+        $has_ipv4_change = (isset($vars['configoptions']['ipv4'])
+                && $vars['configoptions']['ipv4'] !== '')
+            || (isset($vars['configoptions'][self::ADDITIONAL_IPV4_OPTION])
+                && $vars['configoptions'][self::ADDITIONAL_IPV4_OPTION] !== '');
+        if (!$has_ipv4_change) {
+            return [
+                'service_fields' => $service_fields,
+                'errors' => ['err_msg' => '']
+            ];
         }
+
+        $base_qty = max(1, (int) ($package->meta->default_ipv4 ?? 1));
+        $current_total = isset($service_fields->virtfusion_ipv4_quantity)
+            && is_numeric($service_fields->virtfusion_ipv4_quantity)
+            ? (int) $service_fields->virtfusion_ipv4_quantity
+            : $base_qty + $current_qty;
+        $current_qty = max(0, $current_total - $base_qty);
+
+        // The ipv4 configurable option is the absolute API quantity. Convert
+        // it to the additional-address count used by the IP management UI.
+        $edit_total = $current_total;
+        if (isset($vars['configoptions']['ipv4']) && $vars['configoptions']['ipv4'] !== '') {
+            $edit_total = (int) $vars['configoptions']['ipv4'];
+        } elseif (isset($vars['configoptions'][self::ADDITIONAL_IPV4_OPTION])
+            && $vars['configoptions'][self::ADDITIONAL_IPV4_OPTION] !== '') {
+            $edit_total = $base_qty + (int) $vars['configoptions'][self::ADDITIONAL_IPV4_OPTION];
+        }
+        if ($edit_total < $base_qty) {
+            return [
+                'service_fields' => $service_fields,
+                'errors' => [
+                    'err_msg' => Language::_('VirtfusionDirectProvisioningMod.!error.configoption.ipv4.package_minimum', true)
+                ]
+            ];
+        }
+        $edit_qty = max(0, $edit_total - $base_qty);
 
         if (isset($vars['virtfusion_extra_ip_to_remove'])) {
             $ips_to_remove = $vars['virtfusion_extra_ip_to_remove'];
@@ -4131,8 +4408,8 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         if (empty($err_msg) && $current_qty != $edit_qty) {
-            // should we do this here?
             $service_fields->{'additional_num_ips'} = implode(',', $new_extra_ips);
+            $service_fields->virtfusion_ipv4_quantity = $edit_total;
         }
 
         return [
@@ -4170,7 +4447,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         // determine if we can add more IPs
         foreach ($service->options as $option) {
-            if ($option->option_name == 'additional_num_ips') {
+            if (in_array($option->option_name, ['ipv4', self::ADDITIONAL_IPV4_OPTION], true)) {
                 $option_addable = $option->option_addable;
             }
         }
@@ -4196,7 +4473,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $option_editable = !$client;
         if ($client) {
             foreach ($service->options as $option) {
-                if ($option->option_name == 'additional_num_ips') {
+                if (in_array($option->option_name, ['ipv4', self::ADDITIONAL_IPV4_OPTION], true)) {
                     $option_editable = ($option->option_editable == 1);
                     break;
                 }
@@ -4271,25 +4548,44 @@ class VirtfusionDirectProvisioningMod extends Module
         return $options;
     }
 
-    private function provisioningOptionVisibilityHtml($package_id, $legacy_auto_build)
+    private function provisioningOptionVisibilityHtml($package_id, $fallback_auto_build, $editing = false)
     {
         Loader::loadModels($this, ['PackageOptions']);
         $always_hidden_ids = [];
         $build_option_ids = [];
         $auto_build_ids = [];
         $build_option_names = [
-            'virtfusion-os_template',
-            'virtfusion-ssh_keys',
-            'virtfusion-email',
-            'virtfusion-swap'
+            'operatingSystemId',
+            'sshKeys',
+            'ipv6',
+            'email',
+            'swap'
         ];
+        $create_only_names = array_merge($build_option_names, [
+            self::AUTO_BUILD_OPTION,
+            'hypervisorId',
+            self::NETWORK_SPEED_OPTION,
+            'networkSpeedInbound',
+            'networkSpeedOutbound',
+            'storage',
+            'storageProfile',
+            'networkProfile',
+            'firewallRulesets',
+            'hypervisorAssetGroups',
+            'additionalStorage1Enable',
+            'additionalStorage2Enable',
+            'additionalStorage1Profile',
+            'additionalStorage2Profile',
+            'additionalStorage1Capacity',
+            'additionalStorage2Capacity'
+        ]);
         foreach ($this->PackageOptions->getByPackageId($package_id) as $option) {
             $name = $option->name ?? null;
-            if ($name === 'virtfusion-vnc') {
+            if ($name === 'vnc' || ($editing && in_array($name, $create_only_names, true))) {
                 $always_hidden_ids[] = (int) $option->id;
             } elseif (in_array($name, $build_option_names, true)) {
                 $build_option_ids[] = (int) $option->id;
-            } elseif (in_array($name, self::AUTO_BUILD_OPTIONS, true)) {
+            } elseif ($name === self::AUTO_BUILD_OPTION) {
                 $auto_build_ids[] = (int) $option->id;
             }
         }
@@ -4298,7 +4594,7 @@ class VirtfusionDirectProvisioningMod extends Module
             . 'var alwaysHidden=' . json_encode($always_hidden_ids) . ';'
             . 'var buildOptions=' . json_encode($build_option_ids) . ';'
             . 'var autoBuildOptions=' . json_encode($auto_build_ids) . ';'
-            . 'var fallbackAutoBuild=' . ($legacy_auto_build ? 'true' : 'false') . ';'
+            . 'var fallbackAutoBuild=' . ($fallback_auto_build ? 'true' : 'false') . ';'
             . 'function selector(id){return "[name=\\"configoptions["+id+"]\\"],"'
             . '+"[name=\\"configoptions["+id+"][]\\"]";}'
             . 'function boolValue(value){return ["1","true","yes","on"].indexOf(String(value).toLowerCase())!==-1;}'
@@ -4364,7 +4660,7 @@ class VirtfusionDirectProvisioningMod extends Module
             <script type='text/javascript'>" . $this->getHostnameValidationJS() . '</script>
         ' . $this->provisioningOptionVisibilityHtml(
             $package->id,
-            $this->shouldAutoBuild($package)
+            false
         ));
 
         return $fields;
@@ -4388,9 +4684,10 @@ class VirtfusionDirectProvisioningMod extends Module
             return $fields;
         }
 
-        $form_auto_build = $this->shouldAutoBuild($package)
-            && (($vars->virtfusion_build_status ?? null) !== 'skipped');
-        $hidden_options = $this->provisioningOptionVisibilityHtml($package->id, $form_auto_build);
+        // Existing services keep their edit layout unless their saved build
+        // status explicitly identifies a no-build service.
+        $form_auto_build = (($vars->virtfusion_build_status ?? null) !== 'skipped');
+        $hidden_options = $this->provisioningOptionVisibilityHtml($package->id, $form_auto_build, true);
         $hostname_field = $fields->label(Language::_('VirtfusionDirectProvisioningMod.option_fields.hostname.label', true), 'hostname');
         $hostname_field->attach(
             $fields->fieldText(
@@ -4421,7 +4718,10 @@ class VirtfusionDirectProvisioningMod extends Module
             $extra_ips = array_combine($ip_options, $ip_options);
         }
 
-        $service_options = $this->getServiceOption($package->id, 'additional_num_ips');
+        $service_options = $this->getServiceOption($package->id, 'ipv4');
+        if (empty($service_options)) {
+            $service_options = $this->getServiceOption($package->id, self::ADDITIONAL_IPV4_OPTION);
+        }
         if (!empty($service_options)) {
             $extra_ip_addresses = $fields->label(Language::_('VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses', true), 'virtfusion_direct_provisioning_mod_extra_ip_addresses');
             $extra_ip_addresses->attach($fields->tooltip(Language::_('VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses.tooltip', true)));
@@ -4478,7 +4778,10 @@ class VirtfusionDirectProvisioningMod extends Module
         // Set the field
         $fields->setField($hostname_field);
 
-        $service_options = $this->getServiceOption($package->id, 'additional_num_ips');
+        $service_options = $this->getServiceOption($package->id, 'ipv4');
+        if (empty($service_options)) {
+            $service_options = $this->getServiceOption($package->id, self::ADDITIONAL_IPV4_OPTION);
+        }
         if (!empty($service_options) && $service_options['addable'] == '1') {
         }
 
@@ -4487,7 +4790,7 @@ class VirtfusionDirectProvisioningMod extends Module
             <script type='text/javascript'>" . $this->getHostnameValidationJS() . '</script>
         ' . $this->provisioningOptionVisibilityHtml(
             $package->id,
-            $this->shouldAutoBuild($package)
+            false
         ));
 
         return $fields;
@@ -4497,11 +4800,11 @@ class VirtfusionDirectProvisioningMod extends Module
     {
         $fields = new ModuleFields();
         if (!$this->isTrafficBlockPackage($package)) {
-            $form_auto_build = $this->shouldAutoBuild($package)
-                && (($vars->virtfusion_build_status ?? null) !== 'skipped');
+            $form_auto_build = (($vars->virtfusion_build_status ?? null) !== 'skipped');
             $fields->setHtml($this->provisioningOptionVisibilityHtml(
                 $package->id,
-                $form_auto_build
+                $form_auto_build,
+                true
             ));
         }
         return $fields;

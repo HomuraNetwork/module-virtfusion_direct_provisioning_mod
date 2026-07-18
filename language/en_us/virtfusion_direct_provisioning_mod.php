@@ -79,13 +79,20 @@ $lang['VirtfusionDirectProvisioningMod.!error.meta[package_id].valid'] = 'Invali
 $lang['VirtfusionDirectProvisioningMod.!error.server_id.valid'] = 'Invalid server ID.';
 $lang['VirtfusionDirectProvisioningMod.!error.label.valid'] = 'Invalid service label.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.numeric'] = 'The %1$s configurable option must be numeric.';
-$lang['VirtfusionDirectProvisioningMod.!error.configoption.os_template.required'] = 'Select a valid virtfusion-os_template when Auto build is enabled.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.os_template.required'] = 'Select a valid operatingSystemId when Auto Build is enabled.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.minimum'] = 'The ipv4 quantity must be at least 1.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.package_minimum'] = 'The ipv4 quantity cannot be lower than the package Default IPv4 value.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.additional_minimum'] = 'additionalIpv4 must be zero or greater.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu_throttle.range'] = 'cpuThrottle must be between 0 and 99.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.create_only'] = '%1$s can only be selected when the service is created.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.network_speed.minimum'] = 'Network speed must be zero or greater.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.hypervisor.minimum'] = 'hypervisorId must be at least 1.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.memory.minimum'] = 'Memory must be at least 256 MB.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu.minimum'] = 'CPU cores must be at least 1.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu.maximum'] = 'VirtFusion supports at most 600 CPU cores.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum'] = 'Traffic must be zero or greater.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.traffic.maximum'] = 'VirtFusion traffic must not exceed 999999999 GB.';
-$lang['VirtfusionDirectProvisioningMod.!error.configoption.port_speed.edit'] = 'VirtFusion does not provide a documented API for changing a custom port speed after creation. Change to a VirtFusion package with the required network speed instead.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.network_speed.edit'] = 'VirtFusion does not provide a documented API for changing a custom network speed after creation. Change to a VirtFusion package with the required speed instead.';
 $lang['VirtfusionDirectProvisioningMod.!error.storage.downgrade'] = 'Primary disk storage cannot be reduced.';
 $lang['VirtfusionDirectProvisioningMod.!error.storage.package_required'] = 'VirtFusion only exposes primary disk expansion through a package change. Disk growth cannot be applied from a storage configurable option; select a larger package without changing this option.';
 $lang['VirtfusionDirectProvisioningMod.!error.resource.current'] = 'The current VirtFusion server resources could not be retrieved.';
@@ -99,7 +106,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion act
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.disabled'] = 'Traffic Block purchases are disabled for this VirtFusion server row.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
-$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'Traffic Block GB must be a positive whole number, supplied by the configurable option or package metadata.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'The amount configurable option must contain a positive whole number of GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.server_id'] = 'The parent service does not contain a valid VirtFusion server ID.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.module_row'] = 'The Traffic Block must use the same VirtFusion module row as its parent server.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.pending_required'] = 'For safe one-time provisioning, create and invoice the Traffic Block as a pending service before activation.';
@@ -203,7 +210,7 @@ $lang['VirtfusionDirectProvisioningMod.product_addon.traffic_block'] = 'Traffic 
 $lang['VirtfusionDirectProvisioningMod.product_addon.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the addon; VirtFusion does not provide a reservation API.';
 
 // Option Fields
-$lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'additional_num_ips';
+$lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'ipv4';
 
 // Client Fields
 $lang['VirtfusionDirectProvisioningMod.option_fields.hostname.label'] = 'Hostname';

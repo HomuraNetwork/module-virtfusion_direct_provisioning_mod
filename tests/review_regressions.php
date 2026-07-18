@@ -123,22 +123,57 @@ function assertSameValue($expected, $actual, $message)
 
 $module = (new ReflectionClass(VirtfusionDirectProvisioningMod::class))->newInstanceWithoutConstructor();
 
-$package = (object) ['meta' => (object) []];
-assertSameValue(true, callPrivate($module, 'shouldAutoBuild', [$package]), 'Auto build must default to enabled.');
-$package->meta->{'virtfusion-auto_build'} = 'false';
-assertSameValue(false, callPrivate($module, 'shouldAutoBuild', [$package]), 'Package setting must disable auto build.');
+assertSameValue(false, callPrivate($module, 'shouldAutoBuild'), 'Auto build must use the safe disabled default.');
 assertSameValue(
     true,
-    callPrivate($module, 'shouldAutoBuild', [$package, ['virtfusion-auto_build' => 'true']]),
-    'The configurable Auto build option must override legacy package metadata.'
+    callPrivate($module, 'shouldAutoBuild', [['autoBuild' => 'true']]),
+    'The canonical autoBuild option must explicitly enable Auto Build.'
 );
+assertSameValue(
+    false,
+    callPrivate($module, 'shouldAutoBuild', [['virtfusion-auto_build' => 'true']]),
+    'Legacy Auto Build option names must not be accepted.'
+);
+$server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
+$add_rules = callPrivate($module, 'getServiceRules', [
+    ['configoptions' => ['autoBuild' => 'true']],
+    false,
+    $server_package
+]);
+assertSameValue(true, isset($add_rules['virtfusion_hostname']), 'Auto Build creation must require a hostname.');
+$edit_rules = callPrivate($module, 'getServiceRules', [[], true, null]);
+assertSameValue(false, isset($edit_rules['virtfusion_hostname']), 'Service edits must not require a build hostname.');
 
 $create = callPrivate($module, 'applyCreateConfigOptions', [
     ['packageId' => 10, 'userId' => 20, 'hypervisorId' => 30],
-    ['virtfusion-port_speed' => '2500']
+    ['networkSpeed' => '2500', 'ipv4' => '3']
 ]);
 assertSameValue(2500, $create['networkSpeedInbound'], 'Combined port speed must set inbound speed.');
 assertSameValue(2500, $create['networkSpeedOutbound'], 'Combined port speed must set outbound speed.');
+assertSameValue(3, $create['ipv4'], 'The canonical ipv4 option must map directly to the create request.');
+
+$ipv4_package = (object) ['meta' => (object) ['default_ipv4' => 1]];
+assertSameValue(
+    3,
+    callPrivate($module, 'getIpv4Quantity', [$ipv4_package, ['additionalIpv4' => 2]]),
+    'additionalIpv4 must be added to the package default.'
+);
+assertSameValue(
+    4,
+    callPrivate($module, 'getIpv4Quantity', [$ipv4_package, ['ipv4' => 4, 'additionalIpv4' => 2]]),
+    'The absolute ipv4 API field must take precedence over additionalIpv4.'
+);
+
+assertSameValue(
+    100,
+    callPrivate($module, 'getTrafficBlockAmount', [['amount' => '100']]),
+    'Traffic Block amount must use the API request field name.'
+);
+assertSameValue(
+    null,
+    callPrivate($module, 'getTrafficBlockAmount', [['traffic_block_gb' => '100']]),
+    'Legacy Traffic Block option names must not be accepted.'
+);
 
 $blocks = [
     (object) ['id' => 1, 'month' => 5, 'traffic' => 100, 'added' => '2026-07-18T01:00:00Z'],
@@ -215,9 +250,11 @@ $resource_module->PackageOptions = new class {
     public function getByPackageId($package_id)
     {
         return [
-            (object) ['id' => 10, 'name' => 'virtfusion-os_template'],
-            (object) ['id' => 11, 'name' => 'virtfusion-vnc'],
-            (object) ['id' => 12, 'name' => 'virtfusion-backup_plan_id']
+            (object) ['id' => 10, 'name' => 'operatingSystemId'],
+            (object) ['id' => 11, 'name' => 'vnc'],
+            (object) ['id' => 12, 'name' => 'backupPlanId'],
+            (object) ['id' => 13, 'name' => 'autoBuild'],
+            (object) ['id' => 14, 'name' => 'networkSpeed']
         ];
     }
 };
@@ -226,10 +263,15 @@ assertSameValue(true, strpos($hidden_options, '10') !== false, 'No-auto-build fo
 assertSameValue(true, strpos($hidden_options, '11') !== false, 'No-auto-build forms must hide the VNC option.');
 assertSameValue(false, strpos($hidden_options, '12') !== false, 'Backup plan must remain available without auto build.');
 
+$edit_hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1, true, true]);
+assertSameValue(true, strpos($edit_hidden_options, '13') !== false, 'Service edits must hide autoBuild.');
+assertSameValue(true, strpos($edit_hidden_options, '14') !== false, 'Service edits must hide create-only networkSpeed.');
+assertSameValue(false, strpos($edit_hidden_options, '12') !== false, 'Service edits must keep backupPlanId available.');
+
 $no_build_vnc = callPrivate($resource_module, 'applyConfigurableServerOptions', [
     $row,
     (object) ['virtfusion_server_id' => 42, 'virtfusion_vnc' => 'false'],
-    ['configoptions' => ['virtfusion-vnc' => 'true']]
+    ['configoptions' => ['vnc' => 'true']]
 ]);
 assertSameValue('', $no_build_vnc['errors']['err_msg'], 'Services must ignore VNC config without an API call.');
 

@@ -66,75 +66,63 @@ The module adds these Module Options:
 
 The configurable-option **Name** must match the value shown below. The customer-facing label may be changed or translated.
 
-### Basic provisioning options
+Configurable Option names use the VirtFusion API field names. The module does not accept legacy aliases.
+
+### Module controls
 
 | Name | Suggested type | Use |
 | --- | --- | --- |
-| `virtfusion-auto_build` | Dropdown | `true` builds the selected OS; `false` creates the server without building it. |
-| `virtfusion-os_template` | Dropdown | VirtFusion operating-system template ID. Required when Auto Build is enabled. |
-| `dynamic_hypervisor_group_id` | Dropdown | Overrides the package's Hypervisor Group ID. |
-| `additional_num_ips` | Quantity | Additional IPv4 addresses beyond Default IPv4. |
-| `virtfusion-backup_plan_id` | Dropdown | VirtFusion backup-plan ID. May be changed later. |
-| `virtfusion-cpu_throttle` | Quantity or Dropdown | CPU throttle percentage. |
+| `autoBuild` | Dropdown | Create only. `true` calls the Build API; `false` creates the server without building. If omitted, the default is `false`. |
+| `networkSpeed` | Quantity or Dropdown | Create only. Module-provided combined speed applied to both `networkSpeedInbound` and `networkSpeedOutbound`. |
+| `additionalIpv4` | Quantity | Adds IPv4 addresses to the Module Option **Default IPv4** quantity. Ignored when an absolute `ipv4` value is supplied. |
+| `additionalTraffic` | Quantity or Dropdown | Adds GB to the selected VirtFusion package's base traffic. Ignored when an absolute `traffic` value is supplied. |
+| `backupPlanId` | Dropdown | Backup-plan ID applied after creation and changeable later. Use `0` to remove the plan. |
+| `cpuThrottle` | Quantity or Dropdown | CPU throttle percentage from 0 to 99, applied after creation and changeable later. |
 
-For Auto Build, the aliases `virtfusion_auto_build` and `auto_build` are also accepted.
+`autoBuild` and all Build API options are hidden after service creation. To make a package always build, attach an `autoBuild` option whose only value is `true`. Omit it for a no-build package.
 
-### Port speed
-
-Use one configurable option named:
-
-```text
-virtfusion-port_speed
-```
-
-Its numeric value is applied to both inbound and outbound port speed. The aliases `virtfusion_port_speed` and `port_speed` are also accepted.
-
-Port speed is applied only when the server is created. It cannot be changed later through the current VirtFusion API.
-
-If needed, separate create-time options named `networkSpeedInbound` and `networkSpeedOutbound` are also supported. The combined port-speed option takes priority when both are present.
-
-### Server resources
+### Create Server API options
 
 | Name | Use |
 | --- | --- |
-| `storage` | Primary disk capacity at creation. |
-| `memory` | Memory in MB. May be changed later. |
-| `cpuCores` | CPU core count. May be changed later. |
-| `traffic` | Total traffic allowance in GB. May be changed later. |
-| `additional_bandwidth` | Additional GB added to the selected VirtFusion package's traffic allowance. |
+| `hypervisorId` | Overrides the Module Option **Hypervisor Group ID**. |
+| `ipv4` | Absolute total IPv4 quantity. Overrides **Default IPv4** and cannot be lower than it. |
+| `storage` | Primary disk capacity in GB. |
+| `traffic` | Absolute traffic allowance in GB; `0` means unlimited. |
+| `memory` | Memory in MB. |
+| `cpuCores` | CPU core count. |
+| `networkSpeedInbound` | Inbound speed in kB/s. Overridden by `networkSpeed`. |
+| `networkSpeedOutbound` | Outbound speed in kB/s. Overridden by `networkSpeed`. |
+| `storageProfile` | Storage-profile ID. |
+| `networkProfile` | Network-profile ID. |
+| `firewallRulesets` | Comma-separated firewall-ruleset IDs. |
+| `hypervisorAssetGroups` | Comma-separated hypervisor asset-group IDs. |
+| `additionalStorage1Enable` | Enable or disable the first additional disk. |
+| `additionalStorage1Profile` | First additional-disk profile ID. |
+| `additionalStorage1Capacity` | First additional-disk capacity in GB. |
+| `additionalStorage2Enable` | Enable or disable the second additional disk. |
+| `additionalStorage2Profile` | Second additional-disk profile ID. |
+| `additionalStorage2Capacity` | Second additional-disk capacity in GB. |
 
-If both `traffic` and `additional_bandwidth` are present, `traffic` takes priority.
+Use `additionalIpv4` for a normally priced Extra IP quantity. Use `ipv4` only when the Configurable Option value should represent the complete API quantity. `ipv4` takes priority if both are attached.
 
-### Build options
+`networkSpeed`, `networkSpeedInbound`, `networkSpeedOutbound`, placement, profiles, and storage layout are create-only. They are hidden on service-edit forms because the current VirtFusion API does not provide matching edit operations.
 
-These options are used only when Auto Build is enabled:
+### Build Server API options
+
+These names are used only when `autoBuild=true`:
 
 | Name | Use |
 | --- | --- |
-| `virtfusion-ssh_keys` | VirtFusion SSH-key IDs. Multiple IDs may be comma-separated. |
-| `virtfusion-email` | Whether VirtFusion sends its build email. |
-| `virtfusion-swap` | Swap value passed to the build request. |
+| `operatingSystemId` | Required VirtFusion operating-system template ID. |
+| `sshKeys` | Comma-separated VirtFusion SSH-key IDs. |
+| `ipv6` | Enable or disable IPv6 during build. |
+| `email` | Enable or disable the VirtFusion build email. |
+| `swap` | Swap value passed to VirtFusion. |
 
-When `virtfusion-auto_build` is `false`, the order form hides hostname, OS template, SSH keys, build email, and swap. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
+When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `ipv6`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
 
 VNC is not a Configurable Option. It is enabled only when the client or administrator requests it from the service Manage page.
-
-### Advanced create-time options
-
-The following options are available when the related VirtFusion configuration is used:
-
-| Name | Use |
-| --- | --- |
-| `storageProfile` | Storage profile ID. |
-| `networkProfile` | Network profile ID. |
-| `firewallRulesets` | Comma-separated firewall ruleset IDs. |
-| `hypervisorAssetGroups` | Comma-separated hypervisor asset-group IDs. |
-| `additionalStorage1Enable` | Enable the first additional disk. |
-| `additionalStorage1Profile` | First additional-disk profile ID. |
-| `additionalStorage1Capacity` | First additional-disk capacity. |
-| `additionalStorage2Enable` | Enable the second additional disk. |
-| `additionalStorage2Profile` | Second additional-disk profile ID. |
-| `additionalStorage2Capacity` | Second additional-disk capacity. |
 
 ## Service upgrades and downgrades
 
@@ -145,7 +133,8 @@ The module can change:
 - memory;
 - CPU cores;
 - traffic allowance;
-- additional bandwidth;
+- additional traffic;
+- IPv4 quantity;
 - backup plan;
 - CPU throttle;
 - the selected VirtFusion package.
@@ -167,10 +156,8 @@ To create a Traffic Block product:
 1. Create another Blesta package using this module.
 2. Set **Product Type** to **Traffic Block (one-shot addon)**.
 3. Add one-time pricing only.
-4. Add a Configurable Option named `virtfusion-traffic_block_gb` whose value is the number of GB to purchase.
+4. Add a Configurable Option named `amount` whose value is the number of GB to purchase.
 5. Enable **Traffic Block Purchases** on the parent server's module row.
-
-The aliases `virtfusion_traffic_block_gb` and `traffic_block_gb` are also accepted.
 
 Install the separate **Product Addons** plugin to offer the Traffic Block after a server has been created. In the plugin, create a `traffic_block` rule and choose the allowed parent server packages and Traffic Block packages.
 

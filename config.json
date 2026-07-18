@@ -1,5 +1,5 @@
 {
-    "version": "2026.07.18.2",
+    "version": "2026.07.18.3",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -33,8 +33,7 @@
             "hypervisor_group_id",
             "default_ipv4",
             "package_id",
-            "virtfusion-service_type",
-            "virtfusion-traffic_block_gb"
+            "virtfusion-service_type"
         ],
         "service": [
             "virtfusion_server_id",
