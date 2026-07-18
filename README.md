@@ -125,5 +125,9 @@ Blesta's normal Service Changes flow calculates proration, validates the request
 
 Package, memory, and CPU changes set a persistent restart recommendation instead of forcing an immediate reboot. The recommendation is cleared after a successful restart from the module's Manage tab.
 
+The Manage tab displays the VirtFusion traffic period end returned by the remote server. This date is independent of Blesta service renewal-date adjustments such as manually granted service days.
+
+Traffic Block purchases are separately gated per module row and are disabled by default. Enabling the row setting only allows the optional purchase integration to operate; it does not create, renew, or delete any traffic block by itself.
+
 ### Reselling bandwidth
 The traffic (bandwidth) management feature requires VirtFusion version 6 or later.

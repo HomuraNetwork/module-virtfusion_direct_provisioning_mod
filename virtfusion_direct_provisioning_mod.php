@@ -521,11 +521,11 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function addModuleRow(array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token'];
+        $meta_fields = ['name', 'hostname', 'api_token', 'traffic_blocks_enabled'];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = [];
+        $checkbox_fields = ['traffic_blocks_enabled'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {
@@ -568,11 +568,11 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function editModuleRow($module_row, array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token'];
+        $meta_fields = ['name', 'hostname', 'api_token', 'traffic_blocks_enabled'];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = [];
+        $checkbox_fields = ['traffic_blocks_enabled'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {

@@ -54,6 +54,8 @@ $lang['VirtfusionDirectProvisioningMod.edit_row.edit_btn'] = 'Update Server';
 $lang['VirtfusionDirectProvisioningMod.row_meta.name'] = 'Name';
 $lang['VirtfusionDirectProvisioningMod.row_meta.hostname'] = 'Hostname';
 $lang['VirtfusionDirectProvisioningMod.row_meta.api_token'] = 'API Token';
+$lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled'] = 'Enable Traffic Block Purchases';
+$lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled.help_text'] = 'Disabled by default. When enabled, the optional Traffic Block purchase integration may offer one-time blocks for active servers on this module row.';
 
 
 
@@ -93,6 +95,7 @@ $lang['VirtfusionDirectProvisioningMod.service_info.main_ip'] = 'Main IP Address
 $lang['VirtfusionDirectProvisioningMod.service_info.base_ips'] = 'Base IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.extra_ips'] = 'Extra IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.label'] = 'Label';
+$lang['VirtfusionDirectProvisioningMod.service_info.traffic_resets'] = 'Traffic Period Ends';
 
 // Service Fields
 $lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';

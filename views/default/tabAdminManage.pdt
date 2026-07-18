@@ -28,6 +28,8 @@
             <div class="col-md-6 service-info">
                 <label>Transfer</label>
                 <h4><?php echo $this->Html->safe($server_info->traffic ?? 'None'); ?> GB</h4>
+                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_resets', true)); ?></label>
+                <h4><?php echo $this->Html->safe($server_info->traffic_reset ?? 'None'); ?></h4>
                 <label>Status</label>
                 <h4><?php echo $this->Html->safe($server_info->status ?? 'None'); ?></h4>
                 <label>IPv4</label>
