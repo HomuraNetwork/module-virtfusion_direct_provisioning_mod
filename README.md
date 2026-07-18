@@ -129,5 +129,11 @@ The Manage tab displays the VirtFusion traffic period end returned by the remote
 
 Traffic Block purchases are separately gated per module row and are disabled by default. Enabling the row setting only allows the optional purchase integration to operate; it does not create, renew, or delete any traffic block by itself.
 
+### Manage page
+
+The client and admin Manage tabs retrieve the remote power state, pending VirtFusion tasks, current traffic usage, assigned traffic blocks, configured resources, port speed, backup plan, backup count, and latest backup time. Power controls are state-aware and are locked while VirtFusion reports pending work. Password resets remain visible once in Blesta and sensitive password, VNC, and authentication-token responses are not written to module logs.
+
+VNC is enabled on demand when the console button is clicked. The admin Manage button uses a normal configurable VirtFusion admin URL and does not request or create a client authentication token. Existing module rows default to `https://{hostname}/admin/servers/{server_id}`; edit the module row if the VirtFusion installation uses a different frontend route.
+
 ### Reselling bandwidth
 The traffic (bandwidth) management feature requires VirtFusion version 6 or later.

@@ -54,6 +54,8 @@ $lang['VirtfusionDirectProvisioningMod.edit_row.edit_btn'] = 'Update Server';
 $lang['VirtfusionDirectProvisioningMod.row_meta.name'] = 'Name';
 $lang['VirtfusionDirectProvisioningMod.row_meta.hostname'] = 'Hostname';
 $lang['VirtfusionDirectProvisioningMod.row_meta.api_token'] = 'API Token';
+$lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url'] = 'Admin Server URL Template';
+$lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url.help_text'] = 'Used for the admin-only direct server link without creating a client login token. Available placeholders: {hostname}, {server_id}.';
 $lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled'] = 'Enable Traffic Block Purchases';
 $lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled.help_text'] = 'Disabled by default. When enabled, the optional Traffic Block purchase integration may offer one-time blocks for active servers on this module row.';
 
@@ -85,6 +87,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.resource.cpu'] = 'VirtFusion did n
 $lang['VirtfusionDirectProvisioningMod.!error.resource.traffic'] = 'VirtFusion did not accept the traffic allowance change.';
 $lang['VirtfusionDirectProvisioningMod.!error.package.target'] = 'The target VirtFusion package could not be retrieved.';
 $lang['VirtfusionDirectProvisioningMod.!error.package.change'] = 'VirtFusion did not accept the package change.';
+$lang['VirtfusionDirectProvisioningMod.!error.tasks.pending'] = 'VirtFusion already has a pending task for this server. Wait for it to finish before sending another action.';
 
 // Client Errors
 $lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
@@ -96,6 +99,12 @@ $lang['VirtfusionDirectProvisioningMod.service_info.base_ips'] = 'Base IP Addres
 $lang['VirtfusionDirectProvisioningMod.service_info.extra_ips'] = 'Extra IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.label'] = 'Label';
 $lang['VirtfusionDirectProvisioningMod.service_info.traffic_resets'] = 'Traffic Period Ends';
+$lang['VirtfusionDirectProvisioningMod.service_info.traffic_used'] = 'Traffic Used';
+$lang['VirtfusionDirectProvisioningMod.service_info.traffic_blocks'] = 'Traffic Blocks';
+$lang['VirtfusionDirectProvisioningMod.service_info.package'] = 'Blesta Package';
+$lang['VirtfusionDirectProvisioningMod.service_info.port_speed'] = 'Port Speed (Inbound / Outbound)';
+$lang['VirtfusionDirectProvisioningMod.service_info.backups'] = 'Backups / Latest';
+$lang['VirtfusionDirectProvisioningMod.service_info.backup_plan'] = 'Backup Plan';
 
 // Service Fields
 $lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';
@@ -109,15 +118,20 @@ $lang['VirtfusionDirectProvisioningMod.tabManage.submit'] = 'Submit';
 $lang['VirtfusionDirectProvisioningMod.tabManage.actions'] = 'Actions';
 $lang['VirtfusionDirectProvisioningMod.tabManage.manage'] = 'Manage Server';
 $lang['VirtfusionDirectProvisioningMod.tabManage.manage_as_client'] = 'Manage Server as Client';
+$lang['VirtfusionDirectProvisioningMod.tabManage.manage_admin'] = 'Open VirtFusion Admin';
 $lang['VirtfusionDirectProvisioningMod.tabManage.boot'] = 'Boot';
 $lang['VirtfusionDirectProvisioningMod.tabManage.restart'] = 'Restart';
 $lang['VirtfusionDirectProvisioningMod.tabManage.shutdown'] = 'Shutdown';
 $lang['VirtfusionDirectProvisioningMod.tabManage.poweroff'] = 'Power Off';
 $lang['VirtfusionDirectProvisioningMod.tabManage.reset_password'] = 'Reset Password';
 $lang['VirtfusionDirectProvisioningMod.tabManage.vnc_console'] = 'VNC Console';
+$lang['VirtfusionDirectProvisioningMod.tabManage.backups'] = 'Manage Backups';
 $lang['VirtfusionDirectProvisioningMod.tabManage.action_success'] = 'The action was successful.';
 $lang['VirtfusionDirectProvisioningMod.tabManage.reset_password_success'] = 'The action was successful. The new password is:';
 $lang['VirtfusionDirectProvisioningMod.restart_recommended'] = 'The server resources were changed. A restart is recommended to apply all changes.';
+$lang['VirtfusionDirectProvisioningMod.tasks.pending'] = 'Pending VirtFusion task: ';
+$lang['VirtfusionDirectProvisioningMod.confirm.power'] = 'Are you sure you want to perform this power action?';
+$lang['VirtfusionDirectProvisioningMod.confirm.reset_password'] = 'Reset the server password? The new password will be displayed once on this page and may also be emailed.';
 
 
 // Manage IP Address

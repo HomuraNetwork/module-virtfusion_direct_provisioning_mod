@@ -192,6 +192,20 @@ class VirtfusionDirectProvisioningMod extends Module
         ]);
     }
 
+    private function getAdminServerUrl($module_row, $server_id)
+    {
+        $template = trim((string) ($module_row->meta->admin_server_url ?? ''));
+        if ($template === '') {
+            $template = 'https://{hostname}/admin/servers/{server_id}';
+        }
+
+        return str_replace(
+            ['{hostname}', '{server_id}'],
+            [$module_row->meta->hostname, (int) $server_id],
+            $template
+        );
+    }
+
     private function moduleHasOwnedData($module_id)
     {
         foreach (['module_rows', 'module_groups', 'module_meta', 'packages'] as $table) {
@@ -521,7 +535,7 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function addModuleRow(array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token', 'traffic_blocks_enabled'];
+        $meta_fields = ['name', 'hostname', 'api_token', 'admin_server_url', 'traffic_blocks_enabled'];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
@@ -568,7 +582,7 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function editModuleRow($module_row, array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token', 'traffic_blocks_enabled'];
+        $meta_fields = ['name', 'hostname', 'api_token', 'admin_server_url', 'traffic_blocks_enabled'];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
@@ -2029,7 +2043,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
-        $request = $server_api->get($server_id);
+        $request = $server_api->get($server_id, true);
 
         if (!isset($request['info']) || $request['info']['http_code'] !== 200) {
             return null;
@@ -2046,9 +2060,52 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info->traffic_reset = $data->data->traffic->public->currentPeriod->end ?? null;
         $server_info->ipv4 = $data->data->network->interfaces[0]->ipv4[0]->address ?? null;
         $server_info->ipv6 = $data->data->network->interfaces[0]->ipv6[0]->subnet ?? null;
-        $server_info->power = $data->data->remoteState->running ?? null;
-        $server_info->status = $data->data->remoteState->state ?? null;
-        $server_info->vnc = $data->data->vnc->enabled ?? null;
+        $remote_state = isset($data->data->remoteState) && is_object($data->data->remoteState)
+            ? $data->data->remoteState
+            : null;
+        $server_info->power = $remote_state->running ?? null;
+        $server_info->status = $remote_state->state ?? ($data->data->state ?? null);
+        $server_info->network_in = $data->data->network->interfaces[0]->inAverage ?? null;
+        $server_info->network_out = $data->data->network->interfaces[0]->outAverage ?? null;
+        $backup_plan = $data->data->backupPlan ?? null;
+        $server_info->backup_plan = is_object($backup_plan)
+            ? ($backup_plan->name ?? $backup_plan->id ?? null)
+            : ($data->data->settings->backupPlan ?? null);
+
+        $pending_tasks = $data->data->tasks->actions->pending ?? [];
+        $server_info->tasks_active = !empty($data->data->tasks->active) || !empty($pending_tasks);
+        $server_info->pending_tasks = [];
+        foreach ($pending_tasks as $task) {
+            $server_info->pending_tasks[] = $task->action ?? ('Task #' . ($task->id ?? '?'));
+        }
+
+        $traffic_request = $server_api->getTraffic($server_id);
+        if ($this->apiRequestSucceeded($traffic_request, [200])) {
+            $traffic_data = json_decode($traffic_request['response']);
+            $current_month = $traffic_data->data->monthly[0] ?? null;
+            if ($current_month) {
+                $server_info->traffic = $current_month->limit ?? $server_info->traffic;
+                $server_info->traffic_reset = $current_month->end ?? $server_info->traffic_reset;
+                $server_info->traffic_used = round(((float) ($current_month->total ?? 0)) / 1000000000, 2);
+                $server_info->traffic_blocks = 0;
+                foreach (($current_month->blocks ?? []) as $block) {
+                    $server_info->traffic_blocks += (int) ($block->traffic ?? 0);
+                }
+                $server_info->traffic_percent = (int) $server_info->traffic > 0
+                    ? min(100, round(($server_info->traffic_used / (int) $server_info->traffic) * 100, 1))
+                    : null;
+            }
+        }
+
+        $backup_request = $server_api->getBackups($server_id);
+        $server_info->backup_count = 0;
+        $server_info->latest_backup = null;
+        if ($this->apiRequestSucceeded($backup_request, [200])) {
+            $backup_data = json_decode($backup_request['response']);
+            $backups = (array) ($backup_data->data ?? []);
+            $server_info->backup_count = count($backups);
+            $server_info->latest_backup = $backups[0] ?? null;
+        }
 
         return $server_info;
     }
@@ -2117,12 +2174,31 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_id = $service_fields->virtfusion_server_id;
         $action = $post['action'] ?? 'manage';
 
+        if (in_array($action, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'vnc'], true)) {
+            $state_request = $server_api->get($server_id, true);
+            if ($this->apiRequestSucceeded($state_request, [200])) {
+                $state_data = json_decode($state_request['response']);
+                $pending = $state_data->data->tasks->actions->pending ?? [];
+                if (!empty($state_data->data->tasks->active) || !empty($pending)) {
+                    $this->Input->setErrors([
+                        'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.tasks.pending', true)]
+                    ]);
+                    return null;
+                }
+            }
+        }
+
         switch ($action) {
             case 'manage':
                 $request = $server_api->fetchToken($server_id, $service->client_id, []);
 
                 if (isset($request['info'])) {
-                    $this->log($module_row->meta->hostname . '| api token', serialize($request), 'output', $request['info']['http_code'] == 200);
+                    $this->log(
+                        $module_row->meta->hostname . '| api token',
+                        'HTTP ' . (int) $request['info']['http_code'],
+                        'output',
+                        $request['info']['http_code'] == 200
+                    );
                     if ($request['info']['http_code'] === 200) {
                         $data = json_decode($request['response']);
 
@@ -2159,7 +2235,12 @@ class VirtfusionDirectProvisioningMod extends Module
                     'sendMail' => isset($post['sendMail']) ? $this->boolValue($post['sendMail']) : true
                 ]);
                 $success = isset($request['info']) && $request['info']['http_code'] == 200;
-                $this->log($module_row->meta->hostname . '| reset password', serialize($request), 'output', $success);
+                $this->log(
+                    $module_row->meta->hostname . '| reset password',
+                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    'output',
+                    $success
+                );
 
                 if (!$success) {
                     $this->Input->setErrors(['api' => ['response' => 'The password reset was unsuccessful.']]);
@@ -2173,7 +2254,12 @@ class VirtfusionDirectProvisioningMod extends Module
             case 'vnc':
                 $request = $server_api->setVnc($server_id, 'enable');
                 $success = isset($request['info']) && $request['info']['http_code'] == 200;
-                $this->log($module_row->meta->hostname . '| vnc action', serialize($request), 'output', $success);
+                $this->log(
+                    $module_row->meta->hostname . '| vnc action',
+                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    'output',
+                    $success
+                );
 
                 if (!$success) {
                     $this->Input->setErrors(['api' => ['response' => 'The VNC action was unsuccessful.']]);
@@ -2243,6 +2329,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->set('message', $message);
         $this->view->set('service_fields', $service_fields);
+        $this->view->set('package', $package);
         $this->view->set('service_id', $service->id);
         $this->view->set('client_id', $service->client_id);
         $this->view->set('vars', new stdClass());
@@ -2292,6 +2379,13 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->set('message', $message);
         $this->view->set('service_fields', $service_fields);
+        $this->view->set('package', $package);
+        $this->view->set(
+            'admin_server_url',
+            $row && isset($service_fields->virtfusion_server_id)
+                ? $this->getAdminServerUrl($row, $service_fields->virtfusion_server_id)
+                : null
+        );
         $this->view->set('service_id', $service->id);
         $this->view->set('client_id', $service->client_id);
         $this->view->set('vars', new stdClass());

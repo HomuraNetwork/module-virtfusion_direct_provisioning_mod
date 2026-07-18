@@ -34,9 +34,14 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/build', 'POST', $vars);
     }
 
-    public function get($serverId)
+    public function get($serverId, $remoteState = false)
     {
-        return $this->api->submit('servers/' . $serverId , 'GET');
+        $path = 'servers/' . $serverId;
+        if ($remoteState) {
+            $path .= '?remoteState=true';
+        }
+
+        return $this->api->submit($path, 'GET');
     }
 
     public function getPkg($pkgId){
@@ -103,6 +108,11 @@ class VirtfusionServer
     
     public function getTraffic($serverId) {
         return $this->api->submit('servers/' . $serverId . '/traffic', 'GET');
+    }
+
+    public function getBackups($serverId)
+    {
+        return $this->api->submit('backups/server/' . $serverId, 'GET');
     }
 
     public function addIpv4Qty($serverId, $qty, $interface = 'primary')

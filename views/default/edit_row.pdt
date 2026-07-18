@@ -57,6 +57,20 @@ $this->Widget->create($this->_('VirtfusionDirectProvisioningMod.edit_row.box_tit
     ]); ?>
 </div>
 
+<div class="mb-3">
+    <label for="admin_server_url" class="form-label">
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.admin_server_url'); ?>
+    </label>
+    <?php $this->Form->fieldText(
+        'admin_server_url',
+        $vars->admin_server_url ?? 'https://{hostname}/admin/servers/{server_id}',
+        ['id' => 'admin_server_url', 'class' => 'form-control']
+    ); ?>
+    <div class="form-text">
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.admin_server_url.help_text'); ?>
+    </div>
+</div>
+
 <?php $this->Widget->footer(); ?>
 <div class="d-flex justify-content-end">
     <?php $this->Form->fieldSubmit('save', $this->_('VirtfusionDirectProvisioningMod.edit_row.edit_btn', true), [
