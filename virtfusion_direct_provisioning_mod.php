@@ -3997,6 +3997,12 @@ class VirtfusionDirectProvisioningMod extends Module
                     $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
                     if (is_array($result)) {
                         $action_result = $result;
+                        if (($result['type'] ?? null) === 'vnc') {
+                            $this->setMessage(
+                                'success',
+                                Language::_('VirtfusionDirectProvisioningMod.vnc.ready', true)
+                            );
+                        }
                     } else {
                         $message = $result;
                     }
@@ -4068,6 +4074,12 @@ class VirtfusionDirectProvisioningMod extends Module
                     $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
                     if (is_array($result)) {
                         $action_result = $result;
+                        if (($result['type'] ?? null) === 'vnc') {
+                            $this->setMessage(
+                                'success',
+                                Language::_('VirtfusionDirectProvisioningMod.vnc.ready', true)
+                            );
+                        }
                     } else {
                         $message = $result;
                     }

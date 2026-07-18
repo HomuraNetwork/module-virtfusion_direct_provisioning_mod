@@ -380,8 +380,23 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($vnc_template, "addEventListener('shown.bs.modal', connect") !== false,
-    'The embedded VNC console must connect only after the popup is visible.'
+    strpos($vnc_template, 'import(noVncModuleUrl)') !== false,
+    'The VNC console must dynamically load noVNC from AJAX-rendered tab content.'
+);
+assertSameValue(
+    true,
+    strpos($vnc_template, "window.jQuery.fn.modal") !== false,
+    'The VNC popup must support the Bootstrap 4 client theme.'
+);
+assertSameValue(
+    true,
+    strpos($vnc_template, "Modal.getOrCreateInstance") !== false,
+    'The VNC popup must support the Bootstrap 5 administrator theme.'
+);
+assertSameValue(
+    false,
+    strpos($vnc_template, '<script type="module"') !== false,
+    'The VNC initializer must not rely on module scripts executing after an AJAX tab replacement.'
 );
 
 $service = (object) ['fields' => [

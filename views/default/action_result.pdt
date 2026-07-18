@@ -49,6 +49,33 @@
     min-height: 360px;
     overflow: hidden;
 }
+.virtfusion-vnc-panel {
+    color: #212529;
+    background: #fff;
+}
+.virtfusion-vnc-controls > * {
+    margin: 0.125rem 0.25rem;
+}
+.virtfusion-vnc-toggle {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: 0;
+    padding-left: 0;
+}
+.virtfusion-vnc-toggle .form-check-input {
+    position: static;
+    float: none;
+    margin: 0 0.35rem 0 0;
+}
+.virtfusion-vnc-divider {
+    width: 1px;
+    height: 1.5rem;
+    margin: 0 0.25rem;
+    background: #dee2e6;
+}
+.virtfusion-vnc-footer > * {
+    margin-left: 0.5rem;
+}
 #virtfusionVncModal:fullscreen {
     width: 100vw;
     height: 100vh;
@@ -89,7 +116,7 @@
                 </div>
             </div>
             <div class="modal-body d-flex flex-column p-0 bg-dark">
-                <div class="d-flex flex-wrap align-items-center gap-2 border-bottom bg-body p-2">
+                <div class="virtfusion-vnc-panel virtfusion-vnc-controls d-flex flex-wrap align-items-center border-bottom p-2">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionReconnectVnc">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.reconnect'); ?>
                     </button>
@@ -102,22 +129,22 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionToggleClipboard" aria-expanded="false" aria-controls="virtfusionVncClipboard">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?>
                     </button>
-                    <div class="vr d-none d-md-block mx-1"></div>
-                    <div class="form-check form-switch mb-0">
+                    <div class="virtfusion-vnc-divider d-none d-md-block"></div>
+                    <div class="form-check virtfusion-vnc-toggle">
                         <input class="form-check-input" type="checkbox" role="switch" id="virtfusionScaleVnc" checked>
                         <label class="form-check-label small" for="virtfusionScaleVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.fit_window'); ?></label>
                     </div>
-                    <div class="form-check form-switch mb-0">
+                    <div class="form-check virtfusion-vnc-toggle">
                         <input class="form-check-input" type="checkbox" role="switch" id="virtfusionViewOnlyVnc">
                         <label class="form-check-label small" for="virtfusionViewOnlyVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.view_only'); ?></label>
                     </div>
-                    <div class="form-check form-switch mb-0">
+                    <div class="form-check virtfusion-vnc-toggle">
                         <input class="form-check-input" type="checkbox" role="switch" id="virtfusionResizeVnc">
                         <label class="form-check-label small" for="virtfusionResizeVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.resize_session'); ?></label>
                     </div>
                 </div>
                 <div id="virtfusionVncScreen"></div>
-                <div class="border-top bg-body p-3" id="virtfusionVncClipboard" hidden>
+                <div class="virtfusion-vnc-panel border-top p-3" id="virtfusionVncClipboard" hidden>
                     <label for="virtfusionVncClipboardText" class="form-label fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?></label>
                     <textarea class="form-control mb-2" id="virtfusionVncClipboardText" rows="3" spellcheck="false" placeholder="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_placeholder', true)); ?>"></textarea>
                     <div class="d-flex flex-wrap align-items-center gap-2">
@@ -131,7 +158,7 @@
                     </div>
                 </div>
             </div>
-            <div class="modal-footer gap-2">
+            <div class="modal-footer virtfusion-vnc-footer">
                 <?php if (!empty($action_result['console_url'])) { ?>
                 <a href="<?php echo $this->Html->safe($action_result['console_url']); ?>" target="_blank" rel="noopener" class="btn btn-outline-secondary">
                     <?php $this->_('VirtfusionDirectProvisioningMod.vnc.open_virtfusion'); ?>
@@ -147,10 +174,9 @@
     </div>
 </div>
 
-<script type="module" crossorigin="anonymous">
-import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
-
+<script type="text/javascript">
 (function () {
+    var noVncModuleUrl = <?php echo json_encode(VENDORWEBDIR . 'novnc/novnc/core/rfb.js'); ?>;
     var modalElement = document.getElementById('virtfusionVncModal');
     var screen = document.getElementById('virtfusionVncScreen');
     var statusElement = document.getElementById('virtfusionVncStatus');
@@ -171,10 +197,7 @@ import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
         return;
     }
 
-    var modal = bootstrap.Modal.getOrCreateInstance(modalElement, {
-        backdrop: 'static',
-        keyboard: false
-    });
+    var RFB = null;
     var rfb = null;
     var connectionState = 'disconnected';
 
@@ -211,6 +234,10 @@ import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
     }
 
     function connect() {
+        if (!RFB) {
+            return;
+        }
+
         if (rfb) {
             var previousConnection = rfb;
             rfb = null;
@@ -263,6 +290,46 @@ import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
             rfb = null;
             setDisconnectedStatus(false);
         }
+    }
+
+    function loadConsole() {
+        import(noVncModuleUrl).then(function (module) {
+            RFB = module.default;
+            connect();
+        }).catch(function () {
+            setDisconnectedStatus(false);
+        });
+    }
+
+    function showModal() {
+        if (window.bootstrap
+            && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
+            var modal = window.bootstrap.Modal.getOrCreateInstance(modalElement, {
+                backdrop: 'static',
+                keyboard: false
+            });
+            modalElement.addEventListener('shown.bs.modal', loadConsole, {once: true});
+            modal.show();
+            return;
+        }
+
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(modalElement)
+                .one('shown.bs.modal', loadConsole)
+                .modal({
+                    backdrop: 'static',
+                    keyboard: false,
+                    show: true
+                });
+            return;
+        }
+
+        modalElement.style.display = 'block';
+        modalElement.classList.add('show');
+        modalElement.removeAttribute('aria-hidden');
+        modalElement.setAttribute('aria-modal', 'true');
+        loadConsole();
     }
 
     if (reconnectButton) {
@@ -358,8 +425,7 @@ import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
         });
     }
 
-    modalElement.addEventListener('shown.bs.modal', connect, {once: true});
-    modal.show();
+    showModal();
 }());
 </script>
 <?php } ?>

@@ -204,6 +204,7 @@ $lang['VirtfusionDirectProvisioningMod.vnc.connecting'] = 'Connecting...';
 $lang['VirtfusionDirectProvisioningMod.vnc.connected'] = 'Connected';
 $lang['VirtfusionDirectProvisioningMod.vnc.disconnected'] = 'Disconnected';
 $lang['VirtfusionDirectProvisioningMod.vnc.failed'] = 'The VNC connection failed.';
+$lang['VirtfusionDirectProvisioningMod.vnc.ready'] = 'The VNC console is ready.';
 $lang['VirtfusionDirectProvisioningMod.vnc.reconnect'] = 'Reconnect';
 $lang['VirtfusionDirectProvisioningMod.vnc.ctrl_alt_del'] = 'Send Ctrl+Alt+Del';
 $lang['VirtfusionDirectProvisioningMod.vnc.fullscreen'] = 'Full Screen';
