@@ -1,147 +1,203 @@
-# VirtFusion Direct Provisioning Mod
+# VirtFusion Direct Provisioning Mod for Blesta
 
-This module tracks the official VirtFusion Blesta module while keeping a separate module identity so Blesta's official updater cannot overwrite local extensions. It targets Blesta 6.0.0-b4 and VirtFusion's current v1 API as documented at `https://docs.virtfusion.com/api/openapi.yaml`.
+VirtFusion provisioning for Blesta with a separate module identity, configurable server resources, controlled service upgrades, one-time Traffic Block products, and expanded service management.
 
-## Install the Module
+This module is named `virtfusion_direct_provisioning_mod`, so it can be installed beside the official VirtFusion module without being replaced by an official-module update.
 
-1. You can install the module via composer:
+## Requirements
 
-    ```
-    composer require homuranetwork/virtfusion_direct_provisioning_mod
-    ```
+- Blesta 6.0.0-b4 or later
+- A VirtFusion installation with API access
+- A VirtFusion API token
 
-2. OR upload the source code to a /components/modules/virtfusion_direct_provisioning_mod/ directory within
-   your Blesta installation path.
+## Installation
 
-   For example:
+Copy the module to:
 
-    ```
-    /var/www/html/blesta/components/modules/virtfusion_direct_provisioning_mod/
-    ```
-
-3. Log in to your admin Blesta account and navigate to
-> Settings > Modules
-
-4. Find **VirtFusion Direct Provisioning Mod** and click the **Install** button.
-
-5. If replacing the official module, open the mod's management page and run **Sync from official**.
-
-## Migrating existing services
-
-The sync action moves local Blesta ownership for module rows, module groups, packages, and module metadata from the official module ID to the mod module ID in one transaction. Existing services continue to use the same `module_row_id`, and no VirtFusion API create, update, or delete call is made.
-
-After a successful **Sync from official**, the official module no longer owns the migrated packages or rows and can be disabled or uninstalled. **Sync to official** reverses the ownership move. The destination must be empty to prevent an accidental merge.
-
-Both current `virtfusion_server_id` service fields and legacy `server_id` fields are supported.
-
-## Upstream maintenance strategy
-
-This project is a downstream fork, but its module identity and main class have diverged too far for routine merges from the official repository to be reliable. Keep the official repository configured as `upstream`, fetch each official release, and review its diff against the last reviewed upstream tag. Port relevant API, security, and Blesta-compatibility changes as focused commits instead of merging `upstream/master` wholesale. Mod releases use CalVer and `mod-YYYY.MM.DD` tags so they cannot be confused with official module versions.
-
-# Setting up VirtFusion Package Option
-This module supports usage of default OS that you can set per package
-When creating a new package, after selecting `Server Group` you will have an option for `Default Operating System ID`.
-Follow the help text to find that Tempalate ID.
-
-***This option will be overriden by `virtfusion-os_template` config option***
-
-### Automatic build
-
-Set **Auto build** to **No** in the Blesta package's module options to create the VirtFusion server without calling `/servers/{serverId}/build`. In this mode a hostname and OS template are not required. The returned server ID is still stored so the service can be managed and built later.
-
-## Configuring package options
-### Operating System
-
-If you want to allow your users to have an option of selecting multiple operating systems, you will need to create a package option (Config option -> Create option in blesta). The package option name must be `virtfusion-os_template` to work correctly with this module. Type should be set to `Drop-down`. If you only need one option, consider using `Default Operating System ID` described above. 
-
-Per each option you choose, the value **must** be the ID of the template. 
-The easiest way to find this value is to go to `media/templates` in Virtfution dashboard and choose a template. 
-he last value in url will be the template OS ID.
-
-
-In example below **12** is the template OS ID.
-
-This is the same number used if only setting default operating system ID
-```
-/admin/server/media/templates/12
+```text
+/path/to/blesta/components/modules/virtfusion_direct_provisioning_mod/
 ```
 
-### Extra IP Addresses
-If you want to add an option to allow customers to buy extra IP Address, you will need to create another package option (Config option -> Create option in blesta).
+Then open **Settings > Modules > Available** in Blesta and install **VirtFusion Direct Provisioning Mod**.
 
-The name for this option **must** be `additional_num_ips` and type should be set to `Quantity`.
+Do not rename the module directory.
 
-### Hypervisor Group ID Config Option
-You can set up **dynamic Hypervisor Group** ID values by using blesta package options
+## Moving existing services from the official module
 
-You can set **Label** of package option to whatever makes sense for your organization
-Set **Name** to 
-```
-dynamic_hypervisor_group_id
-```
+Install this module without uninstalling the official module, then open its management page and select **Sync from official**.
 
-The **names** of the options will not matter and can be set to whatever makes sense for your organization, but the **value** must match an **ID** in Virtfution hypervisor groups dashboard.
-```
-Computer Resources -> Hypervisor Groups -> ID
-```
+The sync moves the existing VirtFusion module rows, groups, and packages to this module. Existing services keep the same `module_row_id` and VirtFusion server ID, so they remain manageable without being recreated.
 
-If dynamic hypervisor group is not set,
-it will use defualt from that package module option
+After checking an existing service's Manage page, the official module may be disabled. **Sync to official** reverses the change if you need to move the packages and module configuration back.
 
-***Package option **Type** has only been tested with dropwdown!***
+Back up the Blesta database before running either sync action.
+
+## Add a VirtFusion server
+
+Open the installed module and add a server with the following settings:
+
+| Setting | Description |
+| --- | --- |
+| Name | An internal name for this VirtFusion installation. |
+| Hostname | VirtFusion hostname without `https://`, for example `vf.example.com`. |
+| API Token | VirtFusion API token. |
+| Admin Server URL Template | Optional admin-only server link. The default is `https://{hostname}/admin/servers/{server_id}`. |
+| Enable Traffic Block Purchases | Enables optional one-time Traffic Block products for services on this server. |
+| Allow insecure TLS certificates | Disables certificate verification for this server. Use only for a trusted self-signed installation. |
+
+Saving the server checks the API connection.
+
+## Create a server package
+
+Create a Blesta package and select this module. Blesta displays its normal **Module**, **Server Group**, and **Server** selectors.
+
+The module adds these Module Options:
+
+| Module Option | Value |
+| --- | --- |
+| Product Type | Select **Server** for a normal VirtFusion server. |
+| Hypervisor Group ID | Default VirtFusion hypervisor group ID. |
+| Default IPv4 | Number of IPv4 addresses included by default. |
+| Package ID | VirtFusion package ID used to create the server. |
+
+`Product Type` is the only new package-mode field. Auto Build, operating system, backup plan, port speed, and resource choices belong in Blesta **Configurable Options**, not Module Options.
+
+## Configurable Options
+
+The configurable-option **Name** must match the value shown below. The customer-facing label may be changed or translated.
+
+### Basic provisioning options
+
+| Name | Suggested type | Use |
+| --- | --- | --- |
+| `virtfusion-auto_build` | Dropdown | `true` builds the selected OS; `false` creates the server without building it. |
+| `virtfusion-os_template` | Dropdown | VirtFusion operating-system template ID. Required when Auto Build is enabled. |
+| `dynamic_hypervisor_group_id` | Dropdown | Overrides the package's Hypervisor Group ID. |
+| `additional_num_ips` | Quantity | Additional IPv4 addresses beyond Default IPv4. |
+| `virtfusion-backup_plan_id` | Dropdown | VirtFusion backup-plan ID. May be changed later. |
+| `virtfusion-cpu_throttle` | Quantity or Dropdown | CPU throttle percentage. |
+
+For Auto Build, the aliases `virtfusion_auto_build` and `auto_build` are also accepted.
 
 ### Port speed
 
-Create a Blesta configurable option named:
+Use one configurable option named:
 
-```
+```text
 virtfusion-port_speed
 ```
 
-Its numeric value is sent to both `networkSpeedInbound` and `networkSpeedOutbound` when the server is created. VirtFusion defines the unit as kB/s. The aliases `virtfusion_port_speed` and `port_speed` are accepted for compatibility. If the combined option is present, it overrides separately supplied `networkSpeedInbound` and `networkSpeedOutbound` values. A fixed default can also be set with the package's **Default Port Speed** module field.
+Its numeric value is applied to both inbound and outbound port speed. The aliases `virtfusion_port_speed` and `port_speed` are also accepted.
 
-### Other create-time resource options
+Port speed is applied only when the server is created. It cannot be changed later through the current VirtFusion API.
 
-The following configurable option names map directly to the current VirtFusion create-server API:
+If needed, separate create-time options named `networkSpeedInbound` and `networkSpeedOutbound` are also supported. The combined port-speed option takes priority when both are present.
 
-- `storage`, `traffic`, `memory`, `cpuCores`
-- `networkSpeedInbound`, `networkSpeedOutbound`
-- `storageProfile`, `networkProfile`
-- `firewallRulesets`, `hypervisorAssetGroups` (array or comma-separated IDs)
-- `additionalStorage1Enable`, `additionalStorage2Enable`
-- `additionalStorage1Profile`, `additionalStorage2Profile`
-- `additionalStorage1Capacity`, `additionalStorage2Capacity`
+### Server resources
 
-Build and post-create options retained from the previous customized module include `virtfusion-ssh_keys`, `virtfusion-vnc`, `virtfusion-email`, `virtfusion-swap`, `virtfusion-backup_plan_id`, and `virtfusion-cpu_throttle`.
+| Name | Use |
+| --- | --- |
+| `storage` | Primary disk capacity at creation. |
+| `memory` | Memory in MB. May be changed later. |
+| `cpuCores` | CPU core count. May be changed later. |
+| `traffic` | Total traffic allowance in GB. May be changed later. |
+| `additional_bandwidth` | Additional GB added to the selected VirtFusion package's traffic allowance. |
 
-### Service upgrades and downgrades
+If both `traffic` and `additional_bandwidth` are present, `traffic` takes priority.
 
-Blesta's normal Service Changes flow calculates proration, validates the requested change before invoicing, and applies the module change after payment when queued service changes are enabled.
+### Build options
 
-- `memory` is updated through `PUT /servers/{serverId}/modify/memory`.
-- `cpuCores` is updated through `PUT /servers/{serverId}/modify/cpuCores`.
-- `traffic` is updated through `PUT /servers/{serverId}/modify/traffic`.
-- `additional_bandwidth` remains an additive allowance on top of the selected VirtFusion package traffic.
-- Blesta/VirtFusion package changes can upgrade or downgrade CPU, memory, traffic, and other package resources.
-- A package downgrade never shrinks the primary disk. The current disk size is retained while the other package resources are changed.
-- Primary disk growth is supported through a VirtFusion package change. The current API does not expose an arbitrary disk-size modification endpoint, so changing a `storage` configurable option after creation is rejected before an invoice is generated.
-- Custom `virtfusion-port_speed` values are preserved across package changes. Editing a custom port speed after creation is rejected because the current API does not expose a documented network-speed modification endpoint.
+These options are used only when Auto Build is enabled:
 
-Package, memory, and CPU changes set a persistent restart recommendation instead of forcing an immediate reboot. The recommendation is cleared after a successful restart from the module's Manage tab.
+| Name | Use |
+| --- | --- |
+| `virtfusion-ssh_keys` | VirtFusion SSH-key IDs. Multiple IDs may be comma-separated. |
+| `virtfusion-email` | Whether VirtFusion sends its build email. |
+| `virtfusion-swap` | Swap value passed to the build request. |
 
-The Manage tab displays the VirtFusion traffic period end returned by the remote server. This date is independent of Blesta service renewal-date adjustments such as manually granted service days.
+When `virtfusion-auto_build` is `false`, the order form hides hostname, OS template, SSH keys, build email, and swap. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
 
-Traffic Block purchases are separately gated per module row and are disabled by default. Create a separate package with **Product Type** set to **Traffic Block (one-shot addon)** and only one-time pricing. The amount may be fixed in **Traffic Block GB**, or supplied by a configurable option named `virtfusion-traffic_block_gb`, `virtfusion_traffic_block_gb`, or `traffic_block_gb` (the configurable option wins).
+VNC is not a Configurable Option. It is enabled only when the client or administrator requests it from the service Manage page.
 
-The generic Product Addons plugin shows this package only after an active parent server exists. The confirmation preview reads `GET /servers/{serverId}/traffic/blocks`. When payment activates the pending child service, the module queries the current VirtFusion month again and calls `POST /servers/{serverId}/traffic/blocks`. The resulting service stores the parent server ID, GB, month, start/end, and block ID when returned. Canceling, suspending, or deleting the Blesta audit service never removes the remote block; VirtFusion owns the block lifecycle and billing-date expiry.
+### Advanced create-time options
 
-TLS certificate verification is enabled by default. A per-row **Allow insecure TLS certificates** option exists only for trusted self-signed endpoints and should remain disabled in normal installations.
+The following options are available when the related VirtFusion configuration is used:
 
-### Manage page
+| Name | Use |
+| --- | --- |
+| `storageProfile` | Storage profile ID. |
+| `networkProfile` | Network profile ID. |
+| `firewallRulesets` | Comma-separated firewall ruleset IDs. |
+| `hypervisorAssetGroups` | Comma-separated hypervisor asset-group IDs. |
+| `additionalStorage1Enable` | Enable the first additional disk. |
+| `additionalStorage1Profile` | First additional-disk profile ID. |
+| `additionalStorage1Capacity` | First additional-disk capacity. |
+| `additionalStorage2Enable` | Enable the second additional disk. |
+| `additionalStorage2Profile` | Second additional-disk profile ID. |
+| `additionalStorage2Capacity` | Second additional-disk capacity. |
 
-The client and admin Manage tabs retrieve the remote power state, pending VirtFusion tasks, current traffic usage, assigned traffic blocks, configured resources, port speed, backup plan, backup count, and latest backup time. Power controls are state-aware and are locked while VirtFusion reports pending work. Password resets remain visible once in Blesta and sensitive password, VNC, and authentication-token responses are not written to module logs.
+## Service upgrades and downgrades
 
-VNC is enabled on demand when the console button is clicked. The admin Manage button uses a normal configurable VirtFusion admin URL and does not request or create a client authentication token. Existing module rows default to `https://{hostname}/admin/servers/{server_id}`; edit the module row if the VirtFusion installation uses a different frontend route.
+Use Blesta's normal service-change and configurable-option upgrade process. Blesta handles pricing, invoicing, and proration before the module applies the paid change to VirtFusion.
 
-### Reselling bandwidth
-The traffic (bandwidth) management feature requires VirtFusion version 6 or later.
+The module can change:
+
+- memory;
+- CPU cores;
+- traffic allowance;
+- additional bandwidth;
+- backup plan;
+- CPU throttle;
+- the selected VirtFusion package.
+
+Disk restrictions:
+
+- a `storage` Configurable Option cannot be reduced;
+- an existing primary disk cannot be resized directly through the `storage` option;
+- when changing to a smaller VirtFusion package, the current primary disk is preserved and is not shrunk.
+
+Memory, CPU, and VirtFusion package changes show **Resource changed; restart recommended**. The module does not restart the server automatically.
+
+## One-time Traffic Block products
+
+Traffic Blocks are separate one-time child services. They are not server upgrades and do not change the server package.
+
+To create a Traffic Block product:
+
+1. Create another Blesta package using this module.
+2. Set **Product Type** to **Traffic Block (one-shot addon)**.
+3. Add one-time pricing only.
+4. Add a Configurable Option named `virtfusion-traffic_block_gb` whose value is the number of GB to purchase.
+5. Enable **Traffic Block Purchases** on the parent server's module row.
+
+The aliases `virtfusion_traffic_block_gb` and `traffic_block_gb` are also accepted.
+
+Install the separate **Product Addons** plugin to offer the Traffic Block after a server has been created. In the plugin, create a `traffic_block` rule and choose the allowed parent server packages and Traffic Block packages.
+
+The purchase confirmation shows the current VirtFusion traffic period end date. VirtFusion controls when the Traffic Block expires; Blesta does not remove it at the service renewal date.
+
+Pricing is defined by the Blesta package and Configurable Option. The module does not calculate the price.
+
+## Service Manage page
+
+The client and administrator Manage pages show available VirtFusion information, including:
+
+- power and build state;
+- pending tasks;
+- CPU, memory, disk, package, and port speed;
+- traffic usage, Traffic Blocks, and traffic reset date;
+- IPv4 and IPv6 addresses;
+- backup plan and recent backup information;
+- restart recommendation and build-status warnings.
+
+Available actions include boot, shutdown, power off, restart, password reset, VNC access, IP management, and opening the server in VirtFusion.
+
+The administrator link opens the configured VirtFusion admin server URL and does not create a client login session. The client link may use VirtFusion's client login bridge.
+
+The traffic reset date shown by the module comes from VirtFusion. Changing the Blesta renewal date or granting extra service days does not change that VirtFusion date.
+
+## Links
+
+- [VirtFusion API documentation](https://docs.virtfusion.com/api/openapi.yaml)
+- [Official VirtFusion Blesta module](https://github.com/blesta/module-virtfusion_direct_provisioning)
+- [VirtFusion Direct Provisioning Mod repository](https://github.com/HomuraNetwork/module-virtfusion_direct_provisioning_mod)

@@ -15,6 +15,13 @@ class Language
     }
 }
 
+class Loader
+{
+    public static function loadModels()
+    {
+    }
+}
+
 require dirname(__DIR__) . '/virtfusion_direct_provisioning_mod.php';
 
 class FakeResourceServerApi
@@ -70,6 +77,7 @@ class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
 {
     public $state;
     public $serverApi;
+    public $PackageOptions;
 
     protected function getServerApiFromRow($row)
     {
@@ -119,6 +127,11 @@ $package = (object) ['meta' => (object) []];
 assertSameValue(true, callPrivate($module, 'shouldAutoBuild', [$package]), 'Auto build must default to enabled.');
 $package->meta->{'virtfusion-auto_build'} = 'false';
 assertSameValue(false, callPrivate($module, 'shouldAutoBuild', [$package]), 'Package setting must disable auto build.');
+assertSameValue(
+    true,
+    callPrivate($module, 'shouldAutoBuild', [$package, ['virtfusion-auto_build' => 'true']]),
+    'The configurable Auto build option must override legacy package metadata.'
+);
 
 $create = callPrivate($module, 'applyCreateConfigOptions', [
     ['packageId' => 10, 'userId' => 20, 'hypervisorId' => 30],
@@ -197,5 +210,27 @@ $second_change = callPrivate($resource_module, 'applyJournaledResourceOptions', 
 assertSameValue('completed', $resource_module->state['status'], 'Retrying the same resource targets must complete the journal.');
 assertSameValue(['memory', 'cpuCores', 'cpuCores'], $resource_module->serverApi->calls, 'Retry must skip memory that already reached its target.');
 assertSameValue('', $second_change['errors']['err_msg'], 'A resumed resource change must complete without errors.');
+
+$resource_module->PackageOptions = new class {
+    public function getByPackageId($package_id)
+    {
+        return [
+            (object) ['id' => 10, 'name' => 'virtfusion-os_template'],
+            (object) ['id' => 11, 'name' => 'virtfusion-vnc'],
+            (object) ['id' => 12, 'name' => 'virtfusion-backup_plan_id']
+        ];
+    }
+};
+$hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1, true]);
+assertSameValue(true, strpos($hidden_options, '10') !== false, 'No-auto-build forms must hide the OS option.');
+assertSameValue(true, strpos($hidden_options, '11') !== false, 'No-auto-build forms must hide the VNC option.');
+assertSameValue(false, strpos($hidden_options, '12') !== false, 'Backup plan must remain available without auto build.');
+
+$no_build_vnc = callPrivate($resource_module, 'applyConfigurableServerOptions', [
+    $row,
+    (object) ['virtfusion_server_id' => 42, 'virtfusion_vnc' => 'false'],
+    ['configoptions' => ['virtfusion-vnc' => 'true']]
+]);
+assertSameValue('', $no_build_vnc['errors']['err_msg'], 'Services must ignore VNC config without an API call.');
 
 echo "review regressions: ok\n";

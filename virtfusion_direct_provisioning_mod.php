@@ -14,6 +14,11 @@ class VirtfusionDirectProvisioningMod extends Module
         'virtfusion_port_speed',
         'port_speed'
     ];
+    private const AUTO_BUILD_OPTIONS = [
+        'virtfusion-auto_build',
+        'virtfusion_auto_build',
+        'auto_build'
+    ];
     private const TRAFFIC_BLOCK_CAPABILITY = 'traffic_block';
     private const TRAFFIC_BLOCK_GB_OPTIONS = [
         'virtfusion-traffic_block_gb',
@@ -61,8 +66,17 @@ class VirtfusionDirectProvisioningMod extends Module
         return new VirtfusionServer($api);
     }
 
-    private function shouldAutoBuild($package)
+    private function shouldAutoBuild($package, array $config_options = [])
     {
+        foreach (self::AUTO_BUILD_OPTIONS as $option_name) {
+            if (array_key_exists($option_name, $config_options)
+                && $config_options[$option_name] !== '') {
+                return $this->boolValue($config_options[$option_name]);
+            }
+        }
+
+        // Compatibility for packages created before Auto build moved to a
+        // configurable option. New package forms no longer write this meta key.
         return !isset($package->meta->{'virtfusion-auto_build'})
             || $package->meta->{'virtfusion-auto_build'} !== 'false';
     }
@@ -1472,6 +1486,19 @@ class VirtfusionDirectProvisioningMod extends Module
                 return [];
             }
 
+            // Preserve hidden compatibility metadata when an older package is
+            // edited. Configurable options override these values at service time.
+            foreach ([
+                'virtfusion-auto_build',
+                'virtfusion-default_os_template',
+                'virtfusion-traffic_block_gb'
+            ] as $legacy_key) {
+                if (!array_key_exists($legacy_key, $vars['meta'])
+                    && isset($package->meta->{$legacy_key})) {
+                    $vars['meta'][$legacy_key] = $package->meta->{$legacy_key};
+                }
+            }
+
             // Return all package meta fields
             foreach ($vars['meta'] as $key => $value) {
                 $meta[] = [
@@ -1506,15 +1533,17 @@ class VirtfusionDirectProvisioningMod extends Module
     private function getPackageRules(array $vars)
     {
         $service_type = $vars['meta']['virtfusion-service_type'] ?? 'server';
+        $service_type_rule = [
+            'valid' => [
+                'if_set' => true,
+                'rule' => ['in_array', ['server', self::TRAFFIC_BLOCK_CAPABILITY]],
+                'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta.service_type.valid', true)
+            ]
+        ];
 
         if ($service_type === self::TRAFFIC_BLOCK_CAPABILITY) {
             return [
-                'meta[virtfusion-service_type]' => [
-                    'valid' => [
-                        'rule' => ['in_array', ['server', self::TRAFFIC_BLOCK_CAPABILITY]],
-                        'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta.service_type.valid', true)
-                    ]
-                ],
+                'meta[virtfusion-service_type]' => $service_type_rule,
                 'meta[virtfusion-traffic_block_gb]' => [
                     'valid' => [
                         'if_set' => true,
@@ -1527,6 +1556,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         // Validate the package fields
         $rules = [
+            'meta[virtfusion-service_type]' => $service_type_rule,
             'meta[hypervisor_group_id]' => [
                 'empty' => [
                     'rule' => 'isEmpty',
@@ -1549,16 +1579,6 @@ class VirtfusionDirectProvisioningMod extends Module
                 ]
             ]
         ];
-
-        if (($vars['meta']['virtfusion-auto_build'] ?? 'true') !== 'false') {
-            $rules['meta[virtfusion-default_os_template]'] = [
-                'empty' => [
-                    'rule' => 'isEmpty',
-                    'negate' => true,
-                    'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta[default_os_template].valid', true)
-                ]
-            ];
-        }
 
         return $rules;
     }
@@ -1601,23 +1621,6 @@ class VirtfusionDirectProvisioningMod extends Module
         );
         $fields->setField($service_type);
 
-        $traffic_block_gb = $fields->label(
-            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb', true),
-            'virtfusion_direct_provisioning_mod_traffic_block_gb'
-        );
-        $traffic_block_gb->attach(
-            $fields->fieldText(
-                'meta[virtfusion-traffic_block_gb]',
-                ($vars->meta['virtfusion-traffic_block_gb'] ?? null),
-                ['id' => 'virtfusion_direct_provisioning_mod_traffic_block_gb']
-            )
-        );
-        $traffic_block_gb->attach($fields->tooltip(
-            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text', true),
-            'virtfusion_direct_provisioning_mod_traffic_block_gb'
-        ));
-        $fields->setField($traffic_block_gb);
-
         // Set the Hypervisor Group ID field
         $hypervisor_group_id = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id', true), 'virtfusion_direct_provisioning_mod_hypervisor_group_id');
         $hypervisor_group_id->attach(
@@ -1651,96 +1654,26 @@ class VirtfusionDirectProvisioningMod extends Module
         );
         $fields->setField($package_id);
 
-        $backup_plan_id = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.backup_plan_id', true), 'virtfusion_direct_provisioning_mod_backup_plan_id');
-        $backup_plan_id->attach(
-            $fields->fieldText(
-                'meta[virtfusion-backup_plan_id]',
-                ($vars->meta['virtfusion-backup_plan_id'] ?? null),
-                ['id' => 'virtfusion_direct_provisioning_mod_backup_plan_id']
-            )
-        );
-        $backup_plan_id->attach($fields->tooltip(Language::_('VirtfusionDirectProvisioningMod.package_fields.backup_plan_id.help_text', true), 'virtfusion_direct_provisioning_mod_backup_plan_id'));
-        $fields->setField($backup_plan_id);
-
-        $auto_build = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.auto_build', true), 'virtfusion_direct_provisioning_mod_auto_build');
-        $auto_build->attach(
-            $fields->fieldSelect(
-                'meta[virtfusion-auto_build]',
-                [
-                    'true' => Language::_('VirtfusionDirectProvisioningMod.package_fields.auto_build.yes', true),
-                    'false' => Language::_('VirtfusionDirectProvisioningMod.package_fields.auto_build.no', true)
-                ],
-                ($vars->meta['virtfusion-auto_build'] ?? 'true'),
-                ['id' => 'virtfusion_direct_provisioning_mod_auto_build']
-            )
-        );
-        $auto_build->attach($fields->tooltip(Language::_('VirtfusionDirectProvisioningMod.package_fields.auto_build.help_text', true), 'virtfusion_direct_provisioning_mod_auto_build'));
-        $fields->setField($auto_build);
-
-        $port_speed = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.port_speed', true), 'virtfusion_direct_provisioning_mod_port_speed');
-        $port_speed->attach(
-            $fields->fieldText(
-                'meta[virtfusion-port_speed]',
-                ($vars->meta['virtfusion-port_speed'] ?? null),
-                ['id' => 'virtfusion_direct_provisioning_mod_port_speed']
-            )
-        );
-        $port_speed->attach($fields->tooltip(Language::_('VirtfusionDirectProvisioningMod.package_fields.port_speed.help_text', true), 'virtfusion_direct_provisioning_mod_port_speed'));
-        $fields->setField($port_speed);
-
-        // Set the default OS template field
-        $os_id = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.os_id', true), 'virtfusion_direct_provisioning_mod_os_id');
-        $os_id->attach(
-            $fields->fieldText(
-                'meta[virtfusion-default_os_template]',
-                ($vars->meta['virtfusion-default_os_template'] ?? null),
-                [
-                    'id' => 'virtfusion_direct_provisioning_mod_os_id',
-                    'required' => 'required'
-                ]
-            )
-        );
-        $os_id->attach($fields->tooltip(Language::_('VirtfusionDirectProvisioningMod.package_fields.os_id.help_text', true), 'virtfusion_direct_provisioning_mod_os_id'));
-
-        $fields->setField($os_id);
-
         $fields->setHtml('
             <script type="text/javascript">
                 (function () {
                     var type = document.getElementById("virtfusion_direct_provisioning_mod_service_type");
-                    var block = document.getElementById("virtfusion_direct_provisioning_mod_traffic_block_gb");
-                    var autoBuild = document.getElementById("virtfusion_direct_provisioning_mod_auto_build");
-                    var osTemplate = document.getElementById("virtfusion_direct_provisioning_mod_os_id");
                     var serverIds = [
                         "virtfusion_direct_provisioning_mod_hypervisor_group_id",
                         "virtfusion_direct_provisioning_mod_default_ipv4",
-                        "virtfusion_direct_provisioning_mod_package_id",
-                        "virtfusion_direct_provisioning_mod_backup_plan_id",
-                        "virtfusion_direct_provisioning_mod_auto_build",
-                        "virtfusion_direct_provisioning_mod_port_speed"
+                        "virtfusion_direct_provisioning_mod_package_id"
                     ];
                     function updateVirtFusionProductType() {
                         var isBlock = type && type.value === "traffic_block";
-                        if (block && block.closest(".mb-3")) {
-                            block.closest(".mb-3").style.display = isBlock ? "" : "none";
-                        }
                         serverIds.forEach(function (id) {
                             var field = document.getElementById(id);
                             if (field && field.closest(".mb-3")) {
                                 field.closest(".mb-3").style.display = isBlock ? "none" : "";
                             }
                         });
-                        if (osTemplate && osTemplate.closest(".mb-3")) {
-                            var needsOs = !isBlock && (!autoBuild || autoBuild.value !== "false");
-                            osTemplate.closest(".mb-3").style.display = needsOs ? "" : "none";
-                            osTemplate.required = needsOs;
-                        }
                     }
                     if (type) {
                         type.addEventListener("change", updateVirtFusionProductType);
-                    }
-                    if (autoBuild) {
-                        autoBuild.addEventListener("change", updateVirtFusionProductType);
                     }
                     updateVirtFusionProductType();
                 }());
@@ -1795,9 +1728,12 @@ class VirtfusionDirectProvisioningMod extends Module
         // Set unset checkboxes
         $checkbox_fields = [];
 
-        // default OS version
-        $virtfusion_os_id = $package->meta->{'virtfusion-default_os_template'} ?? null;
-        $auto_build = $this->shouldAutoBuild($package);
+        $create_config_options = $vars['configoptions'] ?? [];
+        // Compatibility fallback for packages created before OS and Auto build
+        // moved to configurable options.
+        $virtfusion_os_id = $create_config_options['virtfusion-os_template']
+            ?? ($package->meta->{'virtfusion-default_os_template'} ?? null);
+        $auto_build = $this->shouldAutoBuild($package, $create_config_options);
         $domain = isset($vars['virtfusion_hostname']) ? trim($vars['virtfusion_hostname']) : '';
         $server_id = 0;
         $virtfusion_password = '';
@@ -1805,8 +1741,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $virtfusion_base_ips = '';
         $virtfusion_additional_ips = '';
         $virtfusion_ipv6_cidr = '';
-        $virtfusion_backup_plan_id = $package->meta->{'virtfusion-backup_plan_id'} ?? '';
-        $virtfusion_vnc = '';
+        $virtfusion_backup_plan_id = '';
         $virtfusion_build_status = $auto_build ? 'pending' : 'skipped';
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {
@@ -1942,22 +1877,52 @@ class VirtfusionDirectProvisioningMod extends Module
                         'ipv4' => $ipv4_count,
                     ];
 
-                    $create_config_options = $vars['configoptions'] ?? [];
-                    $has_port_speed_option = false;
-                    foreach (self::PORT_SPEED_OPTIONS as $port_speed_option) {
-                        if (isset($create_config_options[$port_speed_option])
-                            && $create_config_options[$port_speed_option] !== '') {
-                            $has_port_speed_option = true;
-                            break;
-                        }
-                    }
-
-                    if (!$has_port_speed_option && isset($package->meta->{'virtfusion-port_speed'})
-                        && $package->meta->{'virtfusion-port_speed'} !== '') {
-                        $create_config_options['virtfusion-port_speed'] = $package->meta->{'virtfusion-port_speed'};
-                    }
-
                     $request_params = $this->applyCreateConfigOptions($request_params, $create_config_options);
+
+                    if (!array_key_exists('traffic', $create_config_options)
+                        && isset($create_config_options['additional_bandwidth'])
+                        && $create_config_options['additional_bandwidth'] !== '') {
+                        $additional_bandwidth = $create_config_options['additional_bandwidth'];
+                        if (!is_numeric($additional_bandwidth) || (int) $additional_bandwidth < 0) {
+                            $this->Input->setErrors([
+                                'configoptions' => [
+                                    'additional_bandwidth' => Language::_(
+                                        'VirtfusionDirectProvisioningMod.!error.configoption.traffic.minimum',
+                                        true
+                                    )
+                                ]
+                            ]);
+                            return;
+                        }
+
+                        $package_request = $server_api->getPkg($package->meta->package_id);
+                        if (!$this->apiRequestSucceeded($package_request, [200])) {
+                            $this->Input->setErrors([
+                                'api' => [
+                                    'response' => Language::_(
+                                        'VirtfusionDirectProvisioningMod.!error.package.target',
+                                        true
+                                    )
+                                ]
+                            ]);
+                            return;
+                        }
+                        $package_data = json_decode((string) $package_request['response']);
+                        $target_traffic = (int) ($package_data->data->traffic ?? 0)
+                            + (int) $additional_bandwidth;
+                        if ($target_traffic > 999999999) {
+                            $this->Input->setErrors([
+                                'configoptions' => [
+                                    'additional_bandwidth' => Language::_(
+                                        'VirtfusionDirectProvisioningMod.!error.configoption.traffic.maximum',
+                                        true
+                                    )
+                                ]
+                            ]);
+                            return;
+                        }
+                        $request_params['traffic'] = $target_traffic;
+                    }
 
                     $request = $server_api->create($request_params);
 
@@ -1983,9 +1948,6 @@ class VirtfusionDirectProvisioningMod extends Module
                      *
                      */
 
-                    if (isset($vars['configoptions']['virtfusion-os_template'])) {
-                        $virtfusion_os_id = $vars['configoptions']['virtfusion-os_template'];
-                    }
                     $this->log($row->meta->hostname . '| build os id', $virtfusion_os_id, 'input', true);
 
                     $hasError = $auto_build;
@@ -2002,11 +1964,6 @@ class VirtfusionDirectProvisioningMod extends Module
 
                         if (!empty($vars['configoptions']['virtfusion-ssh_keys'])) {
                             $build_params['sshKeys'] = $this->csvInts($vars['configoptions']['virtfusion-ssh_keys']);
-                        }
-
-                        if (isset($vars['configoptions']['virtfusion-vnc'])) {
-                            $build_params['vnc'] = $this->boolValue($vars['configoptions']['virtfusion-vnc']);
-                            $virtfusion_vnc = $build_params['vnc'] ? 'true' : 'false';
                         }
 
                         if (isset($vars['configoptions']['virtfusion-email'])) {
@@ -2100,18 +2057,6 @@ class VirtfusionDirectProvisioningMod extends Module
                         $this->log($row->meta->hostname . '| backup plan', serialize($backup_request), 'output', in_array($backup_request['info']['http_code'], [200, 201, 204]));
                     }
 
-                    if (!$auto_build && isset($vars['configoptions']['virtfusion-vnc']) && $this->boolValue($vars['configoptions']['virtfusion-vnc'])) {
-                        $vnc_request = $server_api->setVnc($server_id, 'enable');
-                        $this->log(
-                            $row->meta->hostname . '| vnc',
-                            'HTTP ' . (int) ($vnc_request['info']['http_code'] ?? 0),
-                            'output',
-                            $this->apiRequestSucceeded($vnc_request, [200])
-                        );
-                        if ($vnc_request['info']['http_code'] == 200) {
-                            $virtfusion_vnc = 'true';
-                        }
-                    }
                 } else {
                     $this->Input->setErrors(['api' => ['response' => 'Failed to get a response from the API. The action was unsuccessful.']]);
                     return;
@@ -2131,11 +2076,6 @@ class VirtfusionDirectProvisioningMod extends Module
             [
                 'key' => 'virtfusion_backup_plan_id',
                 'value' => $virtfusion_backup_plan_id,
-                'encrypted' => 0
-            ],
-            [
-                'key' => 'virtfusion_vnc',
-                'value' => $virtfusion_vnc,
                 'encrypted' => 0
             ],
             [
@@ -2288,7 +2228,7 @@ class VirtfusionDirectProvisioningMod extends Module
         // Return all service fields because Blesta replaces, rather than merges,
         // module metadata after editService(). Operation journals are removed only
         // after the whole edit has completed successfully.
-        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_backup_plan_id', 'virtfusion_vnc', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
+        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_backup_plan_id', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
         $encrypted_fields = ['virtfusion_password'];
         $overrides = [];
         foreach ($fields as $field) {
@@ -2506,6 +2446,21 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         if (!$this->isTrafficBlockPackage($package)) {
+            $config_options = $vars['configoptions'] ?? [];
+            $os_template = $config_options['virtfusion-os_template']
+                ?? ($package->meta->{'virtfusion-default_os_template'} ?? null);
+            if ($this->shouldAutoBuild($package, $config_options)
+                && (!is_numeric($os_template) || (int) $os_template < 1)) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'virtfusion-os_template' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.configoption.os_template.required',
+                            true
+                        )
+                    ]
+                ]);
+                return false;
+            }
             return true;
         }
 
@@ -2742,7 +2697,7 @@ class VirtfusionDirectProvisioningMod extends Module
         ];
 
         if (($package === null || !$this->isTrafficBlockPackage($package))
-            && ($package === null || $this->shouldAutoBuild($package))) {
+            && ($package === null || $this->shouldAutoBuild($package, $vars['configoptions'] ?? []))) {
             $rules['virtfusion_hostname'] = [
                 'valid' => [
                     'rule' => [[$this, 'validateHostname']],
@@ -3114,9 +3069,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function getRemoteServerInfo($module_row, $server_id)
     {
-        $api = $this->getApiFromRow($module_row);
-        $api->loadCommand('virtfusion_server');
-        $server_api = new VirtfusionServer($api);
+        $server_api = $this->getServerApiFromRow($module_row);
         $request = $server_api->get($server_id, true);
 
         if (!isset($request['info']) || $request['info']['http_code'] !== 200) {
@@ -4069,9 +4022,7 @@ class VirtfusionDirectProvisioningMod extends Module
             ];
         }
 
-        $api = $this->getApiFromRow($module_row);
-        $api->loadCommand('virtfusion_server');
-        $server_api = new VirtfusionServer($api);
+        $server_api = $this->getServerApiFromRow($module_row);
         $server_id = $service_fields->virtfusion_server_id;
 
         if (!$err_msg && isset($vars['configoptions']['virtfusion-backup_plan_id'])) {
@@ -4085,27 +4036,6 @@ class VirtfusionDirectProvisioningMod extends Module
                     $err_msg = 'There was an error while updating the backup plan.';
                 } else {
                     $updated_fields['virtfusion_backup_plan_id'] = $backup_plan_id;
-                }
-            }
-        }
-
-        if (!$err_msg && isset($vars['configoptions']['virtfusion-vnc'])) {
-            $new_vnc = $this->boolValue($vars['configoptions']['virtfusion-vnc']) ? 'true' : 'false';
-            $current_vnc = isset($service_fields->virtfusion_vnc) ? (string) $service_fields->virtfusion_vnc : '';
-
-            if ($current_vnc !== $new_vnc) {
-                $request = $server_api->setVnc($server_id, $new_vnc === 'true' ? 'enable' : 'disable');
-                $this->log(
-                    $module_row->meta->hostname . '| vnc',
-                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
-                    'output',
-                    $this->apiRequestSucceeded($request, [200])
-                );
-
-                if ($request['info']['http_code'] != 200) {
-                    $err_msg = 'There was an error while updating VNC.';
-                } else {
-                    $updated_fields['virtfusion_vnc'] = $new_vnc;
                 }
             }
         }
@@ -4341,6 +4271,63 @@ class VirtfusionDirectProvisioningMod extends Module
         return $options;
     }
 
+    private function provisioningOptionVisibilityHtml($package_id, $legacy_auto_build)
+    {
+        Loader::loadModels($this, ['PackageOptions']);
+        $always_hidden_ids = [];
+        $build_option_ids = [];
+        $auto_build_ids = [];
+        $build_option_names = [
+            'virtfusion-os_template',
+            'virtfusion-ssh_keys',
+            'virtfusion-email',
+            'virtfusion-swap'
+        ];
+        foreach ($this->PackageOptions->getByPackageId($package_id) as $option) {
+            $name = $option->name ?? null;
+            if ($name === 'virtfusion-vnc') {
+                $always_hidden_ids[] = (int) $option->id;
+            } elseif (in_array($name, $build_option_names, true)) {
+                $build_option_ids[] = (int) $option->id;
+            } elseif (in_array($name, self::AUTO_BUILD_OPTIONS, true)) {
+                $auto_build_ids[] = (int) $option->id;
+            }
+        }
+
+        return '<script type="text/javascript">(function () {'
+            . 'var alwaysHidden=' . json_encode($always_hidden_ids) . ';'
+            . 'var buildOptions=' . json_encode($build_option_ids) . ';'
+            . 'var autoBuildOptions=' . json_encode($auto_build_ids) . ';'
+            . 'var fallbackAutoBuild=' . ($legacy_auto_build ? 'true' : 'false') . ';'
+            . 'function selector(id){return "[name=\\"configoptions["+id+"]\\"],"'
+            . '+"[name=\\"configoptions["+id+"][]\\"]";}'
+            . 'function boolValue(value){return ["1","true","yes","on"].indexOf(String(value).toLowerCase())!==-1;}'
+            . 'function autoBuildEnabled(){var enabled=fallbackAutoBuild;var found=false;'
+            . 'autoBuildOptions.some(function(id){var fields=document.querySelectorAll(selector(id));'
+            . 'if(!fields.length){return false;}found=true;var first=fields[0];'
+            . 'if(first.type==="radio"){fields.forEach(function(field){if(field.checked){enabled=boolValue(field.value);}});}'
+            . 'else if(first.type==="checkbox"){enabled=first.checked&&boolValue(first.value);}'
+            . 'else{enabled=boolValue(first.value);}return true;});return found?enabled:fallbackAutoBuild;}'
+            . 'function setVisible(ids,visible,marker){ids.forEach(function(id){'
+            . 'document.querySelectorAll(selector(id)).forEach(function(field){'
+            . 'var container=field.closest(".mb-3, .form-group");'
+            . 'if(!visible){field.disabled=true;field.dataset[marker]="1";'
+            . 'if(container){container.style.display="none";container.dataset[marker]="1";}}'
+            . 'else{if(field.dataset[marker]==="1"){field.disabled=false;delete field.dataset[marker];}'
+            . 'if(container&&container.dataset[marker]==="1"){container.style.display="";delete container.dataset[marker];}}'
+            . '});});}'
+            . 'function update(){var autoBuild=autoBuildEnabled();setVisible(alwaysHidden,false,"vfAlwaysHidden");'
+            . 'setVisible(buildOptions,autoBuild,"vfAutoHidden");'
+            . 'var hostname=document.getElementById("virtfusion_hostname");if(hostname){'
+            . 'var container=hostname.closest(".mb-3, .form-group");hostname.disabled=!autoBuild;hostname.required=autoBuild;'
+            . 'if(container){container.style.display=autoBuild?"":"none";}}}'
+            . 'document.addEventListener("change",function(event){if(event.target&&event.target.name'
+            . '&&event.target.name.indexOf("configoptions[")===0){update();}});'
+            . 'update();'
+            . 'new MutationObserver(update).observe(document.documentElement,{childList:true,subtree:true});'
+            . '}());</script>';
+    }
+
     /**
      * Returns all fields to display to an admin attempting to add a service with the module
      *
@@ -4356,7 +4343,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $fields = new ModuleFields();
 
-        if ($this->isTrafficBlockPackage($package) || !$this->shouldAutoBuild($package)) {
+        if ($this->isTrafficBlockPackage($package)) {
             return $fields;
         }
 
@@ -4375,7 +4362,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $fields->setHtml("
             <style>.cst_error {border:2px solid red}</style>
             <script type='text/javascript'>" . $this->getHostnameValidationJS() . '</script>
-        ');
+        ' . $this->provisioningOptionVisibilityHtml(
+            $package->id,
+            $this->shouldAutoBuild($package)
+        ));
 
         return $fields;
     }
@@ -4398,19 +4388,19 @@ class VirtfusionDirectProvisioningMod extends Module
             return $fields;
         }
 
-        if ($this->shouldAutoBuild($package)) {
-            $hostname_field = $fields->label(Language::_('VirtfusionDirectProvisioningMod.option_fields.hostname.label', true), 'hostname');
-            $hostname_field->attach(
-                $fields->fieldText(
-                    'virtfusion_hostname',
-                    $this->Html->ifSet($vars->virtfusion_hostname),
-                    ['id' => 'virtfusion_hostname', 'required' => 'required']
-                )
-            );
-            // Set the field
-            $fields->setField($hostname_field);
-            unset($hostname_field);
-        }
+        $form_auto_build = $this->shouldAutoBuild($package)
+            && (($vars->virtfusion_build_status ?? null) !== 'skipped');
+        $hidden_options = $this->provisioningOptionVisibilityHtml($package->id, $form_auto_build);
+        $hostname_field = $fields->label(Language::_('VirtfusionDirectProvisioningMod.option_fields.hostname.label', true), 'hostname');
+        $hostname_field->attach(
+            $fields->fieldText(
+                'virtfusion_hostname',
+                $this->Html->ifSet($vars->virtfusion_hostname),
+                ['id' => 'virtfusion_hostname', 'required' => 'required']
+            )
+        );
+        $fields->setField($hostname_field);
+        unset($hostname_field);
 
         // Set the Server ID field
         $server_id = $fields->label(Language::_('VirtfusionDirectProvisioningMod.service_fields.server_id', true), 'virtfusion_direct_provisioning_mod_server_id');
@@ -4448,7 +4438,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $fields->setHtml("
             <style>.cst_error {border:2px solid red}</style>
             <script type='text/javascript'>" . $this->getHostnameValidationJS() . '</script>
-        ');
+        ' . $hidden_options);
 
         return $fields;
     }
@@ -4467,7 +4457,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $fields = new ModuleFields();
 
-        if ($this->isTrafficBlockPackage($package) || !$this->shouldAutoBuild($package)) {
+        if ($this->isTrafficBlockPackage($package)) {
             return $fields;
         }
 
@@ -4495,14 +4485,26 @@ class VirtfusionDirectProvisioningMod extends Module
         $fields->setHtml("
             <style>.cst_error {border:2px solid red}</style>
             <script type='text/javascript'>" . $this->getHostnameValidationJS() . '</script>
-        ');
+        ' . $this->provisioningOptionVisibilityHtml(
+            $package->id,
+            $this->shouldAutoBuild($package)
+        ));
 
         return $fields;
     }
 
     public function getClientEditFields($package, $vars = null)
     {
-        return new ModuleFields();
+        $fields = new ModuleFields();
+        if (!$this->isTrafficBlockPackage($package)) {
+            $form_auto_build = $this->shouldAutoBuild($package)
+                && (($vars->virtfusion_build_status ?? null) !== 'skipped');
+            $fields->setHtml($this->provisioningOptionVisibilityHtml(
+                $package->id,
+                $form_auto_build
+            ));
+        }
+        return $fields;
     }
 
     /**
