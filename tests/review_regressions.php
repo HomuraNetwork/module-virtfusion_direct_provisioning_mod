@@ -254,6 +254,11 @@ assertSameValue(
     callPrivate($module, 'tasksBlockServerAction', ['restart', [['action' => 'Restart']], []]),
     'An actively executing task must block another power action.'
 );
+assertSameValue(
+    false,
+    callPrivate($module, 'tasksBlockServerAction', ['vnc_disable', [['action' => 'Restart']], []]),
+    'Disabling VNC must remain available as a cleanup action.'
+);
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
 $add_rules = callPrivate($module, 'getServiceRules', [
     ['configoptions' => ['autoBuild' => 'true']],
@@ -348,6 +353,35 @@ assertSameValue(
     false,
     $module->validateAdminServerUrlTemplate('https://evil.example/servers/{server_id}', 'vf.example.com'),
     'A cross-host admin URL must be rejected.'
+);
+$vnc_row = (object) ['meta' => (object) ['hostname' => 'vf.example.com']];
+assertSameValue(
+    'wss://vf.example.com/vnc/?token=test-token',
+    callPrivate($module, 'vncWebSocketUrl', [$vnc_row, '/vnc/?token=test-token']),
+    'The VirtFusion VNC path must be converted to a WSS URL.'
+);
+assertSameValue(
+    null,
+    callPrivate($module, 'vncWebSocketUrl', [$vnc_row, 'wss://evil.example/vnc/?token=test-token']),
+    'A VNC WebSocket URL on another host must be rejected.'
+);
+$vnc_template = file_get_contents(__DIR__ . '/../views/default/action_result.pdt');
+foreach (['sendCtrlAltDel', 'scaleViewport', 'viewOnly', 'resizeSession', 'clipboardPasteFrom', 'requestFullscreen'] as $vnc_feature) {
+    assertSameValue(
+        true,
+        strpos($vnc_template, $vnc_feature) !== false,
+        'The embedded VNC console must retain its ' . $vnc_feature . ' control.'
+    );
+}
+assertSameValue(
+    true,
+    strpos($vnc_template, "addEventListener('clipboard'") !== false,
+    'The embedded VNC console must receive remote clipboard updates.'
+);
+assertSameValue(
+    true,
+    strpos($vnc_template, "addEventListener('shown.bs.modal', connect") !== false,
+    'The embedded VNC console must connect only after the popup is visible.'
 );
 
 $service = (object) ['fields' => [

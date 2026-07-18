@@ -122,7 +122,7 @@ These names are used only when `autoBuild=true`:
 
 When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `ipv6`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
 
-VNC is not a Configurable Option. It is enabled only when the client or administrator requests it from the service Manage page.
+VNC is not a Configurable Option. It is enabled only when the client or administrator opens the console from the service Manage page. The noVNC popup supports reconnect, full screen, fit-to-window, view-only mode, remote display resizing, Ctrl+Alt+Del, and clipboard exchange. Closing it through the provided button also disables VNC.
 
 ## Service upgrades and downgrades
 
@@ -181,7 +181,7 @@ The client and administrator Manage pages show available VirtFusion information,
 - backup plan and recent backup information;
 - restart recommendation and build-status warnings.
 
-Available actions include boot, shutdown, power off, restart, password reset, VNC access, IP management, and opening the server in VirtFusion.
+Available actions include boot, shutdown, power off, restart, password reset, VNC access, IP management, status refresh, and opening the server in VirtFusion. Boot is shown only while the server is stopped; restart, shutdown, and power off are shown only while it is running.
 
 IP addresses, refresh, and eligible additional-IP removal are contained in the Manage page; there is no separate IP Addresses tab. Port speed is displayed automatically in Mbps or Gbps. Services without a hostname use a random public UUID label rather than exposing the sequential VirtFusion server ID.
 

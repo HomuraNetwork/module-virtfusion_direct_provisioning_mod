@@ -1031,6 +1031,29 @@ class VirtfusionDirectProvisioningMod extends Module
         );
     }
 
+    private function vncWebSocketUrl($module_row, $path)
+    {
+        $path = trim((string) $path);
+        if ($path === '' || preg_match('/[\r\n]/', $path)) {
+            return null;
+        }
+
+        if (strpos($path, 'wss://') === 0) {
+            $parts = parse_url($path);
+            if (!$parts
+                || strcasecmp((string) ($parts['host'] ?? ''), (string) $module_row->meta->hostname) !== 0) {
+                return null;
+            }
+            return $path;
+        }
+
+        if ($path[0] !== '/') {
+            return null;
+        }
+
+        return 'wss://' . $module_row->meta->hostname . $path;
+    }
+
     private function moduleHasOwnedData($module_id)
     {
         foreach (['module_rows', 'module_groups', 'module_meta', 'packages'] as $table) {
@@ -3754,6 +3777,10 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     private function tasksBlockServerAction($action, $active_tasks, $pending_tasks)
     {
+        if ($action === 'vnc_disable') {
+            return false;
+        }
+
         if (!empty($active_tasks)) {
             return true;
         }
@@ -3769,11 +3796,16 @@ class VirtfusionDirectProvisioningMod extends Module
     {
         $server_id = $service_fields->virtfusion_server_id;
         $action = $post['action'] ?? 'manage';
+        $server_uuid = null;
 
-        if (in_array($action, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'vnc'], true)) {
+        if (in_array($action, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'vnc', 'vnc_disable'], true)) {
             $state_request = $server_api->get($server_id, true);
             if ($this->apiRequestSucceeded($state_request, [200])) {
                 $state_data = json_decode($state_request['response']);
+                $candidate_uuid = (string) ($state_data->data->uuid ?? '');
+                if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $candidate_uuid)) {
+                    $server_uuid = $candidate_uuid;
+                }
                 $active = $state_data->data->tasks->active ?? [];
                 $pending = $state_data->data->tasks->actions->pending ?? [];
                 if ($this->tasksBlockServerAction($action, $active, $pending)) {
@@ -3845,8 +3877,16 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
 
                 $data = json_decode($request['response']);
-                return Language::_('VirtfusionDirectProvisioningMod.tabManage.reset_password_success', true)
-                    . ' ' . ($data->data->expectedPassword ?? '');
+                $password = (string) ($data->data->expectedPassword ?? '');
+                if ($password === '') {
+                    $this->Input->setErrors(['api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.password.missing', true)]]);
+                    return null;
+                }
+
+                return [
+                    'type' => 'password',
+                    'password' => $password
+                ];
 
             case 'vnc':
                 $request = $server_api->setVnc($server_id, 'enable');
@@ -3864,13 +3904,41 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
 
                 $data = json_decode($request['response']);
-                if (!empty($data->data->vnc->wss->url)) {
-                    header('Location: https://' . $module_row->meta->hostname . $data->data->vnc->wss->url);
-                    die();
+                $websocket_url = $this->vncWebSocketUrl(
+                    $module_row,
+                    $data->data->vnc->wss->url ?? null
+                );
+                $password = (string) ($data->data->vnc->password ?? '');
+                if ($websocket_url && $password !== '') {
+                    return [
+                        'type' => 'vnc',
+                        'websocket_url' => $websocket_url,
+                        'password' => $password,
+                        'console_url' => $server_uuid
+                            ? 'https://' . $module_row->meta->hostname . '/server/' . rawurlencode($server_uuid) . '/vnc'
+                            : null
+                    ];
                 }
 
-                $this->Input->setErrors(['api' => ['response' => 'The VNC console URL was not returned by the API.']]);
+                $this->Input->setErrors(['api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.vnc.details', true)]]);
                 return null;
+
+            case 'vnc_disable':
+                $request = $server_api->setVnc($server_id, 'disable');
+                $success = isset($request['info']) && $request['info']['http_code'] == 200;
+                $this->log(
+                    $module_row->meta->hostname . '| vnc disable',
+                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    'output',
+                    $success
+                );
+
+                if (!$success) {
+                    $this->Input->setErrors(['api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.vnc.disable', true)]]);
+                    return null;
+                }
+
+                return Language::_('VirtfusionDirectProvisioningMod.tabManage.vnc_closed', true);
         }
 
         return null;
@@ -3900,6 +3968,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $message = null;
+        $action_result = null;
         $server_info = null;
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
@@ -3908,6 +3977,8 @@ class VirtfusionDirectProvisioningMod extends Module
             if (($post['action'] ?? null) === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+            } elseif (($post['action'] ?? null) === 'refresh_state') {
+                $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
             } elseif (($post['action'] ?? null) === 'remove_ip') {
                 $error = $this->removeIPAddress($package, $service, $post, true);
                 if ($error) {
@@ -3923,7 +3994,12 @@ class VirtfusionDirectProvisioningMod extends Module
                     $api->loadCommand('virtfusion_server');
 
                     $server_api = new VirtfusionServer($api);
-                    $message = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    if (is_array($result)) {
+                        $action_result = $result;
+                    } else {
+                        $message = $result;
+                    }
                 }
             }
         }
@@ -3936,6 +4012,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $this->view->set('message', $message);
+        $this->view->set('action_result', $action_result);
         $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, true, $service_fields));
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
@@ -3962,6 +4039,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $message = null;
+        $action_result = null;
         $server_info = null;
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
@@ -3970,6 +4048,8 @@ class VirtfusionDirectProvisioningMod extends Module
             if (($post['action'] ?? null) === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+            } elseif (($post['action'] ?? null) === 'refresh_state') {
+                $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
             } elseif (($post['action'] ?? null) === 'remove_ip') {
                 $error = $this->removeIPAddress($package, $service, $post, false);
                 if ($error) {
@@ -3985,7 +4065,12 @@ class VirtfusionDirectProvisioningMod extends Module
                     $api->loadCommand('virtfusion_server');
 
                     $server_api = new VirtfusionServer($api);
-                    $message = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    if (is_array($result)) {
+                        $action_result = $result;
+                    } else {
+                        $message = $result;
+                    }
                 }
             }
         }
@@ -3998,6 +4083,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $this->view->set('message', $message);
+        $this->view->set('action_result', $action_result);
         $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, false, $service_fields));
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);

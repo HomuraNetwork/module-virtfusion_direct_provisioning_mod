@@ -1,0 +1,365 @@
+<?php if (($action_result['type'] ?? null) === 'password') { ?>
+<div class="alert alert-success border-success mb-3" role="alert">
+    <h5 class="alert-heading mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.password_result.heading'); ?></h5>
+    <p class="mb-3"><?php $this->_('VirtfusionDirectProvisioningMod.password_result.notice'); ?></p>
+    <div class="input-group">
+        <input
+            type="text"
+            class="form-control font-monospace fw-semibold"
+            id="virtfusionNewPassword"
+            value="<?php echo $this->Html->safe($action_result['password']); ?>"
+            readonly
+            autocomplete="off"
+        >
+        <button type="button" class="btn btn-success" id="virtfusionCopyPassword">
+            <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
+        </button>
+    </div>
+</div>
+<script type="text/javascript">
+(function () {
+    var button = document.getElementById('virtfusionCopyPassword');
+    var field = document.getElementById('virtfusionNewPassword');
+    if (!button || !field) {
+        return;
+    }
+
+    button.addEventListener('click', function () {
+        var copied = function () {
+            button.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.password_result.copied', true)); ?>;
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(field.value).then(copied);
+            return;
+        }
+
+        field.select();
+        document.execCommand('copy');
+        copied();
+    });
+}());
+</script>
+<?php } ?>
+
+<?php if (($action_result['type'] ?? null) === 'vnc') { ?>
+<style>
+#virtfusionVncScreen {
+    height: min(62vh, 680px);
+    min-height: 360px;
+    overflow: hidden;
+}
+#virtfusionVncModal:fullscreen {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    background: #000;
+}
+#virtfusionVncModal:fullscreen .modal-dialog,
+#virtfusionVncModal:fullscreen .modal-content {
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+}
+#virtfusionVncModal:fullscreen .modal-body {
+    min-height: 0;
+}
+#virtfusionVncModal:fullscreen #virtfusionVncScreen {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+}
+@media (max-width: 575.98px) {
+    #virtfusionVncScreen {
+        height: 52vh;
+        min-height: 280px;
+    }
+}
+</style>
+<div class="modal fade" id="virtfusionVncModal" tabindex="-1" aria-labelledby="virtfusionVncHeading" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <h5 class="modal-title" id="virtfusionVncHeading"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.heading'); ?></h5>
+                    <div class="small text-muted" id="virtfusionVncStatus" aria-live="polite"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.connecting'); ?></div>
+                </div>
+            </div>
+            <div class="modal-body d-flex flex-column p-0 bg-dark">
+                <div class="d-flex flex-wrap align-items-center gap-2 border-bottom bg-body p-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionReconnectVnc">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.reconnect'); ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionSendCtrlAltDel" disabled>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.ctrl_alt_del'); ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionFullscreenVnc">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.fullscreen'); ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionToggleClipboard" aria-expanded="false" aria-controls="virtfusionVncClipboard">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?>
+                    </button>
+                    <div class="vr d-none d-md-block mx-1"></div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="virtfusionScaleVnc" checked>
+                        <label class="form-check-label small" for="virtfusionScaleVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.fit_window'); ?></label>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="virtfusionViewOnlyVnc">
+                        <label class="form-check-label small" for="virtfusionViewOnlyVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.view_only'); ?></label>
+                    </div>
+                    <div class="form-check form-switch mb-0">
+                        <input class="form-check-input" type="checkbox" role="switch" id="virtfusionResizeVnc">
+                        <label class="form-check-label small" for="virtfusionResizeVnc"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.resize_session'); ?></label>
+                    </div>
+                </div>
+                <div id="virtfusionVncScreen"></div>
+                <div class="border-top bg-body p-3" id="virtfusionVncClipboard" hidden>
+                    <label for="virtfusionVncClipboardText" class="form-label fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?></label>
+                    <textarea class="form-control mb-2" id="virtfusionVncClipboardText" rows="3" spellcheck="false" placeholder="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_placeholder', true)); ?>"></textarea>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <button type="button" class="btn btn-sm btn-primary" id="virtfusionSendClipboard" disabled>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.vnc.send_clipboard'); ?>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionCopyClipboard">
+                            <?php $this->_('VirtfusionDirectProvisioningMod.vnc.copy_clipboard'); ?>
+                        </button>
+                        <span class="small text-muted" id="virtfusionVncClipboardStatus" aria-live="polite"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard_help'); ?></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer gap-2">
+                <?php if (!empty($action_result['console_url'])) { ?>
+                <a href="<?php echo $this->Html->safe($action_result['console_url']); ?>" target="_blank" rel="noopener" class="btn btn-outline-secondary">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.vnc.open_virtfusion'); ?>
+                </a>
+                <?php } ?>
+                <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                    <button type="submit" name="action" value="vnc_disable" class="btn btn-primary" id="virtfusionCloseVnc">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.close'); ?>
+                    </button>
+                <?php $this->Form->end(); ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="module" crossorigin="anonymous">
+import RFB from '<?php echo VENDORWEBDIR; ?>novnc/novnc/core/rfb.js';
+
+(function () {
+    var modalElement = document.getElementById('virtfusionVncModal');
+    var screen = document.getElementById('virtfusionVncScreen');
+    var statusElement = document.getElementById('virtfusionVncStatus');
+    var ctrlAltDel = document.getElementById('virtfusionSendCtrlAltDel');
+    var reconnectButton = document.getElementById('virtfusionReconnectVnc');
+    var fullscreenButton = document.getElementById('virtfusionFullscreenVnc');
+    var scaleToggle = document.getElementById('virtfusionScaleVnc');
+    var viewOnlyToggle = document.getElementById('virtfusionViewOnlyVnc');
+    var resizeToggle = document.getElementById('virtfusionResizeVnc');
+    var clipboardToggle = document.getElementById('virtfusionToggleClipboard');
+    var clipboardPanel = document.getElementById('virtfusionVncClipboard');
+    var clipboardText = document.getElementById('virtfusionVncClipboardText');
+    var clipboardStatus = document.getElementById('virtfusionVncClipboardStatus');
+    var sendClipboard = document.getElementById('virtfusionSendClipboard');
+    var copyClipboard = document.getElementById('virtfusionCopyClipboard');
+    var closeButton = document.getElementById('virtfusionCloseVnc');
+    if (!modalElement || !screen || !statusElement) {
+        return;
+    }
+
+    var modal = bootstrap.Modal.getOrCreateInstance(modalElement, {
+        backdrop: 'static',
+        keyboard: false
+    });
+    var rfb = null;
+    var connectionState = 'disconnected';
+
+    function updateControls() {
+        var connected = connectionState === 'connected';
+        var viewOnly = viewOnlyToggle && viewOnlyToggle.checked;
+        if (ctrlAltDel) {
+            ctrlAltDel.disabled = !connected || viewOnly;
+        }
+        if (sendClipboard) {
+            sendClipboard.disabled = !connected || viewOnly;
+        }
+        if (reconnectButton) {
+            reconnectButton.disabled = connectionState === 'connecting';
+        }
+    }
+
+    function applyDisplayPreferences(connection) {
+        var scale = !scaleToggle || scaleToggle.checked;
+        connection.viewOnly = Boolean(viewOnlyToggle && viewOnlyToggle.checked);
+        connection.scaleViewport = scale;
+        connection.clipViewport = !scale;
+        connection.resizeSession = Boolean(resizeToggle && resizeToggle.checked);
+        connection.focusOnClick = true;
+        screen.style.overflow = scale ? 'hidden' : 'auto';
+    }
+
+    function setDisconnectedStatus(clean) {
+        connectionState = 'disconnected';
+        statusElement.textContent = clean
+            ? <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.disconnected', true)); ?>
+            : <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.failed', true)); ?>;
+        updateControls();
+    }
+
+    function connect() {
+        if (rfb) {
+            var previousConnection = rfb;
+            rfb = null;
+            previousConnection.disconnect();
+        }
+
+        screen.replaceChildren();
+        connectionState = 'connecting';
+        statusElement.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.connecting', true)); ?>;
+        updateControls();
+
+        try {
+            var connection = new RFB(
+                screen,
+                <?php echo json_encode($action_result['websocket_url']); ?>,
+                {
+                    credentials: {
+                        password: <?php echo json_encode($action_result['password']); ?>
+                    },
+                    wsProtocols: ['binary', 'base64']
+                }
+            );
+            rfb = connection;
+            applyDisplayPreferences(connection);
+            connection.addEventListener('connect', function () {
+                if (rfb !== connection) {
+                    return;
+                }
+                connectionState = 'connected';
+                statusElement.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.connected', true)); ?>;
+                updateControls();
+            });
+            connection.addEventListener('disconnect', function (event) {
+                if (rfb !== connection) {
+                    return;
+                }
+                rfb = null;
+                setDisconnectedStatus(event.detail.clean);
+            });
+            connection.addEventListener('clipboard', function (event) {
+                if (!clipboardText) {
+                    return;
+                }
+                clipboardText.value = event.detail.text || '';
+                if (clipboardStatus) {
+                    clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_received', true)); ?>;
+                }
+            });
+        } catch (error) {
+            rfb = null;
+            setDisconnectedStatus(false);
+        }
+    }
+
+    if (reconnectButton) {
+        reconnectButton.addEventListener('click', connect);
+    }
+    if (ctrlAltDel) {
+        ctrlAltDel.addEventListener('click', function () {
+            if (rfb && connectionState === 'connected' && !(viewOnlyToggle && viewOnlyToggle.checked)) {
+                rfb.sendCtrlAltDel();
+            }
+        });
+    }
+    if (scaleToggle) {
+        scaleToggle.addEventListener('change', function () {
+            if (rfb) {
+                applyDisplayPreferences(rfb);
+            } else {
+                screen.style.overflow = scaleToggle.checked ? 'hidden' : 'auto';
+            }
+        });
+    }
+    if (viewOnlyToggle) {
+        viewOnlyToggle.addEventListener('change', function () {
+            if (rfb) {
+                rfb.viewOnly = viewOnlyToggle.checked;
+            }
+            updateControls();
+        });
+    }
+    if (resizeToggle) {
+        resizeToggle.addEventListener('change', function () {
+            if (rfb) {
+                rfb.resizeSession = resizeToggle.checked;
+            }
+        });
+    }
+    if (clipboardToggle && clipboardPanel) {
+        clipboardToggle.addEventListener('click', function () {
+            clipboardPanel.hidden = !clipboardPanel.hidden;
+            clipboardToggle.setAttribute('aria-expanded', clipboardPanel.hidden ? 'false' : 'true');
+        });
+    }
+    if (sendClipboard && clipboardText) {
+        sendClipboard.addEventListener('click', function () {
+            if (!rfb || connectionState !== 'connected' || (viewOnlyToggle && viewOnlyToggle.checked)) {
+                return;
+            }
+            rfb.clipboardPasteFrom(clipboardText.value);
+            if (clipboardStatus) {
+                clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_sent', true)); ?>;
+            }
+        });
+    }
+    if (copyClipboard && clipboardText) {
+        copyClipboard.addEventListener('click', function () {
+            var copied = function () {
+                if (clipboardStatus) {
+                    clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_copied', true)); ?>;
+                }
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(clipboardText.value).then(copied);
+                return;
+            }
+            clipboardText.select();
+            document.execCommand('copy');
+            copied();
+        });
+    }
+    if (fullscreenButton) {
+        if (!modalElement.requestFullscreen) {
+            fullscreenButton.disabled = true;
+        } else {
+            fullscreenButton.addEventListener('click', function () {
+                if (document.fullscreenElement === modalElement) {
+                    document.exitFullscreen();
+                } else {
+                    modalElement.requestFullscreen();
+                }
+            });
+            document.addEventListener('fullscreenchange', function () {
+                fullscreenButton.textContent = document.fullscreenElement === modalElement
+                    ? <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.exit_fullscreen', true)); ?>
+                    : <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.fullscreen', true)); ?>;
+            });
+        }
+    }
+    if (closeButton) {
+        closeButton.addEventListener('click', function () {
+            if (rfb) {
+                rfb.disconnect();
+            }
+        });
+    }
+
+    modalElement.addEventListener('shown.bs.modal', connect, {once: true});
+    modal.show();
+}());
+</script>
+<?php } ?>
