@@ -85,7 +85,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.package_minimum'
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.additional_minimum'] = 'additionalIpv4 must be zero or greater.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu_throttle.range'] = 'cpuThrottle must be between 0 and 99.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.create_only'] = '%1$s can only be selected when the service is created.';
-$lang['VirtfusionDirectProvisioningMod.!error.configoption.network_speed.minimum'] = 'Network speed must be zero or greater.';
+$lang['VirtfusionDirectProvisioningMod.!error.configoption.network_speed.format'] = 'Network speed must be a non-negative raw API value or use Mbps/Gbps, for example 100 Mbps or 1 Gbps.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.hypervisor.minimum'] = 'hypervisorId must be at least 1.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.memory.minimum'] = 'Memory must be at least 256 MB.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.cpu.minimum'] = 'CPU cores must be at least 1.';
@@ -133,7 +133,7 @@ $lang['VirtfusionDirectProvisioningMod.service_info.main_ip'] = 'Main IP Address
 $lang['VirtfusionDirectProvisioningMod.service_info.base_ips'] = 'Base IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.extra_ips'] = 'Extra IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.label'] = 'Label';
-$lang['VirtfusionDirectProvisioningMod.service_info.traffic_resets'] = 'Traffic Period Ends';
+$lang['VirtfusionDirectProvisioningMod.service_info.traffic_resets'] = 'Traffic Resets';
 $lang['VirtfusionDirectProvisioningMod.service_info.traffic_used'] = 'Traffic Used';
 $lang['VirtfusionDirectProvisioningMod.service_info.traffic_blocks'] = 'Traffic Blocks';
 $lang['VirtfusionDirectProvisioningMod.service_info.package'] = 'Blesta Package';
@@ -141,9 +141,10 @@ $lang['VirtfusionDirectProvisioningMod.service_info.port_speed'] = 'Port Speed (
 $lang['VirtfusionDirectProvisioningMod.service_info.backups'] = 'Backups / Latest';
 $lang['VirtfusionDirectProvisioningMod.service_info.backup_plan'] = 'Backup Plan';
 $lang['VirtfusionDirectProvisioningMod.service_name.traffic_block'] = 'Traffic Block (%1$s GB)';
+$lang['VirtfusionDirectProvisioningMod.service_name.server'] = 'VirtFusion Server';
 $lang['VirtfusionDirectProvisioningMod.traffic_block_info.amount'] = 'Traffic Block';
 $lang['VirtfusionDirectProvisioningMod.traffic_block_info.server_id'] = 'Parent VirtFusion Server ID';
-$lang['VirtfusionDirectProvisioningMod.traffic_block_info.period'] = 'VirtFusion Traffic Period Ends';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.period'] = 'Valid Until';
 $lang['VirtfusionDirectProvisioningMod.traffic_block_info.block_id'] = 'VirtFusion Block ID';
 $lang['VirtfusionDirectProvisioningMod.traffic_block_info.operation_status'] = 'Provisioning Operation';
 $lang['VirtfusionDirectProvisioningMod.traffic_block_info.operation_key'] = 'Operation Key';
@@ -196,6 +197,14 @@ $lang['VirtfusionDirectProvisioningMod.ipAddresses.submit'] = 'Submit';
 
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.ipv6_refresh'] = 'Refresh IPv6';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.refresh'] = 'Refresh IP Addresses';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.none'] = 'None assigned';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.refreshed'] = 'IP addresses refreshed.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.removed'] = 'IP address removed.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm'] = 'Remove this IP address?';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_invalid'] = 'The selected additional IP address is unavailable.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_forbidden'] = 'This service does not allow client IP removal.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_failed'] = 'VirtFusion could not remove the IP address.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.update_failed'] = 'The IP was removed remotely, but Blesta could not update the service record.';
 
 // Package Fields
 $lang['VirtfusionDirectProvisioningMod.package_fields.service_type'] = 'Product Type';

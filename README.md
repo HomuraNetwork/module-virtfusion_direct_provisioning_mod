@@ -73,7 +73,7 @@ Configurable Option names use the VirtFusion API field names. The module does no
 | Name | Suggested type | Use |
 | --- | --- | --- |
 | `autoBuild` | Dropdown | Create only. `true` calls the Build API; `false` creates the server without building. If omitted, the default is `false`. |
-| `networkSpeed` | Quantity or Dropdown | Create only. Module-provided combined speed applied to both `networkSpeedInbound` and `networkSpeedOutbound`. |
+| `networkSpeed` | Quantity or Dropdown | Create only. Module-provided combined speed applied to both `networkSpeedInbound` and `networkSpeedOutbound`. Prefer values such as `100 Mbps` or `1 Gbps`; bare numbers are treated as raw API values. |
 | `additionalIpv4` | Quantity | Adds IPv4 addresses to the Module Option **Default IPv4** quantity. Ignored when an absolute `ipv4` value is supplied. |
 | `additionalTraffic` | Quantity or Dropdown | Adds GB to the selected VirtFusion package's base traffic. Ignored when an absolute `traffic` value is supplied. |
 | `backupPlanId` | Dropdown | Backup-plan ID applied after creation and changeable later. Use `0` to remove the plan. |
@@ -91,8 +91,8 @@ Configurable Option names use the VirtFusion API field names. The module does no
 | `traffic` | Absolute traffic allowance in GB; `0` means unlimited. |
 | `memory` | Memory in MB. |
 | `cpuCores` | CPU core count. |
-| `networkSpeedInbound` | Inbound speed in kB/s. Overridden by `networkSpeed`. |
-| `networkSpeedOutbound` | Outbound speed in kB/s. Overridden by `networkSpeed`. |
+| `networkSpeedInbound` | Inbound speed. Accepts Mbps/Gbps or a bare raw API value. Overridden by `networkSpeed`. |
+| `networkSpeedOutbound` | Outbound speed. Accepts Mbps/Gbps or a bare raw API value. Overridden by `networkSpeed`. |
 | `storageProfile` | Storage-profile ID. |
 | `networkProfile` | Network-profile ID. |
 | `firewallRulesets` | Comma-separated firewall-ruleset IDs. |
@@ -178,6 +178,8 @@ The client and administrator Manage pages show available VirtFusion information,
 - restart recommendation and build-status warnings.
 
 Available actions include boot, shutdown, power off, restart, password reset, VNC access, IP management, and opening the server in VirtFusion.
+
+IP addresses, refresh, and eligible additional-IP removal are contained in the Manage page; there is no separate IP Addresses tab. Port speed is displayed automatically in Mbps or Gbps. Services without a hostname use a random public UUID label rather than exposing the sequential VirtFusion server ID.
 
 The administrator link opens the configured VirtFusion admin server URL and does not create a client login session. The client link may use VirtFusion's client login bridge.
 

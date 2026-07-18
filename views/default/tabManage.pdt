@@ -33,7 +33,7 @@
                 <label>CPU</label>
                 <h4><?php echo $this->Html->safe($server_info->cpu ?? 'None'); ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.package', true)); ?></label>
-                <h4><?php echo $this->Html->safe($package->name ?? 'None'); ?> (#<?php echo $this->Html->safe($package->meta->package_id ?? 'None'); ?>)</h4>
+                <h4><?php echo $this->Html->safe($package->name ?? 'None'); ?></h4>
                 <label>RAM</label>
                 <h4><?php echo $this->Html->safe($server_info->memory ?? 'None'); ?> MB</h4>
                 <label>Disk</label>
@@ -43,7 +43,9 @@
                 <label>Transfer</label>
                 <h4><?php echo $this->Html->safe($server_info->traffic ?? 'None'); ?> GB</h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_resets', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->traffic_reset ?? 'None'); ?></h4>
+                <h4><?php echo !empty($server_info->traffic_reset)
+                    ? $this->Html->safe($this->Date->cast($server_info->traffic_reset, 'date_time'))
+                    : 'None'; ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_used', true)); ?></label>
                 <h4><?php echo $this->Html->safe($server_info->traffic_used ?? 'None'); ?> GB</h4>
                 <?php if (isset($server_info->traffic_percent)) { ?>
@@ -60,14 +62,56 @@
                 <label>IPv6</label>
                 <h4><?php echo $this->Html->safe($server_info->ipv6 ?? 'None'); ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.port_speed', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->network_in ?? 'None'); ?> / <?php echo $this->Html->safe($server_info->network_out ?? 'None'); ?> kB/s</h4>
+                <h4><?php echo $this->Html->safe($server_info->network_in ?? 'None'); ?> / <?php echo $this->Html->safe($server_info->network_out ?? 'None'); ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.backups', true)); ?></label>
-                <h4><?php echo $this->Html->safe($server_info->backup_count ?? 0); ?> — <?php echo $this->Html->safe($server_info->latest_backup->created ?? 'None'); ?></h4>
+                <h4><?php echo $this->Html->safe($server_info->backup_count ?? 0); ?> — <?php echo !empty($server_info->latest_backup->created)
+                    ? $this->Html->safe($this->Date->cast($server_info->latest_backup->created, 'date_time'))
+                    : 'None'; ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.backup_plan', true)); ?></label>
                 <h4><?php echo $this->Html->safe($server_info->backup_plan ?? 'None'); ?></h4>
             </div>
         </div>
         <hr>
+    <?php } ?>
+
+    <?php if (isset($ip_data)) { ?>
+    <div class="card mb-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.header'); ?></strong>
+            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                <button type="submit" name="action" value="refresh_ips" class="btn btn-sm btn-outline-secondary">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.refresh'); ?>
+                </button>
+            <?php $this->Form->end(); ?>
+        </div>
+        <div class="card-body"><div class="row">
+            <?php foreach (['main', 'base', 'extra', 'ipv6'] as $ip_type) { ?>
+            <div class="col-md-6 mb-3">
+                <h6><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.' . $ip_type); ?></h6>
+                <?php $addresses = $ip_data->ip_addresses[$ip_type] ?? []; ?>
+                <?php if (empty($addresses)) { ?>
+                    <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                <?php } else { ?>
+                    <ul class="list-group list-group-flush">
+                    <?php foreach ($addresses as $address) { ?>
+                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
+                            <code><?php echo $this->Html->safe($address); ?></code>
+                            <?php if ($ip_type === 'extra' && !empty($ip_data->editable_options['extra'])) { ?>
+                                <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                                    <?php $this->Form->fieldHidden('ip_address', $address); ?>
+                                    <button type="submit" name="action" value="remove_ip" class="btn btn-sm btn-outline-danger" onclick="return confirm(<?php echo $this->Html->safe(json_encode($this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm', true))); ?>);">
+                                        <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>
+                                    </button>
+                                <?php $this->Form->end(); ?>
+                            <?php } ?>
+                        </li>
+                    <?php } ?>
+                    </ul>
+                <?php } ?>
+            </div>
+            <?php } ?>
+        </div></div>
+    </div>
     <?php } ?>
 
     <?php

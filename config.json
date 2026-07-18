@@ -1,5 +1,5 @@
 {
-    "version": "2026.07.18.3",
+    "version": "2026.07.18.4",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -36,6 +36,7 @@
             "virtfusion-service_type"
         ],
         "service": [
+            "virtfusion_public_label",
             "virtfusion_server_id",
             "virtfusion_hostname",
             "virtfusion_password",

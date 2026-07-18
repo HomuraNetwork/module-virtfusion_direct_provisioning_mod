@@ -17,8 +17,8 @@ class VirtfusionDirectProvisioningMod extends Module
     private const CPU_THROTTLE_OPTION = 'cpuThrottle';
     private const TRAFFIC_BLOCK_CAPABILITY = 'traffic_block';
     private const TRAFFIC_BLOCK_AMOUNT_OPTION = 'amount';
-    private const TRAFFIC_BLOCK_OPERATION_FIELD = 'virtfusion_traffic_block_operation';
-    private const RESOURCE_CHANGE_OPERATION_FIELD = 'virtfusion_resource_change_operation';
+    private const TRAFFIC_BLOCK_OPERATION_FIELD = 'vf_traffic_block_operation';
+    private const RESOURCE_CHANGE_OPERATION_FIELD = 'vf_resource_change_operation';
 
     /**
      * Initializes the module
@@ -113,6 +113,70 @@ class VirtfusionDirectProvisioningMod extends Module
         return in_array($value, [true, 1, '1', 'true', 'yes', 'on'], true);
     }
 
+    private function parseNetworkSpeed($value)
+    {
+        if (is_int($value) || is_float($value) || (is_string($value) && is_numeric(trim($value)))) {
+            return (int) $value;
+        }
+
+        if (!is_string($value)
+            || !preg_match('/^\s*(\d+(?:\.\d+)?)\s*(Mbps|Gbps)\s*$/i', $value, $matches)) {
+            return null;
+        }
+
+        $amount = (float) $matches[1];
+        $kilobytes_per_second = strcasecmp($matches[2], 'Gbps') === 0
+            ? ($amount * 1000000 / 8)
+            : ($amount * 1000 / 8);
+
+        return (int) round($kilobytes_per_second);
+    }
+
+    private function formatNetworkSpeed($value)
+    {
+        if (!is_numeric($value)) {
+            $value = $this->parseNetworkSpeed($value);
+            if ($value === null) {
+                return null;
+            }
+        }
+
+        $megabits = ((float) $value * 8) / 1000;
+        $unit = 'Mbps';
+        $display = $megabits;
+        if ($megabits >= 1000) {
+            $display = $megabits / 1000;
+            $unit = 'Gbps';
+        }
+
+        $precision = $display >= 100 ? 0 : ($display >= 10 ? 1 : 2);
+        $formatted = number_format($display, $precision, '.', '');
+        if ($precision > 0) {
+            $formatted = rtrim(rtrim($formatted, '0'), '.');
+        }
+
+        return $formatted . ' ' . $unit;
+    }
+
+    private function uuidV4()
+    {
+        $bytes = random_bytes(16);
+        $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+        $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+        $hex = bin2hex($bytes);
+
+        return substr($hex, 0, 8) . '-'
+            . substr($hex, 8, 4) . '-'
+            . substr($hex, 12, 4) . '-'
+            . substr($hex, 16, 4) . '-'
+            . substr($hex, 20);
+    }
+
+    private function publicServiceLabel($prefix = 'vf')
+    {
+        return $prefix . '-' . $this->uuidV4();
+    }
+
     private function csvInts($value)
     {
         if (is_array($value)) {
@@ -131,8 +195,6 @@ class VirtfusionDirectProvisioningMod extends Module
             'traffic',
             'memory',
             'cpuCores',
-            'networkSpeedInbound',
-            'networkSpeedOutbound',
             'storageProfile',
             'networkProfile',
             'additionalStorage1Profile',
@@ -162,11 +224,19 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
+        foreach (['networkSpeedInbound', 'networkSpeedOutbound'] as $field) {
+            if (isset($config_options[$field]) && $config_options[$field] !== '') {
+                $network_speed = $this->parseNetworkSpeed($config_options[$field]);
+                if ($network_speed !== null && $network_speed >= 0) {
+                    $request_params[$field] = $network_speed;
+                }
+            }
+        }
+
         if (isset($config_options[self::NETWORK_SPEED_OPTION])
-            && $config_options[self::NETWORK_SPEED_OPTION] !== ''
-            && is_numeric($config_options[self::NETWORK_SPEED_OPTION])) {
-            $network_speed = (int) $config_options[self::NETWORK_SPEED_OPTION];
-            if ($network_speed >= 0) {
+            && $config_options[self::NETWORK_SPEED_OPTION] !== '') {
+            $network_speed = $this->parseNetworkSpeed($config_options[self::NETWORK_SPEED_OPTION]);
+            if ($network_speed !== null && $network_speed >= 0) {
                 $request_params['networkSpeedInbound'] = $network_speed;
                 $request_params['networkSpeedOutbound'] = $network_speed;
             }
@@ -698,12 +768,12 @@ class VirtfusionDirectProvisioningMod extends Module
             return;
         }
 
+        Loader::loadHelpers($this, ['Date']);
+
         return [
-            'capability' => self::TRAFFIC_BLOCK_CAPABILITY,
-            'amount_gb' => $amount,
-            'month' => $period['month'],
-            'starts_at' => $period['starts_at'],
-            'ends_at' => $period['ends_at'],
+            'traffic_block' => $amount . ' GB',
+            'valid_from' => $this->Date->cast($period['starts_at'], 'date_time'),
+            'valid_until' => $this->Date->cast($period['ends_at'], 'date_time'),
             'notice' => Language::_('VirtfusionDirectProvisioningMod.product_addon.period_notice', true)
         ];
     }
@@ -1022,7 +1092,7 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function getServiceName($service)
     {
-        $server_id = null;
+        $public_label = null;
         $traffic_block_gb = null;
 
         foreach ($service->fields as $field) {
@@ -1030,8 +1100,8 @@ class VirtfusionDirectProvisioningMod extends Module
                 return $field->value;
             }
 
-            if (in_array($field->key, ['virtfusion_server_id', 'server_id'], true)) {
-                $server_id = $field->value;
+            if ($field->key === 'virtfusion_public_label') {
+                $public_label = $field->value;
             }
 
             if ($field->key === 'virtfusion_traffic_block_gb') {
@@ -1043,7 +1113,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return Language::_('VirtfusionDirectProvisioningMod.service_name.traffic_block', true, $traffic_block_gb);
         }
 
-        return $server_id !== null ? 'VirtFusion #' . $server_id : parent::getServiceName($service);
+        return $public_label ?: Language::_('VirtfusionDirectProvisioningMod.service_name.server', true);
     }
 
     /**
@@ -2048,6 +2118,11 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $service_meta = [
             [
+                'key' => 'virtfusion_public_label',
+                'value' => $this->publicServiceLabel('vf'),
+                'encrypted' => 0
+            ],
+            [
                 'key' => 'virtfusion_server_id',
                 'value' => $server_id,
                 'encrypted' => 0
@@ -2211,7 +2286,7 @@ class VirtfusionDirectProvisioningMod extends Module
         // Return all service fields because Blesta replaces, rather than merges,
         // module metadata after editService(). Operation journals are removed only
         // after the whole edit has completed successfully.
-        $fields = ['virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_ipv4_quantity', 'virtfusion_backup_plan_id', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
+        $fields = ['virtfusion_public_label', 'virtfusion_server_id', 'virtfusion_hostname', 'virtfusion-os_template', 'virtfusion_password', 'virtfusion-base_ips', 'additional_num_ips', 'virtfusion_ip', 'virtfusion_ipv4_quantity', 'virtfusion_backup_plan_id', 'virtfusion_build_status', 'virtfusion_cpu_throttle', 'virtfusion_restart_required'];
         $encrypted_fields = ['virtfusion_password'];
         $overrides = [];
         foreach ($fields as $field) {
@@ -2439,9 +2514,6 @@ class VirtfusionDirectProvisioningMod extends Module
                 self::ADDITIONAL_TRAFFIC_OPTION,
                 'memory',
                 'cpuCores',
-                'networkSpeed',
-                'networkSpeedInbound',
-                'networkSpeedOutbound',
                 'storageProfile',
                 'networkProfile',
                 'additionalStorage1Profile',
@@ -2570,12 +2642,15 @@ class VirtfusionDirectProvisioningMod extends Module
             }
 
             foreach (['networkSpeed', 'networkSpeedInbound', 'networkSpeedOutbound'] as $option_name) {
-                if (isset($config_options[$option_name]) && $config_options[$option_name] !== ''
-                    && (int) $config_options[$option_name] < 0) {
+                if (isset($config_options[$option_name]) && $config_options[$option_name] !== '') {
+                    $network_speed = $this->parseNetworkSpeed($config_options[$option_name]);
+                    if ($network_speed !== null && $network_speed >= 0) {
+                        continue;
+                    }
                     $this->Input->setErrors([
                         'configoptions' => [
                             $option_name => Language::_(
-                                'VirtfusionDirectProvisioningMod.!error.configoption.network_speed.minimum',
+                                'VirtfusionDirectProvisioningMod.!error.configoption.network_speed.format',
                                 true
                             )
                         ]
@@ -3135,9 +3210,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
 
         // Load the helpers required for this view
-        Loader::loadHelpers($this, ['Form', 'Html']);
+        Loader::loadHelpers($this, ['Date', 'Form', 'Html']);
 
         $this->view->set('module_row', $row);
+        $this->view->set('is_admin', true);
         $this->view->set('package', $package);
         $this->view->set('service', $service);
         $this->view->set('service_fields', $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields)));
@@ -3160,8 +3236,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return [
-            'tabManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true),
-            'tabClientIPAddresses' => Language::_('VirtfusionDirectProvisioningMod.ipAddresses', true)
+            'tabManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true)
         ];
     }
 
@@ -3177,8 +3252,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return [
-            'tabAdminManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true),
-            'tabAdminIPAddresses' => Language::_('VirtfusionDirectProvisioningMod.ipAddresses', true)
+            'tabAdminManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true)
         ];
     }
 
@@ -3194,7 +3268,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->setDefaultView(
             'components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS
         );
-        Loader::loadHelpers($this, ['Form', 'Html']);
+        Loader::loadHelpers($this, ['Date', 'Form', 'Html']);
 
         $message = null;
         $post = $post ?? [];
@@ -3328,8 +3402,12 @@ class VirtfusionDirectProvisioningMod extends Module
             : null;
         $server_info->power = $remote_state->running ?? null;
         $server_info->status = $remote_state->state ?? ($data->data->state ?? null);
-        $server_info->network_in = $data->data->network->interfaces[0]->inAverage ?? null;
-        $server_info->network_out = $data->data->network->interfaces[0]->outAverage ?? null;
+        $server_info->network_in = $this->formatNetworkSpeed(
+            $data->data->network->interfaces[0]->inAverage ?? null
+        );
+        $server_info->network_out = $this->formatNetworkSpeed(
+            $data->data->network->interfaces[0]->outAverage ?? null
+        );
         $backup_plan = $data->data->backupPlan ?? null;
         $server_info->backup_plan = is_object($backup_plan)
             ? ($backup_plan->name ?? $backup_plan->id ?? null)
@@ -3569,7 +3647,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view = new View('tabManage', 'default');
         $this->view->base_uri = $this->base_uri;
 
-        Loader::loadHelpers($this, ['Form', 'Html']);
+        Loader::loadHelpers($this, ['Date', 'Form', 'Html']);
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $message = null;
@@ -3578,7 +3656,18 @@ class VirtfusionDirectProvisioningMod extends Module
         $post = !empty($post) ? $post : $_POST;
 
         if (!empty($post) && $row) {
-            if (property_exists($service_fields, 'virtfusion_server_id')) {
+            if (($post['action'] ?? null) === 'refresh_ips') {
+                $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+            } elseif (($post['action'] ?? null) === 'remove_ip') {
+                $error = $this->removeIPAddress($package, $service, $post, true);
+                if ($error) {
+                    $this->Input->setErrors(['api' => ['response' => $error]]);
+                } else {
+                    $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                    $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.removed', true);
+                }
+            } elseif (property_exists($service_fields, 'virtfusion_server_id')) {
                 if (is_numeric($service_fields->virtfusion_server_id)) {
                     $api = $this->getApiFromRow($row);
 
@@ -3598,6 +3687,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $this->view->set('message', $message);
+        $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, true, $service_fields));
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
         $this->view->set('service_id', $service->id);
@@ -3619,7 +3709,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->base_uri = $this->base_uri;
         // Load the helpers required for this view
-        Loader::loadHelpers($this, ['Form', 'Html']);
+        Loader::loadHelpers($this, ['Date', 'Form', 'Html']);
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $message = null;
@@ -3628,7 +3718,18 @@ class VirtfusionDirectProvisioningMod extends Module
         $post = !empty($post) ? $post : $_POST;
 
         if (!empty($post) && $row) {
-            if (property_exists($service_fields, 'virtfusion_server_id')) {
+            if (($post['action'] ?? null) === 'refresh_ips') {
+                $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+            } elseif (($post['action'] ?? null) === 'remove_ip') {
+                $error = $this->removeIPAddress($package, $service, $post, false);
+                if ($error) {
+                    $this->Input->setErrors(['api' => ['response' => $error]]);
+                } else {
+                    $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                    $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.removed', true);
+                }
+            } elseif (property_exists($service_fields, 'virtfusion_server_id')) {
                 if (is_numeric($service_fields->virtfusion_server_id)) {
                     $api = $this->getApiFromRow($row);
 
@@ -3648,6 +3749,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $this->view->set('message', $message);
+        $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, false, $service_fields));
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
         $this->view->set(
@@ -3681,39 +3783,8 @@ class VirtfusionDirectProvisioningMod extends Module
         ?array $post = null,
         ?array $files = null
     ) {
-        $this->view = new View('tab_ips', 'default');
-        $this->view->base_uri = $this->base_uri;
-        $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
-
-        // Load the helpers required for this view
-        Loader::loadHelpers($this, ['Form', 'Html']);
-
-        if (!empty($post)) {
-            $error_msg = $this->removeIPAddress($package, $service, $post);
-
-            if (!empty($error_msg)) {
-                // this does not redirect to the right place
-                $this->Input->setErrors(['api' => ['response' => $error_msg]]);
-            }
-
-            // redirect to clear post
-            // if not refresh could cause issues
-            header('Location: ' . $this->base_uri . 'services/manage/' . (int) $service->id . '/tabClientIPAddresses/');
-            die();
-        }
-
-        $ip_address_data = $this->getClientIpAddresses($package, $service, $get, $post, $client = true);
-        $formated_ips = $this->formatIPToView($ip_address_data);
-
-        $submit_uri = $this->base_uri . 'services/manage/' . $service->id . '/tabClientIPAddresses/';
-        $this->view->set('submit_uri', $submit_uri);
-        $this->view->set('ip_addresses', $formated_ips);
-        $this->view->set('client_id', $service->client_id);
-        $this->view->set('service_id', $service->id);
-        $this->view->set('ip_addable', $ip_address_data->addable);
-        $this->view->set('view_type', 'tabClientIPAddresses');
-
-        return $this->view->fetch();
+        header('Location: ' . $this->base_uri . 'services/manage/' . (int) $service->id . '/tabManage/');
+        die();
     }
 
     /**
@@ -3733,128 +3804,102 @@ class VirtfusionDirectProvisioningMod extends Module
         ?array $post = null,
         ?array $files = null
     ) {
-        $this->view = new View('tab_ips', 'default');
-        $this->view->base_uri = $this->base_uri;
-        $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
-
-        // Load the helpers required for this view
-        Loader::loadHelpers($this, ['Form', 'Html']);
-
-        if (isset($post['refresh_ips']) || isset($post['refresh_ipv6'])) {
-            $this->refreshServiceNetworkFields(
-                $service,
-                $package,
-                $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields))
-            );
-
-            // redirect to clear post
-            // if not refresh could cause issues
-            header(
-                'Location: /admin/clients/servicetab/'
-                . (int) $service->client_id . '/' . (int) $service->id . '/tabAdminIPAddresses/'
-            );
-            die();
-        }
-
-        $ip_address_data = $this->getClientIpAddresses($package, $service, $get, $post, $client = false);
-
-        $formated_ips = $this->formatIPToView($ip_address_data);
-
-
-        $this->view->set('ip_addresses', $formated_ips);
-        $this->view->set('client_id', $service->client_id);
-        $this->view->set('service_id', $service->id);
-        $this->view->set('ip_addable', $ip_address_data->addable);
-        $this->view->set('is_admin', true);
-        $this->view->set('view_type', 'tabAdminIPAddresses');
-
-        return $this->view->fetch();
+        header(
+            'Location: /admin/clients/servicetab/'
+            . (int) $service->client_id . '/' . (int) $service->id . '/tabAdminManage/'
+        );
+        die();
     }
 
-    private function removeIPAddress($package, $service, $post)
+    private function removeIPAddress($package, $service, $post, $client = false)
     {
-        Loader::loadHelpers($this, [
-            'Invoices',
-            'Services',
-            'ServiceChanges',
-            'ModuleManager'
-        ]);
+        Loader::loadModels($this, ['Invoices', 'Services', 'ServiceChanges']);
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
-        $module_row = $this->getModuleRow();
+        $module_row = $this->getModuleRow($service->module_row_id ?? null) ?: $this->getModuleRow();
+        $ip_to_remove = trim((string) ($post['ip_address'] ?? ''));
+        $extra_ips = !empty($service_fields->{'additional_num_ips'})
+            ? explode(',', $service_fields->{'additional_num_ips'})
+            : [];
 
-        // Get current extra IP stuff
-        $extra_ips_arr = [];
-        $extra_ips = $service_fields->{'virtfusion-extra_ips'};
-        if (!empty($extra_ips) && $module_row) {
-            $extra_ips_arr = explode(',', $extra_ips);
+        if (!$module_row || empty($service_fields->virtfusion_server_id)
+            || $ip_to_remove === '' || !in_array($ip_to_remove, $extra_ips, true)) {
+            return Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_invalid', true);
         }
 
-        $ip_to_remove = $post['ip_address'];
-
-        if (in_array($ip_to_remove, $extra_ips_arr)) {
-            // Get and load api
-            $server_api = $this->getServerApiFromRow($module_row);
-
-            $request = $server_api->removeIpv4($service_fields->virtfusion_server_id, [ $ip_to_remove ]);
-            $this->log($module_row->meta->hostname, serialize($request), 'output', $request['info']['http_code'] == '204');
-            $new_extra_ips = implode(',', array_diff($extra_ips_arr, [ $ip_to_remove ]));
-
-            if ($request['info']['http_code'] == '204') {
-                // prorate here
-
-                $new_extra_ips = array_diff($extra_ips_arr, [ $ip_to_remove ]);
-
-                $this->Services->editField(
-                    $service->id,
-                    [
-                        'key' => 'virtfusion-extra_ips',
-                        'value' => implode(',', $new_extra_ips),
-                        'encrypted' => false
-                    ]
-                );
-
-                // Fetch and re-set all current service config options
-                $options = [];
-                foreach ($service->options as $option) {
-                    // Quantity options use the qty field as the value
-                    if ($option->option_type == 'quantity') {
-                        $option->option_value = $option->qty;
-                    }
-
-                    // Set the extra IPs to the count of them
-                    if ($option->option_name == 'virtfusion-extra_ips') {
-                        $option->option_value = max(0, count($new_extra_ips));
-                    }
-
-                    // Set the value of each option
-                    $options[$option->option_id] = $option->option_value;
-                }
-
-                // Get the invoice lines for an ip change
-                $invoice_vars = $this->getIpChangeInvoiceVars($service, $options);
-                if (!empty($invoice_vars)) {
-                    // Create the invoice
-                    $this->Invoices->add($invoice_vars);
-                }
-
-                // Update the config options
-                $this->Services->edit(
-                    $service->id,
-                    [
-                        'virtfusion_server_id' => $service_fields->{'virtfusion_server_id'},
-                        'virtfusion_hostname' => $service_fields->virtfusion_hostname,
-                        'configoptions' => $options,
-                        'use_module' => 'false'
-                    ]
-                );
-
-                if ($this->Services->errors()) {
-                    return $this->Services->errors();
-                }
-            } else {
-                return 'Could not remove IP address.';
+        $target_option = null;
+        foreach (($service->options ?? []) as $option) {
+            if (!in_array($option->option_name ?? null, ['ipv4', self::ADDITIONAL_IPV4_OPTION], true)) {
+                continue;
             }
+            if ($client && (int) ($option->option_editable ?? 0) !== 1) {
+                continue;
+            }
+            if (!$target_option || $option->option_name === self::ADDITIONAL_IPV4_OPTION) {
+                $target_option = $option;
+            }
+        }
+        if ($client && !$target_option) {
+            return Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_forbidden', true);
+        }
+
+        $server_api = $this->getServerApiFromRow($module_row);
+        $request = $server_api->removeIpv4($service_fields->virtfusion_server_id, [$ip_to_remove]);
+        $success = $this->apiRequestSucceeded($request, [204]);
+        $this->log($module_row->meta->hostname . '| remove ipv4', serialize($request), 'output', $success);
+        if (!$success) {
+            return Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_failed', true);
+        }
+
+        $new_extra_ips = array_values(array_diff($extra_ips, [$ip_to_remove]));
+        $base_qty = max(1, (int) ($package->meta->default_ipv4 ?? 1));
+        $current_total = isset($service_fields->virtfusion_ipv4_quantity)
+            ? (int) $service_fields->virtfusion_ipv4_quantity
+            : $base_qty + count($extra_ips);
+        $new_total = max($base_qty, $current_total - 1);
+        foreach ([
+            'additional_num_ips' => implode(',', $new_extra_ips),
+            'virtfusion_ipv4_quantity' => $new_total
+        ] as $key => $value) {
+            $this->Services->editField($service->id, [
+                'key' => $key,
+                'value' => $value,
+                'encrypted' => false
+            ]);
+        }
+
+        if ($target_option) {
+            $options = [];
+            foreach (($service->options ?? []) as $option) {
+                $value = ($option->option_type ?? null) === 'quantity'
+                    ? ($option->qty ?? 0)
+                    : ($option->value ?? $option->option_value ?? '');
+                if ((int) $option->option_id === (int) $target_option->option_id) {
+                    $value = $target_option->option_name === self::ADDITIONAL_IPV4_OPTION
+                        ? max(0, count($new_extra_ips))
+                        : $new_total;
+                }
+                $options[$option->option_id] = $value;
+            }
+
+            $invoice_vars = $this->getIpChangeInvoiceVars($service, $options);
+            if (!empty($invoice_vars)) {
+                $this->Invoices->add($invoice_vars);
+            }
+
+            $edit_vars = [
+                'virtfusion_server_id' => $service_fields->virtfusion_server_id,
+                'configoptions' => $options,
+                'use_module' => 'false'
+            ];
+            if (!empty($service_fields->virtfusion_hostname)) {
+                $edit_vars['virtfusion_hostname'] = $service_fields->virtfusion_hostname;
+            }
+            $this->Services->edit($service->id, $edit_vars);
+        }
+
+        if ($this->Services->errors()) {
+            return Language::_('VirtfusionDirectProvisioningMod.ipAddresses.update_failed', true);
         }
 
         return '';
@@ -3874,6 +3919,9 @@ class VirtfusionDirectProvisioningMod extends Module
             $service->id,
             ['configoptions' => $options, 'pricing_id' => $service->pricing_id, 'qty' => $service->qty]
         );
+        if (!$serviceChange) {
+            return [];
+        }
 
         // Setup line items from each of the presenter's items
         foreach ($serviceChange->items() as $item) {
@@ -3912,32 +3960,6 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return $invoice_vars;
-    }
-
-    /**
-     * Format ip array in to array used in views to display tabled ip data
-     *
-     * @param object $ip_address_data An object representing all ips
-     * @return array An array of ip for the template
-     */
-    private function formatIPToView($ip_address_data)
-    {
-        $view_ready = [];
-
-        if (isset($ip_address_data->ip_addresses) && isset($ip_address_data->editable_options)) {
-            $ip_addresses = $ip_address_data->ip_addresses;
-            $editable_options = $ip_address_data->editable_options;
-
-            foreach ($ip_addresses as $title => $address) {
-                $view_ready[] = (object) [
-                    'header' => Language::_('VirtfusionDirectProvisioningMod.ipAddresses.' . $title, true),
-                    'editable' => $editable_options[$title], // 1/0 for yes no
-                    'ip_addresses' => $address // needs to be array
-                ];
-            }
-        }
-
-        return $view_ready;
     }
 
     private function updateTraffic($module_row, $service_fields, $package, $additional_traffic)
@@ -4421,8 +4443,7 @@ class VirtfusionDirectProvisioningMod extends Module
     }
 
     /**
-     * Handles data for the IPs tab in the client and admin interfaces
-     * @see VirtfusionDirectProvisioningMod::tabIPs() and VirtfusionDirectProvisioningMod::tabClientIPs()
+     * Builds the IP-address card data for the client and admin Manage pages.
      *
      * @param stdClass $package A stdClass object representing the current package
      * @param stdClass $service A stdClass object representing the current service
@@ -4431,14 +4452,21 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param bool $client True if the action is being performed by the client, false otherwise
      * @return array An array of vars for the template
      */
-    private function getClientIpAddresses($package, $service, ?array $get = null, ?array $post = null, $client = false)
+    private function getClientIpAddresses(
+        $package,
+        $service,
+        ?array $get = null,
+        ?array $post = null,
+        $client = false,
+        $service_fields = null
+    )
     {
         Loader::loadModels($this, ['Services']);
 
         // Get the service fields
-        $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
-        $module_row = $this->getModuleRow($package->module_row);
-
+        $service_fields = $service_fields ?: $this->normalizeLegacyServiceFields(
+            $this->serviceFieldsToObject($service->fields)
+        );
         // define items we will return
         $main_ip = [];
         $base_ips = [];
@@ -4446,7 +4474,7 @@ class VirtfusionDirectProvisioningMod extends Module
         $option_addable = false;
 
         // determine if we can add more IPs
-        foreach ($service->options as $option) {
+        foreach (($service->options ?? []) as $option) {
             if (in_array($option->option_name, ['ipv4', self::ADDITIONAL_IPV4_OPTION], true)) {
                 $option_addable = $option->option_addable;
             }
@@ -4472,7 +4500,7 @@ class VirtfusionDirectProvisioningMod extends Module
         // Determine whether the service option for custom IPs is editable by the client
         $option_editable = !$client;
         if ($client) {
-            foreach ($service->options as $option) {
+            foreach (($service->options ?? []) as $option) {
                 if (in_array($option->option_name, ['ipv4', self::ADDITIONAL_IPV4_OPTION], true)) {
                     $option_editable = ($option->option_editable == 1);
                     break;
@@ -4519,9 +4547,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
 
         // Load the helpers required for this view
-        Loader::loadHelpers($this, ['Form', 'Html']);
+        Loader::loadHelpers($this, ['Date', 'Form', 'Html']);
 
         $this->view->set('module_row', $row);
+        $this->view->set('is_admin', false);
         $this->view->set('package', $package);
         $this->view->set('service', $service);
         $this->view->set('service_fields', $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields)));

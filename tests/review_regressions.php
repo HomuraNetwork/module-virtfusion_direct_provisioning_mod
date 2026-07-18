@@ -122,6 +122,14 @@ function assertSameValue($expected, $actual, $message)
 }
 
 $module = (new ReflectionClass(VirtfusionDirectProvisioningMod::class))->newInstanceWithoutConstructor();
+$module_reflection = new ReflectionClass(VirtfusionDirectProvisioningMod::class);
+foreach (['TRAFFIC_BLOCK_OPERATION_FIELD', 'RESOURCE_CHANGE_OPERATION_FIELD'] as $constant_name) {
+    assertSameValue(
+        true,
+        strlen($module_reflection->getReflectionConstant($constant_name)->getValue()) <= 32,
+        $constant_name . ' must fit Blesta service_fields.key.'
+    );
+}
 
 assertSameValue(false, callPrivate($module, 'shouldAutoBuild'), 'Auto build must use the safe disabled default.');
 assertSameValue(
@@ -152,6 +160,15 @@ assertSameValue(2500, $create['networkSpeedInbound'], 'Combined port speed must 
 assertSameValue(2500, $create['networkSpeedOutbound'], 'Combined port speed must set outbound speed.');
 assertSameValue(3, $create['ipv4'], 'The canonical ipv4 option must map directly to the create request.');
 
+$human_speed = callPrivate($module, 'applyCreateConfigOptions', [
+    ['packageId' => 10, 'userId' => 20, 'hypervisorId' => 30],
+    ['networkSpeed' => '1 Gbps']
+]);
+assertSameValue(125000, $human_speed['networkSpeedInbound'], '1 Gbps must convert to API kB/s.');
+assertSameValue('1 Gbps', callPrivate($module, 'formatNetworkSpeed', [125000]), 'API speed must display as Gbps.');
+assertSameValue('100 Mbps', callPrivate($module, 'formatNetworkSpeed', [12500]), 'API speed must display as Mbps.');
+assertSameValue('2 Gbps', callPrivate($module, 'formatNetworkSpeed', ['2Gbps']), 'Unit-based speed strings must normalize for display.');
+
 $ipv4_package = (object) ['meta' => (object) ['default_ipv4' => 1]];
 assertSameValue(
     3,
@@ -174,6 +191,27 @@ assertSameValue(
     callPrivate($module, 'getTrafficBlockAmount', [['traffic_block_gb' => '100']]),
     'Legacy Traffic Block option names must not be accepted.'
 );
+
+$public_label = callPrivate($module, 'publicServiceLabel');
+assertSameValue(39, strlen($public_label), 'Public service labels must use a prefixed UUID.');
+assertSameValue(
+    true,
+    (bool) preg_match('/^vf-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $public_label),
+    'Public service labels must be UUIDv4 values.'
+);
+$opaque_service = (object) ['fields' => [
+    (object) ['key' => 'virtfusion_server_id', 'value' => '499']
+]];
+assertSameValue(
+    'VirtfusionDirectProvisioningMod.service_name.server',
+    $module->getServiceName($opaque_service),
+    'Existing services without a public label must not expose the VirtFusion server ID.'
+);
+$labeled_service = (object) ['fields' => [
+    (object) ['key' => 'virtfusion_server_id', 'value' => '499'],
+    (object) ['key' => 'virtfusion_public_label', 'value' => $public_label]
+]];
+assertSameValue($public_label, $module->getServiceName($labeled_service), 'New services must use the opaque public label.');
 
 $blocks = [
     (object) ['id' => 1, 'month' => 5, 'traffic' => 100, 'added' => '2026-07-18T01:00:00Z'],
@@ -203,18 +241,18 @@ assertSameValue(
 $service = (object) ['fields' => [
     (object) ['key' => 'virtfusion_server_id', 'value' => '42', 'encrypted' => 0],
     (object) ['key' => 'virtfusion_ipv6_cidr', 'value' => '2001:db8::/64', 'encrypted' => 0],
-    (object) ['key' => 'virtfusion_resource_change_operation', 'value' => '{}', 'encrypted' => 0]
+    (object) ['key' => 'vf_resource_change_operation', 'value' => '{}', 'encrypted' => 0]
 ]];
 $merged = callPrivate($module, 'mergedServiceMeta', [
     $service,
     ['virtfusion_restart_required' => 'true'],
     [],
-    ['virtfusion_resource_change_operation']
+    ['vf_resource_change_operation']
 ]);
 $merged = array_column($merged, 'value', 'key');
 assertSameValue('42', $merged['virtfusion_server_id'], 'Service edits must preserve the server ID.');
 assertSameValue('2001:db8::/64', $merged['virtfusion_ipv6_cidr'], 'Service edits must preserve unrelated metadata.');
-assertSameValue(false, isset($merged['virtfusion_resource_change_operation']), 'A completed journal must be removed.');
+assertSameValue(false, isset($merged['vf_resource_change_operation']), 'A completed journal must be removed.');
 
 $resource_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
 $resource_module->serverApi = new FakeResourceServerApi();
