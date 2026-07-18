@@ -1,5 +1,5 @@
 {
-    "version": "2026.07.18",
+    "version": "2026.07.18.1",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -45,7 +45,10 @@
             "virtfusion_ipv6_cidr",
             "virtfusion_parent_server_id",
             "virtfusion_traffic_block_gb",
-            "virtfusion_traffic_block_end"
+            "virtfusion_traffic_block_month",
+            "virtfusion_traffic_block_start",
+            "virtfusion_traffic_block_end",
+            "virtfusion_traffic_block_id"
         ]
     },
     "logo": {

@@ -12,6 +12,11 @@
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.restart_recommended', true)); ?>
         </div>
     <?php } ?>
+    <?php if (($service_fields->virtfusion_build_status ?? '') === 'failed_or_unknown') { ?>
+        <div class="alert alert-warning">
+            <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_reconciliation_required', true)); ?>
+        </div>
+    <?php } ?>
 
     <?php if (!empty($server_info->tasks_active)) { ?>
         <div class="alert alert-info">

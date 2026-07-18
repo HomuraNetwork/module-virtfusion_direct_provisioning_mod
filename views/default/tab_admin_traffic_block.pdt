@@ -1,0 +1,29 @@
+<?php /** @var View $this **/ ?>
+
+<div id="tabAdminTrafficBlock">
+    <?php if (!empty($message)) { ?>
+        <div class="alert alert-info"><?php echo $this->Html->safe($message); ?></div>
+    <?php } ?>
+
+    <dl class="row">
+        <dt class="col-sm-3"><?php $this->_('VirtfusionDirectProvisioningMod.traffic_block_info.operation_status'); ?></dt>
+        <dd class="col-sm-9"><?php echo $this->Html->safe($operation['status'] ?? 'pending'); ?></dd>
+        <?php if (!empty($operation['operation_key'])) { ?>
+            <dt class="col-sm-3"><?php $this->_('VirtfusionDirectProvisioningMod.traffic_block_info.operation_key'); ?></dt>
+            <dd class="col-sm-9"><code><?php echo $this->Html->safe($operation['operation_key']); ?></code></dd>
+        <?php } ?>
+    </dl>
+
+    <?php if (($operation['status'] ?? null) === 'provisioning_unknown') { ?>
+        <div class="alert alert-warning">
+            <?php $this->_('VirtfusionDirectProvisioningMod.traffic_block.reconcile_help'); ?>
+        </div>
+        <?php $this->Form->create(); ?>
+        <?php $this->Form->fieldSubmit(
+            'confirm_absent',
+            $this->_('VirtfusionDirectProvisioningMod.traffic_block.confirm_absent', true),
+            ['class' => 'btn btn-danger']
+        ); ?>
+        <?php $this->Form->end(); ?>
+    <?php } ?>
+</div>
