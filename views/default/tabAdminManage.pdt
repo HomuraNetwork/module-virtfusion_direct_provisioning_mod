@@ -117,7 +117,7 @@
     <?php
     $tasks_locked = !empty($server_info->tasks_active);
     $running = isset($server_info->power) ? (bool) $server_info->power : null;
-    $power_locked = $tasks_locked || $running === null;
+    $power_locked = !empty($server_info->has_active_tasks) || $running === null;
     $confirm_power = Language::_('VirtfusionDirectProvisioningMod.confirm.power', true);
     $confirm_password = Language::_('VirtfusionDirectProvisioningMod.confirm.reset_password', true);
     ?>

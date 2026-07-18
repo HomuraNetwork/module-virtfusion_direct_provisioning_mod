@@ -142,6 +142,26 @@ assertSameValue(
     callPrivate($module, 'shouldAutoBuild', [['virtfusion-auto_build' => 'true']]),
     'Legacy Auto Build option names must not be accepted.'
 );
+assertSameValue(
+    false,
+    callPrivate($module, 'tasksBlockServerAction', ['restart', [], [['action' => 'Memory Update']]]),
+    'A pending resource task must not block the restart needed to apply it.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'tasksBlockServerAction', ['poweroff', [], [['action' => 'Memory Update']]]),
+    'A pending resource task must not block power off.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'tasksBlockServerAction', ['vnc', [], [['action' => 'Memory Update']]]),
+    'A pending resource task must continue to block non-power actions.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'tasksBlockServerAction', ['restart', [['action' => 'Restart']], []]),
+    'An actively executing task must block another power action.'
+);
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
 $add_rules = callPrivate($module, 'getServiceRules', [
     ['configoptions' => ['autoBuild' => 'true']],

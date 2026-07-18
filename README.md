@@ -128,6 +128,8 @@ VNC is not a Configurable Option. It is enabled only when the client or administ
 
 Use Blesta's normal service-change and configurable-option upgrade process. Blesta handles pricing, invoicing, and proration before the module applies the paid change to VirtFusion.
 
+For a downgrade, Blesta calculates the unused-time difference as a negative prorated total. To automatically place that amount in the customer's Blesta account balance, enable **Settings > Company > Billing/Payment > Invoice and Charge Options > Allow Prorated Credits to be Issued for Service Downgrades**. A client-group setting can override the company default. This creates in-house account credit; it is not an automatic refund to the original payment method. If the option is disabled, Blesta applies the downgrade without issuing the negative difference as credit.
+
 The module can change:
 
 - memory;
@@ -146,6 +148,8 @@ Disk restrictions:
 - when changing to a smaller VirtFusion package, the current primary disk is preserved and is not shrunk.
 
 Memory, CPU, and VirtFusion package changes show **Resource changed; restart recommended**. The module does not restart the server automatically.
+
+A pending VirtFusion resource task does not lock Boot, Restart, Shutdown, or Power Off because a power transition may be required to apply the change. While VirtFusion reports a task as actively executing, power actions are temporarily disabled to avoid submitting a competing operation.
 
 ## One-time Traffic Block products
 

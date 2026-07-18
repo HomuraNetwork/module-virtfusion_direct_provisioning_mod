@@ -3413,8 +3413,11 @@ class VirtfusionDirectProvisioningMod extends Module
             ? ($backup_plan->name ?? $backup_plan->id ?? null)
             : ($data->data->settings->backupPlan ?? null);
 
+        $active_tasks = $data->data->tasks->active ?? [];
         $pending_tasks = $data->data->tasks->actions->pending ?? [];
-        $server_info->tasks_active = !empty($data->data->tasks->active) || !empty($pending_tasks);
+        $server_info->has_active_tasks = !empty($active_tasks);
+        $server_info->has_pending_tasks = !empty($pending_tasks);
+        $server_info->tasks_active = $server_info->has_active_tasks || $server_info->has_pending_tasks;
         $server_info->pending_tasks = [];
         foreach ($pending_tasks as $task) {
             $server_info->pending_tasks[] = $task->action ?? ('Task #' . ($task->id ?? '?'));
@@ -3517,6 +3520,32 @@ class VirtfusionDirectProvisioningMod extends Module
         return $service_fields;
     }
 
+    /**
+     * Determines whether VirtFusion task state conflicts with a server action.
+     *
+     * Pending resource changes often require a power transition before
+     * VirtFusion can apply them, so they must not prevent power actions. An
+     * actively executing task still blocks every action to avoid submitting
+     * competing operations. Non-power actions remain blocked by either state.
+     *
+     * @param string $action The requested server action
+     * @param mixed $active_tasks VirtFusion's active task state
+     * @param mixed $pending_tasks VirtFusion's pending task state
+     * @return bool True when the action must be blocked
+     */
+    private function tasksBlockServerAction($action, $active_tasks, $pending_tasks)
+    {
+        if (!empty($active_tasks)) {
+            return true;
+        }
+
+        if (empty($pending_tasks)) {
+            return false;
+        }
+
+        return !in_array($action, ['boot', 'restart', 'shutdown', 'poweroff'], true);
+    }
+
     private function handleServerAction($module_row, $server_api, $service, $service_fields, array $post)
     {
         $server_id = $service_fields->virtfusion_server_id;
@@ -3526,8 +3555,9 @@ class VirtfusionDirectProvisioningMod extends Module
             $state_request = $server_api->get($server_id, true);
             if ($this->apiRequestSucceeded($state_request, [200])) {
                 $state_data = json_decode($state_request['response']);
+                $active = $state_data->data->tasks->active ?? [];
                 $pending = $state_data->data->tasks->actions->pending ?? [];
-                if (!empty($state_data->data->tasks->active) || !empty($pending)) {
+                if ($this->tasksBlockServerAction($action, $active, $pending)) {
                     $this->Input->setErrors([
                         'api' => ['response' => Language::_('VirtfusionDirectProvisioningMod.!error.tasks.pending', true)]
                     ]);

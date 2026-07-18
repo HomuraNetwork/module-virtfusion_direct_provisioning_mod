@@ -117,7 +117,7 @@
     <?php
     $tasks_locked = !empty($server_info->tasks_active);
     $running = isset($server_info->power) ? (bool) $server_info->power : null;
-    $power_locked = $tasks_locked || $running === null;
+    $power_locked = !empty($server_info->has_active_tasks) || $running === null;
     $confirm_power = Language::_('VirtfusionDirectProvisioningMod.confirm.power', true);
     $confirm_password = Language::_('VirtfusionDirectProvisioningMod.confirm.reset_password', true);
     ?>
@@ -148,6 +148,13 @@
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
                 <button type="submit" name="action" value="shutdown" class="btn btn-outline-secondary w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
                     <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.shutdown', true)); ?>
+                </button>
+            <?php $this->Form->end(); ?>
+        </div>
+        <div class="col-md-3 mb-2">
+            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                <button type="submit" name="action" value="poweroff" class="btn btn-outline-danger w-100" onclick="return confirm(<?php echo $this->Html->safe(json_encode($confirm_power)); ?>);" <?php echo ($power_locked || $running === false) ? 'disabled' : ''; ?>>
+                    <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tabManage.poweroff', true)); ?>
                 </button>
             <?php $this->Form->end(); ?>
         </div>
