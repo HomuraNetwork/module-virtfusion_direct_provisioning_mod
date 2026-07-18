@@ -34,6 +34,10 @@ After a successful **Sync from official**, the official module no longer owns th
 
 Both current `virtfusion_server_id` service fields and legacy `server_id` fields are supported.
 
+## Upstream maintenance strategy
+
+This project is a downstream fork, but its module identity and main class have diverged too far for routine merges from the official repository to be reliable. Keep the official repository configured as `upstream`, fetch each official release, and review its diff against the last reviewed upstream tag. Port relevant API, security, and Blesta-compatibility changes as focused commits instead of merging `upstream/master` wholesale. Mod releases use CalVer and `mod-YYYY.MM.DD` tags so they cannot be confused with official module versions.
+
 # Setting up VirtFusion Package Option
 This module supports usage of default OS that you can set per package
 When creating a new package, after selecting `Server Group` you will have an option for `Default Operating System ID`.
@@ -127,7 +131,11 @@ Package, memory, and CPU changes set a persistent restart recommendation instead
 
 The Manage tab displays the VirtFusion traffic period end returned by the remote server. This date is independent of Blesta service renewal-date adjustments such as manually granted service days.
 
-Traffic Block purchases are separately gated per module row and are disabled by default. Enabling the row setting only allows the optional purchase integration to operate; it does not create, renew, or delete any traffic block by itself.
+Traffic Block purchases are separately gated per module row and are disabled by default. Create a separate package with **Product Type** set to **Traffic Block (one-shot addon)** and only one-time pricing. The amount may be fixed in **Traffic Block GB**, or supplied by a configurable option named `virtfusion-traffic_block_gb`, `virtfusion_traffic_block_gb`, or `traffic_block_gb` (the configurable option wins).
+
+The generic Product Addons plugin shows this package only after an active parent server exists. The confirmation preview reads `GET /servers/{serverId}/traffic/blocks`. When payment activates the pending child service, the module queries the current VirtFusion month again and calls `POST /servers/{serverId}/traffic/blocks`. The resulting service stores the parent server ID, GB, month, start/end, and block ID when returned. Canceling, suspending, or deleting the Blesta audit service never removes the remote block; VirtFusion owns the block lifecycle and billing-date expiry.
+
+TLS certificate verification is enabled by default. A per-row **Allow insecure TLS certificates** option exists only for trusted self-signed endpoints and should remain disabled in normal installations.
 
 ### Manage page
 

@@ -58,6 +58,8 @@ $lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url'] = 'Admin Serv
 $lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url.help_text'] = 'Used for the admin-only direct server link without creating a client login token. Available placeholders: {hostname}, {server_id}.';
 $lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled'] = 'Enable Traffic Block Purchases';
 $lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled.help_text'] = 'Disabled by default. When enabled, the optional Traffic Block purchase integration may offer one-time blocks for active servers on this module row.';
+$lang['VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls'] = 'Allow insecure TLS certificates';
+$lang['VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls.help_text'] = 'Not recommended. Disables certificate verification only for this module row and should be used only with a trusted self-signed VirtFusion endpoint.';
 
 
 
@@ -88,6 +90,15 @@ $lang['VirtfusionDirectProvisioningMod.!error.resource.traffic'] = 'VirtFusion d
 $lang['VirtfusionDirectProvisioningMod.!error.package.target'] = 'The target VirtFusion package could not be retrieved.';
 $lang['VirtfusionDirectProvisioningMod.!error.package.change'] = 'VirtFusion did not accept the package change.';
 $lang['VirtfusionDirectProvisioningMod.!error.tasks.pending'] = 'VirtFusion already has a pending task for this server. Wait for it to finish before sending another action.';
+$lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion action failed unexpectedly. Review the module log for the non-sensitive exception details.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.disabled'] = 'Traffic Block purchases are disabled for this VirtFusion server row.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'Traffic Block GB must be a positive whole number, supplied by the configurable option or package metadata.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.period'] = 'VirtFusion did not return a current traffic billing period for this server.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.onetime'] = 'Traffic Block package pricing must use the one-time period.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.immutable'] = 'A purchased Traffic Block is immutable and cannot be upgraded or downgraded.';
+$lang['VirtfusionDirectProvisioningMod.!error.product_addon.capability'] = 'This product addon capability is not supported by the selected package.';
 
 // Client Errors
 $lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
@@ -105,6 +116,12 @@ $lang['VirtfusionDirectProvisioningMod.service_info.package'] = 'Blesta Package'
 $lang['VirtfusionDirectProvisioningMod.service_info.port_speed'] = 'Port Speed (Inbound / Outbound)';
 $lang['VirtfusionDirectProvisioningMod.service_info.backups'] = 'Backups / Latest';
 $lang['VirtfusionDirectProvisioningMod.service_info.backup_plan'] = 'Backup Plan';
+$lang['VirtfusionDirectProvisioningMod.service_name.traffic_block'] = 'Traffic Block (%1$s GB)';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.amount'] = 'Traffic Block';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.server_id'] = 'Parent VirtFusion Server ID';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.period'] = 'VirtFusion Traffic Period Ends';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.block_id'] = 'VirtFusion Block ID';
+$lang['VirtfusionDirectProvisioningMod.traffic_block_info.pending'] = 'Pending payment / activation';
 
 // Service Fields
 $lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';
@@ -149,6 +166,11 @@ $lang['VirtfusionDirectProvisioningMod.ipAddresses.ipv6_refresh'] = 'Refresh IPv
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.refresh'] = 'Refresh IP Addresses';
 
 // Package Fields
+$lang['VirtfusionDirectProvisioningMod.package_fields.service_type'] = 'Product Type';
+$lang['VirtfusionDirectProvisioningMod.package_fields.service_type.server'] = 'VirtFusion Server';
+$lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block'] = 'Traffic Block (one-shot addon)';
+$lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Traffic Block GB';
+$lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'Fixed GB for this one-time product. Leave blank only when a virtfusion-traffic_block_gb, virtfusion_traffic_block_gb, or traffic_block_gb configurable option supplies the amount.';
 $lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
@@ -162,6 +184,10 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.port_speed'] = 'Default Po
 $lang['VirtfusionDirectProvisioningMod.package_fields.port_speed.help_text'] = 'Optional. Applies the same network speed to inbound and outbound traffic in kB/s. The virtfusion-port_speed configurable option overrides this value.';
 $lang['VirtfusionDirectProvisioningMod.package_fields.os_id'] = 'Default Operating System ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.os_id.help_text'] = 'The OS ID is located in `media/templates`. Once you select a template, the ID is the last number in the url.';
+
+// Generic Product Addon capability
+$lang['VirtfusionDirectProvisioningMod.product_addon.traffic_block'] = 'Traffic Block';
+$lang['VirtfusionDirectProvisioningMod.product_addon.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the addon; VirtFusion does not provide a reservation API.';
 
 // Option Fields
 $lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'additional_num_ips';

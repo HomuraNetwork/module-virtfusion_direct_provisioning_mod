@@ -7,13 +7,16 @@ class VirtfusionApi
 
     private $port;
 
+    private $verify_ssl;
+
     private $last_request = ['url' => null, 'args' => null];
 
-    public function __construct($api_token, $hostname, $port = 443)
+    public function __construct($api_token, $hostname, $port = 443, $verify_ssl = true)
     {
         $this->api_token = $api_token;
         $this->hostname = $hostname;
         $this->port = $port;
+        $this->verify_ssl = (bool) $verify_ssl;
     }
 
     public function get_query($query = '')
@@ -33,7 +36,12 @@ class VirtfusionApi
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($args));
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+
+        if (!empty($args)) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($args));
+        }
 
         switch ($type) {
             case 'DELETE':
@@ -49,8 +57,8 @@ class VirtfusionApi
                 curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'GET');
         }
 
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, $this->verify_ssl);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, $this->verify_ssl ? 2 : 0);
         curl_setopt($ch, CURLOPT_HTTPHEADER, [
             'Accept: application/json',
             'Content-type: application/json; charset=utf-8',
@@ -58,9 +66,16 @@ class VirtfusionApi
         ]);
         $response = curl_exec($ch);
         $info = curl_getinfo($ch);
+        $error = curl_error($ch);
+        $errno = curl_errno($ch);
         curl_close($ch);
 
-        return ['info' => $info, 'response' => $response];
+        return [
+            'info' => $info,
+            'response' => $response,
+            'error' => $error,
+            'errno' => $errno
+        ];
     }
 
     public function lastRequest()

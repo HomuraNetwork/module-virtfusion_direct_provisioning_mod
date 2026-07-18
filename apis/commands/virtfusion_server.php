@@ -110,6 +110,20 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/traffic', 'GET');
     }
 
+    public function getTrafficBlocks($serverId)
+    {
+        return $this->api->submit('servers/' . $serverId . '/traffic/blocks', 'GET');
+    }
+
+    public function addTrafficBlock($serverId, $month, $amount)
+    {
+        return $this->api->submit(
+            'servers/' . $serverId . '/traffic/blocks',
+            'POST',
+            ['month' => (int) $month, 'amount' => (int) $amount]
+        );
+    }
+
     public function getBackups($serverId)
     {
         return $this->api->submit('backups/server/' . $serverId, 'GET');

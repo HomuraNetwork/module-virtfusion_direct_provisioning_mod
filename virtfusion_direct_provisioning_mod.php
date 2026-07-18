@@ -14,6 +14,12 @@ class VirtfusionDirectProvisioningMod extends Module
         'virtfusion_port_speed',
         'port_speed'
     ];
+    private const TRAFFIC_BLOCK_CAPABILITY = 'traffic_block';
+    private const TRAFFIC_BLOCK_GB_OPTIONS = [
+        'virtfusion-traffic_block_gb',
+        'virtfusion_traffic_block_gb',
+        'traffic_block_gb'
+    ];
 
     /**
      * Initializes the module
@@ -30,17 +36,63 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->loadConfig(dirname(__FILE__) . DS . 'config.json');
     }
 
-    private function getApi($api_token, $hostname)
+    private function getApi($api_token, $hostname, $allow_insecure_tls = false)
     {
         Loader::load(dirname(__FILE__) . DS . 'apis' . DS . 'virtfusion_api.php');
 
-        return new VirtfusionApi($api_token, $hostname);
+        return new VirtfusionApi($api_token, $hostname, 443, !$this->boolValue($allow_insecure_tls));
+    }
+
+    private function getApiFromRow($row)
+    {
+        return $this->getApi(
+            $row->meta->api_token,
+            $row->meta->hostname,
+            $row->meta->allow_insecure_tls ?? false
+        );
     }
 
     private function shouldAutoBuild($package)
     {
         return !isset($package->meta->{'virtfusion-auto_build'})
             || $package->meta->{'virtfusion-auto_build'} !== 'false';
+    }
+
+    private function isTrafficBlockPackage($package)
+    {
+        return ($package->meta->{'virtfusion-service_type'} ?? 'server') === self::TRAFFIC_BLOCK_CAPABILITY;
+    }
+
+    private function trafficBlocksEnabled($row)
+    {
+        return $row && $this->boolValue($row->meta->traffic_blocks_enabled ?? false);
+    }
+
+    private function getTrafficBlockAmount($package, array $config_options = [])
+    {
+        foreach (self::TRAFFIC_BLOCK_GB_OPTIONS as $option_name) {
+            if (isset($config_options[$option_name]) && $config_options[$option_name] !== '') {
+                return $this->validateOptionalPositiveInteger($config_options[$option_name])
+                    ? (int) $config_options[$option_name]
+                    : null;
+            }
+        }
+
+        $amount = $package->meta->{'virtfusion-traffic_block_gb'} ?? null;
+        return $amount !== null && $amount !== '' && $this->validateOptionalPositiveInteger($amount)
+            ? (int) $amount
+            : null;
+    }
+
+    private function getPackagePricing($package, $pricing_id)
+    {
+        foreach (($package->pricing ?? []) as $pricing) {
+            if ((int) ($pricing->id ?? 0) === (int) $pricing_id) {
+                return $pricing;
+            }
+        }
+
+        return null;
     }
 
     private function boolValue($value)
@@ -125,6 +177,290 @@ class VirtfusionDirectProvisioningMod extends Module
             && in_array((int) $request['info']['http_code'], $status_codes, true);
     }
 
+    private function apiErrorMessage($request)
+    {
+        if (!empty($request['error'])) {
+            return 'VirtFusion API connection failed: ' . $request['error'];
+        }
+
+        $status_code = (int) ($request['info']['http_code'] ?? 0);
+        return $status_code > 0
+            ? 'VirtFusion API returned HTTP ' . $status_code . '.'
+            : 'VirtFusion API did not return a response.';
+    }
+
+    private function setModuleActionException($row, $action, \Throwable $exception)
+    {
+        $this->log(
+            ($row->meta->hostname ?? 'VirtFusion') . '| ' . $action,
+            $exception->getMessage(),
+            'output',
+            false
+        );
+        $this->Input->setErrors([
+            'api' => [
+                'response' => Language::_('VirtfusionDirectProvisioningMod.!error.api.action', true)
+            ]
+        ]);
+    }
+
+    private function getTrafficBlockPeriod($server_api, $server_id)
+    {
+        $request = $server_api->getTrafficBlocks($server_id);
+        $this->log(
+            $this->getModuleRow()->meta->hostname . '| traffic blocks availability',
+            serialize($request),
+            'output',
+            $this->apiRequestSucceeded($request, [200])
+        );
+
+        if (!$this->apiRequestSucceeded($request, [200])) {
+            $this->Input->setErrors([
+                'api' => ['response' => $this->apiErrorMessage($request)]
+            ]);
+            return null;
+        }
+
+        $data = json_decode($request['response']);
+        $period = $data->data->available->current ?? null;
+        if (!$period || !isset($period->month, $period->start, $period->end)) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'period' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.period', true)
+                ]
+            ]);
+            return null;
+        }
+
+        return [
+            'month' => (int) $period->month,
+            'starts_at' => (string) $period->start,
+            'ends_at' => (string) $period->end,
+            'assigned' => (array) ($data->data->assigned ?? [])
+        ];
+    }
+
+    private function trafficBlockServiceMeta(
+        $server_id,
+        $amount,
+        $month = null,
+        $starts_at = null,
+        $ends_at = null,
+        $block_id = null
+    ) {
+        $values = [
+            'virtfusion_addon_capability' => self::TRAFFIC_BLOCK_CAPABILITY,
+            'virtfusion_parent_server_id' => (int) $server_id,
+            'virtfusion_traffic_block_gb' => (int) $amount,
+            'virtfusion_traffic_block_month' => $month,
+            'virtfusion_traffic_block_start' => $starts_at,
+            'virtfusion_traffic_block_end' => $ends_at,
+            'virtfusion_traffic_block_id' => $block_id
+        ];
+        $meta = [];
+        foreach ($values as $key => $value) {
+            if ($value !== null && $value !== '') {
+                $meta[] = ['key' => $key, 'value' => $value, 'encrypted' => 0];
+            }
+        }
+
+        return $meta;
+    }
+
+    private function findNewTrafficBlockId(array $before, array $after, $month, $amount)
+    {
+        $before_ids = [];
+        foreach ($before as $block) {
+            if (isset($block->id)) {
+                $before_ids[(string) $block->id] = true;
+            }
+        }
+
+        $matches = [];
+        foreach ($after as $block) {
+            if (!isset($block->id)
+                || isset($before_ids[(string) $block->id])
+                || (int) ($block->month ?? 0) !== (int) $month
+                || (int) ($block->traffic ?? 0) !== (int) $amount) {
+                continue;
+            }
+            $matches[] = $block;
+        }
+        usort($matches, function ($left, $right) {
+            return strtotime($right->added ?? '') <=> strtotime($left->added ?? '');
+        });
+
+        return isset($matches[0]->id) ? $matches[0]->id : null;
+    }
+
+    private function provisionTrafficBlock($package, array $vars, $parent_service)
+    {
+        $row = $this->getModuleRow();
+        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
+        if (!$row || !$this->trafficBlocksEnabled($row)) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'disabled' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.disabled', true)
+                ]
+            ]);
+            return;
+        }
+
+        if (!$parent_service || ($parent_service->status ?? null) !== 'active') {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'parent' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.parent', true)
+                ]
+            ]);
+            return;
+        }
+
+        $parent_fields = $this->normalizeLegacyServiceFields(
+            $this->serviceFieldsToObject($parent_service->fields ?? [])
+        );
+        $server_id = $parent_fields->virtfusion_server_id ?? null;
+        if (!is_numeric($server_id) || (int) $server_id < 1 || !$amount || $amount < 1) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'amount' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
+                ]
+            ]);
+            return;
+        }
+
+        // Pending services are recorded and invoiced first. The current VirtFusion
+        // month is intentionally queried only when Blesta activates the paid service.
+        if (($vars['use_module'] ?? 'true') !== 'true') {
+            return $this->trafficBlockServiceMeta($server_id, $amount);
+        }
+
+        $api = $this->getApiFromRow($row);
+        $api->loadCommand('virtfusion_server');
+        $server_api = new VirtfusionServer($api);
+        $period = $this->getTrafficBlockPeriod($server_api, $server_id);
+        if (!$period) {
+            return;
+        }
+
+        $request = $server_api->addTrafficBlock($server_id, $period['month'], $amount);
+        $success = $this->apiRequestSucceeded($request, [201]);
+        $this->log($row->meta->hostname . '| add traffic block', serialize($request), 'output', $success);
+
+        $block_id = null;
+        $response_data = json_decode($request['response'] ?? '');
+        if (isset($response_data->data->id)) {
+            $block_id = $response_data->data->id;
+        } elseif (isset($response_data->id)) {
+            $block_id = $response_data->id;
+        }
+
+        // VirtFusion documents an empty 201 response. Re-query to capture an ID
+        // and to resolve the common timeout-after-success ambiguity before Blesta retries.
+        $after_request = $server_api->getTrafficBlocks($server_id);
+        if ($this->apiRequestSucceeded($after_request, [200])) {
+            $after_data = json_decode($after_request['response']);
+            $detected_id = $this->findNewTrafficBlockId(
+                $period['assigned'],
+                (array) ($after_data->data->assigned ?? []),
+                $period['month'],
+                $amount
+            );
+            if ($detected_id !== null) {
+                $block_id = $detected_id;
+                $success = true;
+            }
+        }
+
+        if (!$success) {
+            $this->Input->setErrors(['api' => ['response' => $this->apiErrorMessage($request)]]);
+            return;
+        }
+
+        return $this->trafficBlockServiceMeta(
+            $server_id,
+            $amount,
+            $period['month'],
+            $period['starts_at'],
+            $period['ends_at'],
+            $block_id
+        );
+    }
+
+    public function getProductAddonCapabilities($parent_package, $parent_service)
+    {
+        $row = $this->getModuleRow();
+        if (!$this->trafficBlocksEnabled($row)
+            || !$parent_service
+            || ($parent_service->status ?? null) !== 'active') {
+            return [];
+        }
+
+        $fields = $this->normalizeLegacyServiceFields(
+            $this->serviceFieldsToObject($parent_service->fields ?? [])
+        );
+        if (empty($fields->virtfusion_server_id)) {
+            return [];
+        }
+
+        return [
+            self::TRAFFIC_BLOCK_CAPABILITY => [
+                'label' => Language::_('VirtfusionDirectProvisioningMod.product_addon.traffic_block', true),
+                'one_time' => true,
+                'requires_active_parent' => true,
+                'requires_provisioned_parent' => true
+            ]
+        ];
+    }
+
+    public function previewProductAddon(
+        $capability,
+        $parent_package,
+        $parent_service,
+        $addon_package,
+        array $config_options = []
+    ) {
+        if ($capability !== self::TRAFFIC_BLOCK_CAPABILITY
+            || !$this->isTrafficBlockPackage($addon_package)) {
+            $this->Input->setErrors([
+                'product_addon' => [
+                    'capability' => Language::_('VirtfusionDirectProvisioningMod.!error.product_addon.capability', true)
+                ]
+            ]);
+            return;
+        }
+
+        $capabilities = $this->getProductAddonCapabilities($parent_package, $parent_service);
+        $amount = $this->getTrafficBlockAmount($addon_package, $config_options);
+        if (!isset($capabilities[$capability]) || !$amount || $amount < 1) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'amount' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
+                ]
+            ]);
+            return;
+        }
+
+        $fields = $this->normalizeLegacyServiceFields(
+            $this->serviceFieldsToObject($parent_service->fields ?? [])
+        );
+        $api = $this->getApiFromRow($this->getModuleRow());
+        $api->loadCommand('virtfusion_server');
+        $server_api = new VirtfusionServer($api);
+        $period = $this->getTrafficBlockPeriod($server_api, $fields->virtfusion_server_id);
+        if (!$period) {
+            return;
+        }
+
+        return [
+            'capability' => self::TRAFFIC_BLOCK_CAPABILITY,
+            'amount_gb' => $amount,
+            'month' => $period['month'],
+            'starts_at' => $period['starts_at'],
+            'ends_at' => $period['ends_at'],
+            'notice' => Language::_('VirtfusionDirectProvisioningMod.product_addon.period_notice', true)
+        ];
+    }
+
     private function getPrimaryStorage($server_data)
     {
         foreach (($server_data->data->storage ?? []) as $storage) {
@@ -138,6 +474,29 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return null;
+    }
+
+    private function selectCurrentTrafficMonth(array $monthly, $period_end = null)
+    {
+        $now = time();
+        $fallback = null;
+        foreach ($monthly as $month) {
+            if ($period_end && isset($month->end) && (string) $month->end === (string) $period_end) {
+                return $month;
+            }
+
+            $start = isset($month->start) ? strtotime($month->start . ' UTC') : false;
+            $end = isset($month->end) ? strtotime($month->end . ' UTC') : false;
+            if ($start !== false && $end !== false && $start <= $now && $now <= $end) {
+                return $month;
+            }
+
+            if (!$fallback || $end > strtotime(($fallback->end ?? '') . ' UTC')) {
+                $fallback = $month;
+            }
+        }
+
+        return $fallback;
     }
 
     private function getServiceConfigOptionValue($service, $option_name)
@@ -387,6 +746,7 @@ class VirtfusionDirectProvisioningMod extends Module
     public function getServiceName($service)
     {
         $server_id = null;
+        $traffic_block_gb = null;
 
         foreach ($service->fields as $field) {
             if ($field->key == 'virtfusion_hostname') {
@@ -396,6 +756,14 @@ class VirtfusionDirectProvisioningMod extends Module
             if (in_array($field->key, ['virtfusion_server_id', 'server_id'], true)) {
                 $server_id = $field->value;
             }
+
+            if ($field->key === 'virtfusion_traffic_block_gb') {
+                $traffic_block_gb = $field->value;
+            }
+        }
+
+        if ($traffic_block_gb !== null) {
+            return Language::_('VirtfusionDirectProvisioningMod.service_name.traffic_block', true, $traffic_block_gb);
         }
 
         return $server_id !== null ? 'VirtFusion #' . $server_id : parent::getServiceName($service);
@@ -535,11 +903,18 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function addModuleRow(array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token', 'admin_server_url', 'traffic_blocks_enabled'];
+        $meta_fields = [
+            'name',
+            'hostname',
+            'api_token',
+            'admin_server_url',
+            'traffic_blocks_enabled',
+            'allow_insecure_tls'
+        ];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = ['traffic_blocks_enabled'];
+        $checkbox_fields = ['traffic_blocks_enabled', 'allow_insecure_tls'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {
@@ -582,11 +957,18 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function editModuleRow($module_row, array &$vars)
     {
-        $meta_fields = ['name', 'hostname', 'api_token', 'admin_server_url', 'traffic_blocks_enabled'];
+        $meta_fields = [
+            'name',
+            'hostname',
+            'api_token',
+            'admin_server_url',
+            'traffic_blocks_enabled',
+            'allow_insecure_tls'
+        ];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = ['traffic_blocks_enabled'];
+        $checkbox_fields = ['traffic_blocks_enabled', 'allow_insecure_tls'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {
@@ -658,10 +1040,14 @@ class VirtfusionDirectProvisioningMod extends Module
     public function validateApiCredentials($api_token, $vars)
     {
         try {
-            $api = $this->getApi($vars['api_token'], $vars['hostname']);
+            $api = $this->getApi(
+                $vars['api_token'],
+                $vars['hostname'],
+                $vars['allow_insecure_tls'] ?? false
+            );
             $request = $api->get_query('packages');
 
-            if ($request['info']['http_code'] != 200) {
+            if (!$this->apiRequestSucceeded($request, [200])) {
                 $msg =  ($request['response']) ? json_decode($request['response']) : 'Invalid API Token';
                 $this->log($vars['hostname'], serialize($msg), 'output', false);
                 return false;
@@ -737,7 +1123,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @see Module::getModule()
      * @see Module::getModuleRow()
      */
-    public function addPackage(array $vars = null)
+    public function addPackage(?array $vars = null)
     {
         // Set rules to validate input data
         $this->Input->setRules($this->getPackageRules($vars));
@@ -777,7 +1163,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @see Module::getModule()
      * @see Module::getModuleRow()
      */
-    public function editPackage($package, array $vars = null)
+    public function editPackage($package, ?array $vars = null)
     {
         // Set rules to validate input data
         $this->Input->setRules($this->getPackageRules($vars));
@@ -822,6 +1208,26 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     private function getPackageRules(array $vars)
     {
+        $service_type = $vars['meta']['virtfusion-service_type'] ?? 'server';
+
+        if ($service_type === self::TRAFFIC_BLOCK_CAPABILITY) {
+            return [
+                'meta[virtfusion-service_type]' => [
+                    'valid' => [
+                        'rule' => ['in_array', ['server', self::TRAFFIC_BLOCK_CAPABILITY]],
+                        'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta.service_type.valid', true)
+                    ]
+                ],
+                'meta[virtfusion-traffic_block_gb]' => [
+                    'valid' => [
+                        'if_set' => true,
+                        'rule' => [[$this, 'validateOptionalPositiveInteger']],
+                        'message' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
+                    ]
+                ]
+            ];
+        }
+
         // Validate the package fields
         $rules = [
             'meta[hypervisor_group_id]' => [
@@ -850,6 +1256,13 @@ class VirtfusionDirectProvisioningMod extends Module
         return $rules;
     }
 
+    public function validateOptionalPositiveInteger($value)
+    {
+        return $value === null
+            || $value === ''
+            || (is_numeric($value) && (int) $value > 0 && (float) $value === (float) (int) $value);
+    }
+
     /**
      * Returns all fields used when adding/editing a package, including any
      * javascript to execute when the page is rendered with these fields.
@@ -863,6 +1276,40 @@ class VirtfusionDirectProvisioningMod extends Module
         Loader::loadHelpers($this, ['Html']);
 
         $fields = new ModuleFields();
+
+        $service_type = $fields->label(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type', true),
+            'virtfusion_direct_provisioning_mod_service_type'
+        );
+        $service_type->attach(
+            $fields->fieldSelect(
+                'meta[virtfusion-service_type]',
+                [
+                    'server' => Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type.server', true),
+                    self::TRAFFIC_BLOCK_CAPABILITY => Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block', true)
+                ],
+                ($vars->meta['virtfusion-service_type'] ?? 'server'),
+                ['id' => 'virtfusion_direct_provisioning_mod_service_type']
+            )
+        );
+        $fields->setField($service_type);
+
+        $traffic_block_gb = $fields->label(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_gb'
+        );
+        $traffic_block_gb->attach(
+            $fields->fieldText(
+                'meta[virtfusion-traffic_block_gb]',
+                ($vars->meta['virtfusion-traffic_block_gb'] ?? null),
+                ['id' => 'virtfusion_direct_provisioning_mod_traffic_block_gb']
+            )
+        );
+        $traffic_block_gb->attach($fields->tooltip(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_gb'
+        ));
+        $fields->setField($traffic_block_gb);
 
         // Set the Hypervisor Group ID field
         $hypervisor_group_id = $fields->label(Language::_('VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id', true), 'virtfusion_direct_provisioning_mod_hypervisor_group_id');
@@ -950,6 +1397,40 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $fields->setField($os_id);
 
+        $fields->setHtml('
+            <script type="text/javascript">
+                (function () {
+                    var type = document.getElementById("virtfusion_direct_provisioning_mod_service_type");
+                    var block = document.getElementById("virtfusion_direct_provisioning_mod_traffic_block_gb");
+                    var serverIds = [
+                        "virtfusion_direct_provisioning_mod_hypervisor_group_id",
+                        "virtfusion_direct_provisioning_mod_default_ipv4",
+                        "virtfusion_direct_provisioning_mod_package_id",
+                        "virtfusion_direct_provisioning_mod_backup_plan_id",
+                        "virtfusion_direct_provisioning_mod_auto_build",
+                        "virtfusion_direct_provisioning_mod_port_speed",
+                        "virtfusion_direct_provisioning_mod_os_id"
+                    ];
+                    function updateVirtFusionProductType() {
+                        var isBlock = type && type.value === "traffic_block";
+                        if (block && block.closest(".mb-3")) {
+                            block.closest(".mb-3").style.display = isBlock ? "" : "none";
+                        }
+                        serverIds.forEach(function (id) {
+                            var field = document.getElementById(id);
+                            if (field && field.closest(".mb-3")) {
+                                field.closest(".mb-3").style.display = isBlock ? "none" : "";
+                            }
+                        });
+                    }
+                    if (type) {
+                        type.addEventListener("change", updateVirtFusionProductType);
+                        updateVirtFusionProductType();
+                    }
+                }());
+            </script>
+        ');
+
         return $fields;
     }
 
@@ -978,11 +1459,21 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function addService(
         $package,
-        array $vars = null,
+        ?array $vars = null,
         $parent_package = null,
         $parent_service = null,
         $status = 'pending'
     ) {
+        $vars = $vars ?? [];
+        if ($this->isTrafficBlockPackage($package)) {
+            $this->validateService($package, $vars);
+            if ($this->Input->errors()) {
+                return;
+            }
+
+            return $this->provisionTrafficBlock($package, $vars, $parent_service);
+        }
+
         // $this->Input->setErrors(['api' => ['response' => print_r($client, true)]]);
         // return;
         // Set unset checkboxes
@@ -1008,8 +1499,16 @@ class VirtfusionDirectProvisioningMod extends Module
 
         // Load the API
         $row = $this->getModuleRow();
+        if (!$row) {
+            $this->Input->setErrors([
+                'module_row' => [
+                    'missing' => Language::_('VirtfusionDirectProvisioningMod.!error.module_row.missing', true)
+                ]
+            ]);
+            return;
+        }
 
-        $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+        $api = $this->getApiFromRow($row);
 
         // Get the fields for the service
         //$params = $this->getFieldsFromInput($vars, $package);
@@ -1040,7 +1539,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
 
                 if (isset($request['info'])) {
-                    $this->log($row->meta->hostname . '| client check result', serialize($request), 'output', $request['info']['http_code'] == 200);
+                    $this->log(
+                        $row->meta->hostname . '| client check result',
+                        'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                        'output',
+                        $this->apiRequestSucceeded($request, [200, 404])
+                    );
                     switch ($request['info']['http_code']) {
                         case 200:
                             $data = json_decode($request['response']);
@@ -1063,7 +1567,12 @@ class VirtfusionDirectProvisioningMod extends Module
                                 'extRelationId' => $vars['client_id']
                             ]);
 
-                            $this->log($row->meta->hostname . '| client info', serialize($request), 'output', $request['info']['http_code'] == 201);
+                            $this->log(
+                                $row->meta->hostname . '| client create',
+                                'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                                'output',
+                                $this->apiRequestSucceeded($request, [201])
+                            );
 
                             if (isset($request['info'])) {
                                 if ($request['info']['http_code'] !== 201) {
@@ -1135,10 +1644,15 @@ class VirtfusionDirectProvisioningMod extends Module
 
                     $request = $server_api->create($request_params);
 
-                    $this->log($row->meta->hostname . '| create server', serialize($request), 'input', $request['info']['http_code'] !== 201);
+                    $this->log(
+                        $row->meta->hostname . '| create server',
+                        'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                        'output',
+                        $this->apiRequestSucceeded($request, [201])
+                    );
 
-                    if ($request['info']['http_code'] !== 201) {
-                        $this->Input->setErrors(['api' => ['response' => 'Received  a ' . $request['info']['http_code'] . ' http code from the API. The action was unsuccessful.']]);
+                    if (!$this->apiRequestSucceeded($request, [201])) {
+                        $this->Input->setErrors(['api' => ['response' => $this->apiErrorMessage($request)]]);
                         return;
                     }
 
@@ -1193,15 +1707,17 @@ class VirtfusionDirectProvisioningMod extends Module
 
                         $build_data = json_decode($build_request['response']);
 
-                        if ($build_request['info']['http_code'] == 200) {
+                        if ($this->apiRequestSucceeded($build_request, [200])) {
                             $hasError = false;
 
-                            $virtfusion_password = $build_data->data->settings->decryptedPassword;
+                            $virtfusion_password = $build_data->data->settings->decryptedPassword ?? '';
 
                             // if 200 we should have this
                             $ip_addresses = [];
-                            foreach ($build_data->data->network->interfaces[0]->ipv4 as $ip) {
-                                $ip_addresses[] = $ip->address;
+                            foreach (($build_data->data->network->interfaces[0]->ipv4 ?? []) as $ip) {
+                                if (isset($ip->address)) {
+                                    $ip_addresses[] = $ip->address;
+                                }
                             }
                             $base_num = $package->meta->default_ipv4 - 1;
 
@@ -1219,8 +1735,10 @@ class VirtfusionDirectProvisioningMod extends Module
                                 $virtfusion_additional_ips = implode(',', $virtfusion_additional_ips_arr);
                             }
 
-                            for ($i = 0; $i <= 10; $i++) {
-                                sleep(5);
+                            for ($i = 0; $i < 5; $i++) {
+                                if ($i > 0) {
+                                    sleep(2);
+                                }
                                 $server_info = $api->get_query("servers/$server_id");
                                 $server_data = json_decode($server_info['response']);
                                 if (isset($server_data->data->network->interfaces[0]->ipv6[0])) {
@@ -1232,7 +1750,12 @@ class VirtfusionDirectProvisioningMod extends Module
                             }
                         }
 
-                        $this->log($row->meta->hostname . '| build server', serialize($build_request), 'output', $build_request['info']['http_code'] == 200);
+                        $this->log(
+                            $row->meta->hostname . '| build server',
+                            'HTTP ' . (int) ($build_request['info']['http_code'] ?? 0),
+                            'output',
+                            $this->apiRequestSucceeded($build_request, [200])
+                        );
                     } elseif (!$auto_build) {
                         $this->log($row->meta->hostname . '| build server', 'Skipped automatic build by package setting.', 'output', true);
                     }
@@ -1261,7 +1784,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
                     if (!$auto_build && isset($vars['configoptions']['virtfusion-vnc']) && $this->boolValue($vars['configoptions']['virtfusion-vnc'])) {
                         $vnc_request = $server_api->setVnc($server_id, 'enable');
-                        $this->log($row->meta->hostname . '| vnc', serialize($vnc_request), 'output', $vnc_request['info']['http_code'] == 200);
+                        $this->log(
+                            $row->meta->hostname . '| vnc',
+                            'HTTP ' . (int) ($vnc_request['info']['http_code'] ?? 0),
+                            'output',
+                            $this->apiRequestSucceeded($vnc_request, [200])
+                        );
                         if ($vnc_request['info']['http_code'] == 200) {
                             $virtfusion_vnc = 'true';
                         }
@@ -1271,7 +1799,7 @@ class VirtfusionDirectProvisioningMod extends Module
                     return;
                 }
             } catch (\Throwable $e) {
-                $this->Input->setErrors(['api' => ['response' => print_r($e->getMessage(), true)]]);
+                $this->setModuleActionException($row, 'create service exception', $e);
                 return;
             }
         }
@@ -1357,8 +1885,14 @@ class VirtfusionDirectProvisioningMod extends Module
      * @see Module::getModule()
      * @see Module::getModuleRow()
      */
-    public function editService($package, $service, array $vars = null, $parent_package = null, $parent_service = null)
+    public function editService($package, $service, ?array $vars = null, $parent_package = null, $parent_service = null)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            // Traffic blocks are one-shot audit services. Editing, suspending, or
+            // canceling the Blesta record must not modify the remote block.
+            return null;
+        }
+
         // Set unset checkboxes
         $checkbox_fields = [];
 
@@ -1370,7 +1904,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
-        $this->validateService($package, $vars, true);
+        $this->validateService($package, $vars);
 
         if ($this->Input->errors()) {
             return;
@@ -1471,8 +2005,12 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function suspendService($package, $service, $parent_package = null, $parent_service = null)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            return true;
+        }
+
         if (($row = $this->getModuleRow())) {
-            $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+            $api = $this->getApiFromRow($row);
             $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
             $api->loadCommand('virtfusion_server');
@@ -1500,7 +2038,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
                 return true;
             } catch (\Throwable $e) {
-                // Nothing to do
+                $this->setModuleActionException($row, 'suspend exception', $e);
                 return;
             }
         }
@@ -1528,8 +2066,12 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function unsuspendService($package, $service, $parent_package = null, $parent_service = null)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            return true;
+        }
+
         if (($row = $this->getModuleRow())) {
-            $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+            $api = $this->getApiFromRow($row);
             $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
             $api->loadCommand('virtfusion_server');
@@ -1557,7 +2099,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
                 return true;
             } catch (\Throwable $e) {
-                // Nothing to do
+                $this->setModuleActionException($row, 'unsuspend exception', $e);
                 return;
             }
         }
@@ -1585,8 +2127,12 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function cancelService($package, $service, $parent_package = null, $parent_service = null)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            return true;
+        }
+
         if (($row = $this->getModuleRow())) {
-            $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+            $api = $this->getApiFromRow($row);
             $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
             $api->loadCommand('virtfusion_server');
@@ -1614,7 +2160,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
                 return true;
             } catch (\Throwable $e) {
-                // Nothing to do
+                $this->setModuleActionException($row, 'cancel exception', $e);
                 return;
             }
         }
@@ -1628,10 +2174,38 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param array $vars An array of user supplied info to satisfy the request
      * @return bool True if the service validates, false otherwise. Sets Input errors when false.
      */
-    public function validateService($package, array $vars = null)
+    public function validateService($package, ?array $vars = null)
     {
         $this->Input->setRules($this->getServiceRules($vars, false, $package));
-        return $this->Input->validates($vars);
+        if (!$this->Input->validates($vars)) {
+            return false;
+        }
+
+        if (!$this->isTrafficBlockPackage($package)) {
+            return true;
+        }
+
+        $pricing = $this->getPackagePricing($package, $vars['pricing_id'] ?? null);
+        if (!$pricing || ($pricing->period ?? null) !== 'onetime') {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'pricing' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.onetime', true)
+                ]
+            ]);
+            return false;
+        }
+
+        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
+        if (!$amount || $amount < 1) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'amount' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
+                ]
+            ]);
+            return false;
+        }
+
+        return true;
     }
 
     /**
@@ -1641,7 +2215,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param array $vars An array of user-supplied info to satisfy the request
      * @return bool True if the service update validates or false otherwise. Sets Input errors when false.
      */
-    public function validateServiceEdit($service, array $vars = null)
+    public function validateServiceEdit($service, ?array $vars = null)
     {
         $this->Input->setRules($this->getServiceRules($vars, true, null));
         if (!$this->Input->validates($vars)) {
@@ -1725,7 +2299,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return false;
         }
 
-        $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+        $api = $this->getApiFromRow($row);
         $server_request = $api->get_query('servers/' . $service_fields->virtfusion_server_id);
         if (!$this->apiRequestSucceeded($server_request, [200])) {
             $this->Input->setErrors([
@@ -1796,7 +2370,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param bool $edit True to get the edit rules, false for the add rules
      * @return array Service rules
      */
-    private function getServiceRules(array $vars = null, $edit = false, $package = null)
+    private function getServiceRules(?array $vars = null, $edit = false, $package = null)
     {
         // Validate the service fields
         $rules = [
@@ -1816,7 +2390,8 @@ class VirtfusionDirectProvisioningMod extends Module
             ]
         ];
 
-        if ($package === null || $this->shouldAutoBuild($package)) {
+        if (($package === null || !$this->isTrafficBlockPackage($package))
+            && ($package === null || $this->shouldAutoBuild($package))) {
             $rules['virtfusion_hostname'] = [
                 'valid' => [
                     'rule' => [[$this, 'validateHostname']],
@@ -1854,10 +2429,20 @@ class VirtfusionDirectProvisioningMod extends Module
         $parent_package = null,
         $parent_service = null
     ) {
+        if ($this->isTrafficBlockPackage($package_from)
+            || $this->isTrafficBlockPackage($package_to)) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'immutable' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.immutable', true)
+                ]
+            ]);
+            return;
+        }
+
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
 
         if (($row = $this->getModuleRow()) && isset($service_fields->virtfusion_server_id)) {
-            $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+            $api = $this->getApiFromRow($row);
             $server_id = $service_fields->virtfusion_server_id;
 
             try {
@@ -1999,7 +2584,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $row = $this->getModuleRow();
 
         // Load the view into this object, so helpers can be automatically added to the view
-        $this->view = new View('admin_service_info', 'default');
+        $this->view = new View(
+            $this->isTrafficBlockPackage($package) ? 'traffic_block_service_info' : 'admin_service_info',
+            'default'
+        );
         $this->view->base_uri = $this->base_uri;
         $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
 
@@ -2024,6 +2612,10 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function getClientTabs($package)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            return [];
+        }
+
         return [
             'tabManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true),
             'tabClientIPAddresses' => Language::_('VirtfusionDirectProvisioningMod.ipAddresses', true)
@@ -2032,6 +2624,10 @@ class VirtfusionDirectProvisioningMod extends Module
 
     public function getAdminTabs($package)
     {
+        if ($this->isTrafficBlockPackage($package)) {
+            return [];
+        }
+
         return [
             'tabAdminManage' => Language::_('VirtfusionDirectProvisioningMod.tabManage', true),
             'tabAdminIPAddresses' => Language::_('VirtfusionDirectProvisioningMod.ipAddresses', true)
@@ -2040,7 +2636,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function getRemoteServerInfo($module_row, $server_id)
     {
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
         $request = $server_api->get($server_id, true);
@@ -2082,7 +2678,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $traffic_request = $server_api->getTraffic($server_id);
         if ($this->apiRequestSucceeded($traffic_request, [200])) {
             $traffic_data = json_decode($traffic_request['response']);
-            $current_month = $traffic_data->data->monthly[0] ?? null;
+            $current_month = $this->selectCurrentTrafficMonth(
+                (array) ($traffic_data->data->monthly ?? []),
+                $server_info->traffic_reset
+            );
             if ($current_month) {
                 $server_info->traffic = $current_month->limit ?? $server_info->traffic;
                 $server_info->traffic_reset = $current_month->end ?? $server_info->traffic_reset;
@@ -2103,6 +2702,9 @@ class VirtfusionDirectProvisioningMod extends Module
         if ($this->apiRequestSucceeded($backup_request, [200])) {
             $backup_data = json_decode($backup_request['response']);
             $backups = (array) ($backup_data->data ?? []);
+            usort($backups, function ($left, $right) {
+                return strtotime($right->created ?? '') <=> strtotime($left->created ?? '');
+            });
             $server_info->backup_count = count($backups);
             $server_info->latest_backup = $backups[0] ?? null;
         }
@@ -2123,7 +2725,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return $service_fields;
         }
 
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
         $request = $server_api->get($service_fields->virtfusion_server_id);
@@ -2292,9 +2894,9 @@ class VirtfusionDirectProvisioningMod extends Module
     public function tabManage(
         $package,
         $service,
-        array $get = null,
-        array $post = null,
-        array $files = null
+        ?array $get = null,
+        ?array $post = null,
+        ?array $files = null
     ) {
         $this->view = new View('tabManage', 'default');
         $this->view->base_uri = $this->base_uri;
@@ -2310,7 +2912,7 @@ class VirtfusionDirectProvisioningMod extends Module
         if (!empty($post) && $row) {
             if (property_exists($service_fields, 'virtfusion_server_id')) {
                 if (is_numeric($service_fields->virtfusion_server_id)) {
-                    $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+                    $api = $this->getApiFromRow($row);
 
                     $api->loadCommand('virtfusion_server');
 
@@ -2341,9 +2943,9 @@ class VirtfusionDirectProvisioningMod extends Module
     public function tabAdminManage(
         $package,
         $service,
-        array $get = null,
-        array $post = null,
-        array $files = null
+        ?array $get = null,
+        ?array $post = null,
+        ?array $files = null
     ) {
         $this->view = new View('tabAdminManage', 'default');
 
@@ -2360,7 +2962,7 @@ class VirtfusionDirectProvisioningMod extends Module
         if (!empty($post) && $row) {
             if (property_exists($service_fields, 'virtfusion_server_id')) {
                 if (is_numeric($service_fields->virtfusion_server_id)) {
-                    $api = $this->getApi($row->meta->api_token, $row->meta->hostname);
+                    $api = $this->getApiFromRow($row);
 
                     $api->loadCommand('virtfusion_server');
 
@@ -2407,9 +3009,9 @@ class VirtfusionDirectProvisioningMod extends Module
     public function tabClientIPAddresses(
         $package,
         $service,
-        array $get = null,
-        array $post = null,
-        array $files = null
+        ?array $get = null,
+        ?array $post = null,
+        ?array $files = null
     ) {
         $this->view = new View('tab_ips', 'default');
         $this->view->base_uri = $this->base_uri;
@@ -2460,9 +3062,9 @@ class VirtfusionDirectProvisioningMod extends Module
     public function tabAdminIPAddresses(
         $package,
         $service,
-        array $get = null,
-        array $post = null,
-        array $files = null
+        ?array $get = null,
+        ?array $post = null,
+        ?array $files = null
     ) {
         $this->view = new View('tab_ips', 'default');
         $this->view->base_uri = $this->base_uri;
@@ -2523,7 +3125,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         if (in_array($ip_to_remove, $extra_ips_arr)) {
             // Get and load api
-            $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+            $api = $this->getApiFromRow($module_row);
             $api->loadCommand('virtfusion_server');
             $server_api = new VirtfusionServer($api);
 
@@ -2673,7 +3275,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function updateTraffic($module_row, $service_fields, $package, $additional_traffic)
     {
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
 
@@ -2711,7 +3313,7 @@ class VirtfusionDirectProvisioningMod extends Module
             ];
         }
 
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
         $server_id = $service_fields->virtfusion_server_id;
@@ -2764,7 +3366,7 @@ class VirtfusionDirectProvisioningMod extends Module
             ];
         }
 
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
         $server_id = $service_fields->virtfusion_server_id;
@@ -2849,7 +3451,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
             if ($current_vnc !== $new_vnc) {
                 $request = $server_api->setVnc($server_id, $new_vnc === 'true' ? 'enable' : 'disable');
-                $this->log($module_row->meta->hostname . '| vnc', serialize($request), 'output', $request['info']['http_code'] == 200);
+                $this->log(
+                    $module_row->meta->hostname . '| vnc',
+                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    'output',
+                    $this->apiRequestSucceeded($request, [200])
+                );
 
                 if ($request['info']['http_code'] != 200) {
                     $err_msg = 'There was an error while updating VNC.';
@@ -2898,7 +3505,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
 
         // Get and load api
-        $api = $this->getApi($module_row->meta->api_token, $module_row->meta->hostname);
+        $api = $this->getApiFromRow($module_row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
 
@@ -2973,7 +3580,7 @@ class VirtfusionDirectProvisioningMod extends Module
      * @param bool $client True if the action is being performed by the client, false otherwise
      * @return array An array of vars for the template
      */
-    private function getClientIpAddresses($package, $service, array $get = null, array $post = null, $client = false)
+    private function getClientIpAddresses($package, $service, ?array $get = null, ?array $post = null, $client = false)
     {
         Loader::loadModels($this, ['Services']);
 
@@ -3053,7 +3660,10 @@ class VirtfusionDirectProvisioningMod extends Module
         $row = $this->getModuleRow();
 
         // Load the view into this object, so helpers can be automatically added to the view
-        $this->view = new View('client_service_info', 'default');
+        $this->view = new View(
+            $this->isTrafficBlockPackage($package) ? 'traffic_block_service_info' : 'client_service_info',
+            'default'
+        );
         $this->view->base_uri = $this->base_uri;
         $this->view->setDefaultView('components' . DS . 'modules' . DS . 'virtfusion_direct_provisioning_mod' . DS);
 
@@ -3102,7 +3712,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $fields = new ModuleFields();
 
-        if (!$this->shouldAutoBuild($package)) {
+        if ($this->isTrafficBlockPackage($package) || !$this->shouldAutoBuild($package)) {
             return $fields;
         }
 
@@ -3139,6 +3749,10 @@ class VirtfusionDirectProvisioningMod extends Module
         Loader::loadHelpers($this, ['Html']);
 
         $fields = new ModuleFields();
+
+        if ($this->isTrafficBlockPackage($package)) {
+            return $fields;
+        }
 
         if ($this->shouldAutoBuild($package)) {
             $hostname_field = $fields->label(Language::_('VirtfusionDirectProvisioningMod.option_fields.hostname.label', true), 'hostname');
@@ -3209,7 +3823,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $fields = new ModuleFields();
 
-        if (!$this->shouldAutoBuild($package)) {
+        if ($this->isTrafficBlockPackage($package) || !$this->shouldAutoBuild($package)) {
             return $fields;
         }
 
@@ -3272,7 +3886,12 @@ class VirtfusionDirectProvisioningMod extends Module
                 'virtfusion_password',
                 'virtfusion_ip',
                 'virtfusion-base_ips',
-                'virtfusion_ipv6_cidr'
+                'virtfusion_ipv6_cidr',
+                'virtfusion_parent_server_id',
+                'virtfusion_traffic_block_gb',
+                'virtfusion_traffic_block_start',
+                'virtfusion_traffic_block_end',
+                'virtfusion_traffic_block_id'
             ]
         ];
     }

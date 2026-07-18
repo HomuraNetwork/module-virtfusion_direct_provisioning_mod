@@ -1,7 +1,7 @@
 {
     "name": "homuranetwork/virtfusion_direct_provisioning_mod",
     "description": "A compatibility-focused VirtFusion provisioning module with pre-build, configurable resources, migration, and server management extensions.",
-    "license": "proprietary",
+    "license": "MIT",
     "type": "blesta-module",
     "require": {
         "blesta/composer-installer": "~1.0"

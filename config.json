@@ -1,5 +1,5 @@
 {
-    "version": "2.1.1.4",
+    "version": "2026.07.18",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -32,7 +32,9 @@
         "package": [
             "hypervisor_group_id",
             "default_ipv4",
-            "package_id"
+            "package_id",
+            "virtfusion-service_type",
+            "virtfusion-traffic_block_gb"
         ],
         "service": [
             "virtfusion_server_id",
@@ -40,7 +42,10 @@
             "virtfusion_password",
             "virtfusion_ip",
             "virtfusion-base_ips",
-            "virtfusion_ipv6_cidr"
+            "virtfusion_ipv6_cidr",
+            "virtfusion_parent_server_id",
+            "virtfusion_traffic_block_gb",
+            "virtfusion_traffic_block_end"
         ]
     },
     "logo": {

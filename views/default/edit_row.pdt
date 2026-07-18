@@ -37,6 +37,21 @@ $this->Widget->create($this->_('VirtfusionDirectProvisioningMod.edit_row.box_tit
     </div>
 </div>
 
+<div class="mb-3 form-check">
+    <?php $this->Form->fieldCheckbox(
+        'allow_insecure_tls',
+        'true',
+        ($vars->allow_insecure_tls ?? 'false') === 'true',
+        ['id' => 'allow_insecure_tls', 'class' => 'form-check-input']
+    ); ?>
+    <label for="allow_insecure_tls" class="form-check-label">
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls'); ?>
+    </label>
+    <div class="form-text text-danger">
+        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls.help_text'); ?>
+    </div>
+</div>
+
 <div class="mb-3">
     <label for="hostname" class="form-label">
         <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.hostname'); ?>
