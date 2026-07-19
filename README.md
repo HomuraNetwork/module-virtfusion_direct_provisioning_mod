@@ -59,7 +59,6 @@ The module adds these Module Options:
 | Default IPv4 | Server | Number of IPv4 addresses included by default. |
 | Package ID | Server | VirtFusion package ID used to create the server. |
 | Block Size (GB) | Traffic Block | Default positive whole-number capacity purchased by this package. |
-| Override Configurable Option ID | Traffic Block | Optional numeric Blesta Configurable Option ID whose submitted GB value overrides **Block Size**. |
 
 Auto Build, operating system, backup plan, port speed, and server resource choices belong in Blesta **Configurable Options**, not Module Options.
 
@@ -79,6 +78,7 @@ Configurable Option names use the VirtFusion API field names. The module does no
 | `additionalTraffic` | Quantity or Dropdown | Adds GB to the selected VirtFusion package's base traffic. Ignored when an absolute `traffic` value is supplied. |
 | `backupPlanId` | Dropdown | Backup-plan ID applied after creation and changeable later. Use `0` to remove the plan. |
 | `cpuThrottle` | Quantity or Dropdown | CPU throttle percentage from 0 to 99, applied after creation and changeable later. |
+| `addon_traffic` | Quantity or Dropdown | Traffic Block capacity in GB. For Traffic Block products this overrides `traffic` and the package **Block Size (GB)**. |
 
 `autoBuild` and all Build API options are hidden after service creation. To make a package always build, attach an `autoBuild` option whose only value is `true`. Omit it for a no-build package.
 
@@ -162,7 +162,7 @@ To create a Traffic Block product:
 2. Set **Product Type** to **Traffic Block**.
 3. Enter the package's default **Block Size (GB)**. For example, `1000` displays and provisions as `1 TB`.
 4. Add one-time pricing only.
-5. Optionally create a Quantity or Dropdown Configurable Option and enter its numeric ID in **Override Configurable Option ID**. Its internal name may be customized; when the customer submits a value, that positive whole-number GB value replaces the fixed Block Size.
+5. Optionally add a Quantity or Dropdown Configurable Option named `traffic` or `addon_traffic`. The submitted positive whole-number GB value overrides the fixed Block Size. If both are present, `addon_traffic` takes priority.
 
 Install the separate [Service Extras](https://github.com/HomuraNetwork/plugin-service_extras) plugin to offer the Traffic Block after a server has been created. Create a rule, select the allowed parent server packages, select the product group containing the Traffic Block package, and explicitly add the Traffic Block package to the rule's offered products. The module identifies the action from the package's **Product Type**; no capability name is configured in the plugin.
 

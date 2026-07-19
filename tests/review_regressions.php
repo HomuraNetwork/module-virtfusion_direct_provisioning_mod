@@ -303,16 +303,9 @@ assertSameValue(
 );
 
 $traffic_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
-$traffic_module->PackageOptions = new class {
-    public function get($option_id)
-    {
-        return (int) $option_id === 77 ? (object) ['id' => 77, 'name' => 'customBlockSize'] : false;
-    }
-};
 $traffic_package = (object) ['meta' => (object) [
     'virtfusion-service_type' => 'traffic_block',
-    'traffic_block_gb' => '1000',
-    'traffic_block_option_id' => '77'
+    'traffic_block_gb' => '1000'
 ]];
 assertSameValue(
     1000,
@@ -321,18 +314,34 @@ assertSameValue(
 );
 assertSameValue(
     1500,
-    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['customBlockSize' => '1500']]),
-    'The configured Option ID must resolve its internal name and override the fixed GB value.'
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['traffic' => '1500']]),
+    'The traffic Configurable Option must override the package Traffic Block size.'
 );
 assertSameValue(
-    1000,
-    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['amount' => '2500']]),
-    'Unconfigured option names must not override the package Traffic Block size.'
+    2500,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [
+        $traffic_package,
+        ['traffic' => '1500', 'addon_traffic' => '2500']
+    ]),
+    'The addon_traffic Configurable Option must take priority over traffic.'
+);
+assertSameValue(
+    1500,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [
+        $traffic_package,
+        ['addon_traffic' => null, 'traffic' => '1500']
+    ]),
+    'An empty addon_traffic value must fall through to traffic.'
 );
 assertSameValue(
     null,
-    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['customBlockSize' => '0']]),
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['addon_traffic' => '0']]),
     'An explicitly submitted override must remain a positive whole number.'
+);
+assertSameValue(
+    1000,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['customBlockSize' => '2500']]),
+    'Arbitrary Configurable Option names must not override the package Traffic Block size.'
 );
 assertSameValue('999 GB', callPrivate($traffic_module, 'formatTrafficBlockSize', [999]), 'GB values must remain in GB.');
 assertSameValue('1 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1000]), '1000 GB must display as 1 TB.');
@@ -342,9 +351,9 @@ $traffic_rules = callPrivate($traffic_module, 'getPackageRules', [[
 ]]);
 assertSameValue(true, isset($traffic_rules['meta[traffic_block_gb]']), 'Traffic Block packages must require a fixed GB size.');
 assertSameValue(
-    true,
+    false,
     isset($traffic_rules['meta[traffic_block_option_id]']),
-    'Traffic Block packages must validate the optional override Configurable Option ID.'
+    'Traffic Block packages must use the standard traffic option names instead of a numeric option override.'
 );
 
 $public_label = callPrivate($module, 'publicServiceLabel');

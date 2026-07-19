@@ -93,28 +93,19 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function getTrafficBlockAmount($package, array $config_options = [])
     {
+        foreach (['addon_traffic', 'traffic'] as $option_name) {
+            if (array_key_exists($option_name, $config_options)
+                && $config_options[$option_name] !== null
+                && $config_options[$option_name] !== '') {
+                $amount = $config_options[$option_name];
+                return $this->validateOptionalPositiveInteger($amount) ? (int) $amount : null;
+            }
+        }
+
         $amount = $this->packageMetaValue($package, 'traffic_block_gb');
-        if (!$this->validateOptionalPositiveInteger($amount) || $amount === null || $amount === '') {
-            return null;
-        }
-
-        $option_id = $this->packageMetaValue($package, 'traffic_block_option_id');
-        if (!$this->validateOptionalPositiveInteger($option_id) || $option_id === null || $option_id === '') {
-            return (int) $amount;
-        }
-
-        if (!isset($this->PackageOptions)) {
-            Loader::loadModels($this, ['PackageOptions']);
-        }
-        $option = $this->PackageOptions->get((int) $option_id);
-        $option_name = trim((string) ($option->name ?? ''));
-        if ($option_name === '' || !array_key_exists($option_name, $config_options)
-            || $config_options[$option_name] === '') {
-            return (int) $amount;
-        }
-
-        $override = $config_options[$option_name];
-        return $this->validateOptionalPositiveInteger($override) ? (int) $override : null;
+        return $this->validateOptionalPositiveInteger($amount) && $amount !== null && $amount !== ''
+            ? (int) $amount
+            : null;
     }
 
     private function formatTrafficBlockSize($amount)
@@ -1973,15 +1964,6 @@ class VirtfusionDirectProvisioningMod extends Module
                             true
                         )
                     ]
-                ],
-                'meta[traffic_block_option_id]' => [
-                    'valid' => [
-                        'rule' => ['matches', '/^([1-9][0-9]*)?$/'],
-                        'message' => Language::_(
-                            'VirtfusionDirectProvisioningMod.!error.meta.traffic_block_option_id.valid',
-                            true
-                        )
-                    ]
                 ]
             ];
         }
@@ -2103,23 +2085,6 @@ class VirtfusionDirectProvisioningMod extends Module
         ));
         $fields->setField($traffic_block_gb);
 
-        $traffic_block_option_id = $fields->label(
-            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id', true),
-            'virtfusion_direct_provisioning_mod_traffic_block_option_id'
-        );
-        $traffic_block_option_id->attach(
-            $fields->fieldText(
-                'meta[traffic_block_option_id]',
-                ($vars->meta['traffic_block_option_id'] ?? null),
-                ['id' => 'virtfusion_direct_provisioning_mod_traffic_block_option_id']
-            )
-        );
-        $traffic_block_option_id->attach($fields->tooltip(
-            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id.help_text', true),
-            'virtfusion_direct_provisioning_mod_traffic_block_option_id'
-        ));
-        $fields->setField($traffic_block_option_id);
-
         $fields->setHtml('
             <script type="text/javascript">
                 (function () {
@@ -2130,8 +2095,7 @@ class VirtfusionDirectProvisioningMod extends Module
                         "virtfusion_direct_provisioning_mod_package_id"
                     ];
                     var blockIds = [
-                        "virtfusion_direct_provisioning_mod_traffic_block_gb",
-                        "virtfusion_direct_provisioning_mod_traffic_block_option_id"
+                        "virtfusion_direct_provisioning_mod_traffic_block_gb"
                     ];
                     function setFieldVisible(id, visible) {
                         var field = document.getElementById(id);

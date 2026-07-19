@@ -109,7 +109,6 @@ $lang['VirtfusionDirectProvisioningMod.!error.service_fields.migration'] = 'The 
 $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion action failed unexpectedly. Review the module log for the non-sensitive exception details.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_gb.valid'] = 'Enter a positive whole number for the Traffic Block size in GB.';
-$lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_option_id.valid'] = 'The override Configurable Option ID must be blank or a positive whole number.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'The Traffic Block size must be a positive whole number of GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.server_id'] = 'The parent service does not contain a valid VirtFusion server ID.';
@@ -261,8 +260,6 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default 
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Block Size (GB)';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'The default Traffic Block capacity provisioned by this package.';
-$lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id'] = 'Override Configurable Option ID';
-$lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id.help_text'] = 'Optional. When this Configurable Option submits a value, that positive whole-number GB value overrides Block Size. The option internal name may be customized.';
 
 // Service Extras
 $lang['VirtfusionDirectProvisioningMod.service_extra.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the service; VirtFusion does not provide a reservation API.';

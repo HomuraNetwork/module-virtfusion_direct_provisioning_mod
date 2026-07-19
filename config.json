@@ -1,5 +1,5 @@
 {
-    "version": "2026.07.19.3",
+    "version": "2026.07.19.4",
     "name": "VirtfusionDirectProvisioningMod.name",
     "description": "VirtfusionDirectProvisioningMod.description",
     "authors": [
@@ -34,7 +34,6 @@
             "default_ipv4",
             "package_id",
             "traffic_block_gb",
-            "traffic_block_option_id",
             "virtfusion-service_type"
         ],
         "service": [
