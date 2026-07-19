@@ -16,9 +16,6 @@ if ($server_available && isset($server_info->memory) && is_numeric($server_info-
 $latest_backup = $server_available && !empty($server_info->latest_backup->created)
     ? $this->Date->cast($server_info->latest_backup->created, 'date_time')
     : $empty_value;
-$traffic_reset = $server_available && !empty($server_info->traffic_reset)
-    ? $this->Date->cast($server_info->traffic_reset, 'date_time')
-    : $empty_value;
 ?>
 
 <div id="tabManage">
@@ -132,7 +129,7 @@ $traffic_reset = $server_available && !empty($server_info->traffic_reset)
                 <div class="card-body">
                     <div class="d-flex justify-content-between gap-3 mb-2">
                         <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_used'); ?></span>
-                        <strong><?php echo $this->Html->safe($server_info->traffic_used ?? 0); ?> / <?php echo $this->Html->safe($server_info->traffic ?? $empty_value); ?> GB</strong>
+                        <strong><?php echo $this->Html->safe($server_info->traffic_used ?? 0); ?> / <?php echo $this->Html->safe($server_info->traffic_total ?? $empty_value); ?> GB</strong>
                     </div>
                     <?php if (isset($server_info->traffic_percent)) { ?>
                         <div class="progress mb-4" style="height: 0.65rem;">
@@ -141,12 +138,18 @@ $traffic_reset = $server_available && !empty($server_info->traffic_reset)
                     <?php } ?>
                     <dl class="mb-0">
                         <div class="d-flex justify-content-between gap-3 mb-3">
+                            <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_server'); ?></dt>
+                            <dd class="mb-0"><?php echo $this->Html->safe($server_info->traffic_server ?? $empty_value); ?> GB</dd>
+                        </div>
+                        <div class="d-flex justify-content-between gap-3 mb-3">
                             <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_blocks'); ?></dt>
                             <dd class="mb-0"><?php echo $this->Html->safe($server_info->traffic_blocks ?? 0); ?> GB</dd>
                         </div>
                         <div class="d-flex justify-content-between gap-3">
                             <dt class="text-muted fw-normal"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_resets'); ?></dt>
-                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($traffic_reset); ?></dd>
+                            <dd class="mb-0 text-end"><?php echo $this->Html->safe($server_available && !empty($server_info->traffic_reset)
+                                ? $this->Date->cast($server_info->traffic_reset, 'date')
+                                : $empty_value); ?></dd>
                         </div>
                     </dl>
                 </div>

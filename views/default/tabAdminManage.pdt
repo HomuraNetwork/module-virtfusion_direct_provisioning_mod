@@ -50,11 +50,13 @@
                 <h4><?php echo $this->Html->safe($server_info->disk ?? 'None'); ?> GB</h4>
             </div>
             <div class="col-md-6 service-info">
-                <label>Transfer</label>
-                <h4><?php echo $this->Html->safe($server_info->traffic ?? 'None'); ?> GB</h4>
+                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_total', true)); ?></label>
+                <h4><?php echo $this->Html->safe($server_info->traffic_total ?? 'None'); ?> GB</h4>
+                <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_server', true)); ?></label>
+                <h4><?php echo $this->Html->safe($server_info->traffic_server ?? 'None'); ?> GB</h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_resets', true)); ?></label>
                 <h4><?php echo !empty($server_info->traffic_reset)
-                    ? $this->Html->safe($this->Date->cast($server_info->traffic_reset, 'date_time'))
+                    ? $this->Html->safe($this->Date->cast($server_info->traffic_reset, 'date'))
                     : 'None'; ?></h4>
                 <label><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.service_info.traffic_used', true)); ?></label>
                 <h4><?php echo $this->Html->safe($server_info->traffic_used ?? 'None'); ?> GB</h4>

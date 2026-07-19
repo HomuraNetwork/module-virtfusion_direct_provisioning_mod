@@ -3839,7 +3839,9 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info->cpu = $data->data->settings->resources->cpuCores ?? null;
         $server_info->disk = $data->data->settings->resources->storage ?? null;
         $server_info->memory = $data->data->settings->resources->memory ?? null;
-        $server_info->traffic = $data->data->traffic->public->currentPeriod->limit ?? ($data->data->settings->resources->traffic ?? null);
+        $server_info->traffic_total = $data->data->traffic->public->currentPeriod->limit ?? null;
+        $server_info->traffic_server = $data->data->settings->resources->traffic ?? null;
+        $server_info->traffic = $server_info->traffic_total ?? $server_info->traffic_server;
         $server_info->traffic_reset = $data->data->traffic->public->currentPeriod->end ?? null;
         $server_info->ipv4 = $data->data->network->interfaces[0]->ipv4[0]->address ?? null;
         $server_info->ipv6 = $data->data->network->interfaces[0]->ipv6[0]->subnet ?? null;
@@ -3877,15 +3879,22 @@ class VirtfusionDirectProvisioningMod extends Module
                 $server_info->traffic_reset
             );
             if ($current_month) {
-                $server_info->traffic = $current_month->limit ?? $server_info->traffic;
+                $server_info->traffic_server = $current_month->limit ?? $server_info->traffic_server;
                 $server_info->traffic_reset = $current_month->end ?? $server_info->traffic_reset;
                 $server_info->traffic_used = round(((float) ($current_month->total ?? 0)) / 1000000000, 2);
                 $server_info->traffic_blocks = 0;
                 foreach (($current_month->blocks ?? []) as $block) {
                     $server_info->traffic_blocks += (int) ($block->traffic ?? 0);
                 }
-                $server_info->traffic_percent = (int) $server_info->traffic > 0
-                    ? min(100, round(($server_info->traffic_used / (int) $server_info->traffic) * 100, 1))
+                $calculated_total = (int) $server_info->traffic_server
+                    + (int) $server_info->traffic_blocks;
+                $server_info->traffic_total = max(
+                    (int) ($server_info->traffic_total ?? 0),
+                    $calculated_total
+                );
+                $server_info->traffic = $server_info->traffic_total;
+                $server_info->traffic_percent = (int) $server_info->traffic_total > 0
+                    ? min(100, round(($server_info->traffic_used / (int) $server_info->traffic_total) * 100, 1))
                     : null;
             }
         }

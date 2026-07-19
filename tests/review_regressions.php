@@ -415,6 +415,20 @@ assertSameValue(
 );
 assertSameValue(
     true,
+    strpos($client_manage_template, 'traffic_total') !== false
+        && strpos($client_manage_template, 'traffic_server') !== false
+        && strpos($client_manage_template, "traffic_reset, 'date'") !== false,
+    'The client traffic panel must show total and server traffic with a date-only reset.'
+);
+assertSameValue(
+    true,
+    strpos($admin_manage_template, 'traffic_total') !== false
+        && strpos($admin_manage_template, 'traffic_server') !== false
+        && strpos($admin_manage_template, "traffic_reset, 'date'") !== false,
+    'The admin traffic panel must show total and server traffic with a date-only reset.'
+);
+assertSameValue(
+    true,
     strpos($language_source, 'valid until the traffic reset date shown above') !== false
         && strpos($language_source, 'reservation API') === false,
     'Traffic Block preview guidance must describe the customer-visible reset date without API details.'
