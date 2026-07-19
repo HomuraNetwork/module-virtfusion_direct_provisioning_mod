@@ -16,7 +16,6 @@ class VirtfusionDirectProvisioningMod extends Module
     private const BACKUP_PLAN_OPTION = 'backupPlanId';
     private const CPU_THROTTLE_OPTION = 'cpuThrottle';
     private const TRAFFIC_BLOCK_PRODUCT_TYPE = 'traffic_block';
-    private const TRAFFIC_BLOCK_AMOUNT_OPTION = 'amount';
     private const TRAFFIC_BLOCK_OPERATION_FIELD = 'vf_traffic_block_operation';
     private const RESOURCE_CHANGE_OPERATION_FIELD = 'vf_resource_change_operation';
     private const PRIMARY_IPV4_FIELD = 'virtfusion_primary_ipv4';
@@ -84,12 +83,54 @@ class VirtfusionDirectProvisioningMod extends Module
         return $row && $this->boolValue($row->meta->traffic_blocks_enabled ?? false);
     }
 
-    private function getTrafficBlockAmount(array $config_options = [])
+    private function packageMetaValue($package, $key)
     {
-        $amount = $config_options[self::TRAFFIC_BLOCK_AMOUNT_OPTION] ?? null;
-        return $amount !== null && $amount !== '' && $this->validateOptionalPositiveInteger($amount)
-            ? (int) $amount
-            : null;
+        $meta = $package->meta ?? null;
+        if (is_array($meta)) {
+            return $meta[$key] ?? null;
+        }
+        if (is_object($meta)) {
+            return $meta->{$key} ?? null;
+        }
+
+        return null;
+    }
+
+    private function getTrafficBlockAmount($package, array $config_options = [])
+    {
+        $amount = $this->packageMetaValue($package, 'traffic_block_gb');
+        if (!$this->validateOptionalPositiveInteger($amount) || $amount === null || $amount === '') {
+            return null;
+        }
+
+        $option_id = $this->packageMetaValue($package, 'traffic_block_option_id');
+        if (!$this->validateOptionalPositiveInteger($option_id) || $option_id === null || $option_id === '') {
+            return (int) $amount;
+        }
+
+        if (!isset($this->PackageOptions)) {
+            Loader::loadModels($this, ['PackageOptions']);
+        }
+        $option = $this->PackageOptions->get((int) $option_id);
+        $option_name = trim((string) ($option->name ?? ''));
+        if ($option_name === '' || !array_key_exists($option_name, $config_options)
+            || $config_options[$option_name] === '') {
+            return (int) $amount;
+        }
+
+        $override = $config_options[$option_name];
+        return $this->validateOptionalPositiveInteger($override) ? (int) $override : null;
+    }
+
+    private function formatTrafficBlockSize($amount)
+    {
+        $amount = (int) $amount;
+        if ($amount < 1000) {
+            return $amount . ' GB';
+        }
+
+        $terabytes = rtrim(rtrim(number_format($amount / 1000, 3, '.', ''), '0'), '.');
+        return $terabytes . ' TB';
     }
 
     private function getIpv4Quantity($package, array $config_options = [])
@@ -637,7 +678,7 @@ class VirtfusionDirectProvisioningMod extends Module
     private function provisionTrafficBlock($package, array $vars, $parent_service)
     {
         $row = $this->getModuleRow();
-        $amount = $this->getTrafficBlockAmount($vars['configoptions'] ?? []);
+        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
         if (!$row || !$this->trafficBlocksEnabled($row)) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -916,7 +957,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return;
         }
 
-        $amount = $this->getTrafficBlockAmount($config_options);
+        $amount = $this->getTrafficBlockAmount($extra_package, $config_options);
         if (!$amount || $amount < 1) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -950,7 +991,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return [
-            'traffic_block' => $amount . ' GB',
+            'traffic_block' => $this->formatTrafficBlockSize($amount),
             'valid_from' => $this->Date->cast($period['starts_at'], 'date_time'),
             'valid_until' => $this->Date->cast($period['ends_at'], 'date_time'),
             'notice' => Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
@@ -1405,7 +1446,11 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         if ($traffic_block_gb !== null) {
-            return Language::_('VirtfusionDirectProvisioningMod.service_name.traffic_block', true, $traffic_block_gb);
+            return Language::_(
+                'VirtfusionDirectProvisioningMod.service_name.traffic_block',
+                true,
+                $this->formatTrafficBlockSize($traffic_block_gb)
+            );
         }
 
         return $public_label ?: Language::_('VirtfusionDirectProvisioningMod.service_name.server', true);
@@ -1887,7 +1932,25 @@ class VirtfusionDirectProvisioningMod extends Module
 
         if ($service_type === self::TRAFFIC_BLOCK_PRODUCT_TYPE) {
             return [
-                'meta[virtfusion-service_type]' => $service_type_rule
+                'meta[virtfusion-service_type]' => $service_type_rule,
+                'meta[traffic_block_gb]' => [
+                    'valid' => [
+                        'rule' => ['matches', '/^[1-9][0-9]*$/'],
+                        'message' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.meta.traffic_block_gb.valid',
+                            true
+                        )
+                    ]
+                ],
+                'meta[traffic_block_option_id]' => [
+                    'valid' => [
+                        'rule' => ['matches', '/^([1-9][0-9]*)?$/'],
+                        'message' => Language::_(
+                            'VirtfusionDirectProvisioningMod.!error.meta.traffic_block_option_id.valid',
+                            true
+                        )
+                    ]
+                ]
             ];
         }
 
@@ -1991,6 +2054,40 @@ class VirtfusionDirectProvisioningMod extends Module
         );
         $fields->setField($package_id);
 
+        $traffic_block_gb = $fields->label(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_gb'
+        );
+        $traffic_block_gb->attach(
+            $fields->fieldText(
+                'meta[traffic_block_gb]',
+                ($vars->meta['traffic_block_gb'] ?? null),
+                ['id' => 'virtfusion_direct_provisioning_mod_traffic_block_gb']
+            )
+        );
+        $traffic_block_gb->attach($fields->tooltip(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_gb'
+        ));
+        $fields->setField($traffic_block_gb);
+
+        $traffic_block_option_id = $fields->label(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_option_id'
+        );
+        $traffic_block_option_id->attach(
+            $fields->fieldText(
+                'meta[traffic_block_option_id]',
+                ($vars->meta['traffic_block_option_id'] ?? null),
+                ['id' => 'virtfusion_direct_provisioning_mod_traffic_block_option_id']
+            )
+        );
+        $traffic_block_option_id->attach($fields->tooltip(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_option_id.help_text', true),
+            'virtfusion_direct_provisioning_mod_traffic_block_option_id'
+        ));
+        $fields->setField($traffic_block_option_id);
+
         $fields->setHtml('
             <script type="text/javascript">
                 (function () {
@@ -2000,13 +2097,24 @@ class VirtfusionDirectProvisioningMod extends Module
                         "virtfusion_direct_provisioning_mod_default_ipv4",
                         "virtfusion_direct_provisioning_mod_package_id"
                     ];
+                    var blockIds = [
+                        "virtfusion_direct_provisioning_mod_traffic_block_gb",
+                        "virtfusion_direct_provisioning_mod_traffic_block_option_id"
+                    ];
+                    function setFieldVisible(id, visible) {
+                        var field = document.getElementById(id);
+                        var container = field ? field.closest(".mb-3, .form-group") : null;
+                        if (container) {
+                            container.style.display = visible ? "" : "none";
+                        }
+                    }
                     function updateVirtFusionProductType() {
                         var isBlock = type && type.value === "traffic_block";
                         serverIds.forEach(function (id) {
-                            var field = document.getElementById(id);
-                            if (field && field.closest(".mb-3")) {
-                                field.closest(".mb-3").style.display = isBlock ? "none" : "";
-                            }
+                            setFieldVisible(id, !isBlock);
+                        });
+                        blockIds.forEach(function (id) {
+                            setFieldVisible(id, isBlock);
                         });
                     }
                     if (type) {
@@ -2988,7 +3096,7 @@ class VirtfusionDirectProvisioningMod extends Module
             return false;
         }
 
-        $amount = $this->getTrafficBlockAmount($vars['configoptions'] ?? []);
+        $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
         if (!$amount || $amount < 1) {
             $this->Input->setErrors([
                 'traffic_block' => [
@@ -3508,7 +3616,14 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->set('service', $service);
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $this->view->set('service_fields', $service_fields);
-        if (!$this->isTrafficBlockPackage($package)) {
+        if ($this->isTrafficBlockPackage($package)) {
+            $this->view->set(
+                'traffic_block_size',
+                isset($service_fields->virtfusion_traffic_block_gb)
+                    ? $this->formatTrafficBlockSize($service_fields->virtfusion_traffic_block_gb)
+                    : null
+            );
+        } else {
             $this->view->set('ip_data', $this->getClientIpAddresses(
                 $package,
                 $service,
@@ -4960,7 +5075,14 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->set('service', $service);
         $service_fields = $this->normalizeLegacyServiceFields($this->serviceFieldsToObject($service->fields));
         $this->view->set('service_fields', $service_fields);
-        if (!$this->isTrafficBlockPackage($package)) {
+        if ($this->isTrafficBlockPackage($package)) {
+            $this->view->set(
+                'traffic_block_size',
+                isset($service_fields->virtfusion_traffic_block_gb)
+                    ? $this->formatTrafficBlockSize($service_fields->virtfusion_traffic_block_gb)
+                    : null
+            );
+        } else {
             $this->view->set('ip_data', $this->getClientIpAddresses(
                 $package,
                 $service,

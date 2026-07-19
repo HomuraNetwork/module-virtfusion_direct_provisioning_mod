@@ -53,14 +53,16 @@ Create a Blesta package and select this module. Blesta displays its normal **Mod
 
 The module adds these Module Options:
 
-| Module Option | Value |
-| --- | --- |
-| Product Type | Select **Server** for a normal VirtFusion server. |
-| Hypervisor Group ID | Default VirtFusion hypervisor group ID. |
-| Default IPv4 | Number of IPv4 addresses included by default. |
-| Package ID | VirtFusion package ID used to create the server. |
+| Module Option | Applies to | Value |
+| --- | --- | --- |
+| Product Type | All packages | Select **VirtFusion Server** or **Traffic Block**. |
+| Hypervisor Group ID | Server | Default VirtFusion hypervisor group ID. |
+| Default IPv4 | Server | Number of IPv4 addresses included by default. |
+| Package ID | Server | VirtFusion package ID used to create the server. |
+| Block Size (GB) | Traffic Block | Default positive whole-number capacity purchased by this package. |
+| Override Configurable Option ID | Traffic Block | Optional numeric Blesta Configurable Option ID whose submitted GB value overrides **Block Size**. |
 
-`Product Type` is the only new package-mode field. Auto Build, operating system, backup plan, port speed, and resource choices belong in Blesta **Configurable Options**, not Module Options.
+Auto Build, operating system, backup plan, port speed, and server resource choices belong in Blesta **Configurable Options**, not Module Options.
 
 ## Configurable Options
 
@@ -159,15 +161,16 @@ To create a Traffic Block product:
 
 1. Create another Blesta package using this module.
 2. Set **Product Type** to **Traffic Block**.
-3. Add one-time pricing only.
-4. Add a Configurable Option named `amount` whose value is the number of GB to purchase.
-5. Enable **Traffic Block Purchases** on the parent server's module row.
+3. Enter the package's default **Block Size (GB)**. For example, `1000` displays and provisions as `1 TB`.
+4. Add one-time pricing only.
+5. Optionally create a Quantity or Dropdown Configurable Option and enter its numeric ID in **Override Configurable Option ID**. Its internal name may be customized; when the customer submits a value, that positive whole-number GB value replaces the fixed Block Size.
+6. Enable **Traffic Block Purchases** on the parent server's module row.
 
 Install the separate [Service Extras](https://github.com/HomuraNetwork/plugin-service_extras) plugin to offer the Traffic Block after a server has been created. Create a rule, select the allowed parent server packages, select the product group containing the Traffic Block package, and explicitly add the Traffic Block package to the rule's offered products. The module identifies the action from the package's **Product Type**; no capability name is configured in the plugin.
 
 The purchase confirmation shows the current VirtFusion traffic period end date. Service Extras writes that time to the child service's scheduled cancellation date. If the VirtFusion period changes before payment, the module updates the service to the actual activation-period end before submitting the Traffic Block. Blesta then closes the child service through its normal cancellation automation. The module does not attempt to remove the remote Traffic Block because VirtFusion already controls its lifetime through the traffic period.
 
-Pricing is defined by the Blesta package and Configurable Option. The module does not calculate the price.
+Pricing is defined by the Blesta package and optional Configurable Option. The module does not calculate the price. The created service name includes the final capacity, such as **100 GB Traffic Block** or **1 TB Traffic Block**.
 
 ## Service Manage page
 

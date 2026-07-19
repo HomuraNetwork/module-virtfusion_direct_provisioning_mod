@@ -4,9 +4,7 @@
     <table class="table table-curved table-striped">
         <tr>
             <td><?php $this->_('VirtfusionDirectProvisioningMod.traffic_block_info.amount'); ?></td>
-            <td><?php echo isset($service_fields->virtfusion_traffic_block_gb)
-                ? $this->Html->safe($service_fields->virtfusion_traffic_block_gb . ' GB')
-                : null; ?></td>
+            <td><?php echo isset($traffic_block_size) ? $this->Html->safe($traffic_block_size) : null; ?></td>
         </tr>
         <?php if (!empty($is_admin)) { ?>
         <tr>

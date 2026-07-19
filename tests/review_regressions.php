@@ -20,6 +20,10 @@ class Language
 {
     public static function _($key)
     {
+        $arguments = func_get_args();
+        if ($key === 'VirtfusionDirectProvisioningMod.service_name.traffic_block') {
+            return ($arguments[2] ?? '') . ' Traffic Block';
+        }
         return $key;
     }
 }
@@ -298,15 +302,49 @@ assertSameValue(
     'The absolute ipv4 API field must take precedence over additionalIpv4.'
 );
 
+$traffic_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$traffic_module->PackageOptions = new class {
+    public function get($option_id)
+    {
+        return (int) $option_id === 77 ? (object) ['id' => 77, 'name' => 'customBlockSize'] : false;
+    }
+};
+$traffic_package = (object) ['meta' => (object) [
+    'virtfusion-service_type' => 'traffic_block',
+    'traffic_block_gb' => '1000',
+    'traffic_block_option_id' => '77'
+]];
 assertSameValue(
-    100,
-    callPrivate($module, 'getTrafficBlockAmount', [['amount' => '100']]),
-    'Traffic Block amount must use the API request field name.'
+    1000,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, []]),
+    'A Traffic Block package must provision its fixed GB value without a Configurable Option.'
+);
+assertSameValue(
+    1500,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['customBlockSize' => '1500']]),
+    'The configured Option ID must resolve its internal name and override the fixed GB value.'
+);
+assertSameValue(
+    1000,
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['amount' => '2500']]),
+    'Unconfigured option names must not override the package Traffic Block size.'
 );
 assertSameValue(
     null,
-    callPrivate($module, 'getTrafficBlockAmount', [['traffic_block_gb' => '100']]),
-    'Legacy Traffic Block option names must not be accepted.'
+    callPrivate($traffic_module, 'getTrafficBlockAmount', [$traffic_package, ['customBlockSize' => '0']]),
+    'An explicitly submitted override must remain a positive whole number.'
+);
+assertSameValue('999 GB', callPrivate($traffic_module, 'formatTrafficBlockSize', [999]), 'GB values must remain in GB.');
+assertSameValue('1 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1000]), '1000 GB must display as 1 TB.');
+assertSameValue('1.5 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1500]), 'TB display must retain useful decimals.');
+$traffic_rules = callPrivate($traffic_module, 'getPackageRules', [[
+    'meta' => ['virtfusion-service_type' => 'traffic_block']
+]]);
+assertSameValue(true, isset($traffic_rules['meta[traffic_block_gb]']), 'Traffic Block packages must require a fixed GB size.');
+assertSameValue(
+    true,
+    isset($traffic_rules['meta[traffic_block_option_id]']),
+    'Traffic Block packages must validate the optional override Configurable Option ID.'
 );
 
 $public_label = callPrivate($module, 'publicServiceLabel');
@@ -377,6 +415,14 @@ $labeled_service = (object) ['fields' => [
     (object) ['key' => 'virtfusion_public_label', 'value' => $public_label]
 ]];
 assertSameValue($public_label, $module->getServiceName($labeled_service), 'New services must use the opaque public label.');
+$traffic_service = (object) ['fields' => [
+    (object) ['key' => 'virtfusion_traffic_block_gb', 'value' => '1000']
+]];
+assertSameValue(
+    '1 TB Traffic Block',
+    $traffic_module->getServiceName($traffic_service),
+    'Traffic Block service names must include the normalized purchased capacity.'
+);
 
 $blocks = [
     (object) ['id' => 1, 'month' => 5, 'traffic' => 100, 'added' => '2026-07-18T01:00:00Z'],
