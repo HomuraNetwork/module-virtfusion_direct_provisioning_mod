@@ -58,8 +58,6 @@ $lang['VirtfusionDirectProvisioningMod.row_meta.hostname'] = 'Hostname';
 $lang['VirtfusionDirectProvisioningMod.row_meta.api_token'] = 'API Token';
 $lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url'] = 'Admin Server URL Template';
 $lang['VirtfusionDirectProvisioningMod.row_meta.admin_server_url.help_text'] = 'Used for the admin-only direct server link without creating a client login token. HTTPS and the configured VirtFusion hostname are required. Available placeholders: {hostname}, {server_id}.';
-$lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled'] = 'Enable Traffic Block Purchases';
-$lang['VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled.help_text'] = 'Disabled by default. When enabled, the optional Traffic Block purchase integration may offer one-time blocks for active servers on this module row.';
 $lang['VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls'] = 'Allow insecure TLS certificates';
 $lang['VirtfusionDirectProvisioningMod.row_meta.allow_insecure_tls.help_text'] = 'Not recommended. Disables certificate verification only for this module row and should be used only with a trusted self-signed VirtFusion endpoint.';
 
@@ -112,7 +110,6 @@ $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion act
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_gb.valid'] = 'Enter a positive whole number for the Traffic Block size in GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_option_id.valid'] = 'The override Configurable Option ID must be blank or a positive whole number.';
-$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.disabled'] = 'Traffic Block purchases are disabled for this VirtFusion server row.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'The Traffic Block size must be a positive whole number of GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.server_id'] = 'The parent service does not contain a valid VirtFusion server ID.';

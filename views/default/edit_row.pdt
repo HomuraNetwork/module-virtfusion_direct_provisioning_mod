@@ -24,21 +24,6 @@ $this->Widget->create($this->_('VirtfusionDirectProvisioningMod.edit_row.box_tit
 
 <div class="mb-3 form-check">
     <?php $this->Form->fieldCheckbox(
-        'traffic_blocks_enabled',
-        'true',
-        ($vars->traffic_blocks_enabled ?? 'false') === 'true',
-        ['id' => 'traffic_blocks_enabled', 'class' => 'form-check-input']
-    ); ?>
-    <label for="traffic_blocks_enabled" class="form-check-label">
-        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled'); ?>
-    </label>
-    <div class="form-text">
-        <?php $this->_('VirtfusionDirectProvisioningMod.row_meta.traffic_blocks_enabled.help_text'); ?>
-    </div>
-</div>
-
-<div class="mb-3 form-check">
-    <?php $this->Form->fieldCheckbox(
         'allow_insecure_tls',
         'true',
         ($vars->allow_insecure_tls ?? 'false') === 'true',

@@ -78,11 +78,6 @@ class VirtfusionDirectProvisioningMod extends Module
         return ($package->meta->{'virtfusion-service_type'} ?? 'server') === self::TRAFFIC_BLOCK_PRODUCT_TYPE;
     }
 
-    private function trafficBlocksEnabled($row)
-    {
-        return $row && $this->boolValue($row->meta->traffic_blocks_enabled ?? false);
-    }
-
     private function packageMetaValue($package, $key)
     {
         $meta = $package->meta ?? null;
@@ -679,10 +674,10 @@ class VirtfusionDirectProvisioningMod extends Module
     {
         $row = $this->getModuleRow();
         $amount = $this->getTrafficBlockAmount($package, $vars['configoptions'] ?? []);
-        if (!$row || !$this->trafficBlocksEnabled($row)) {
+        if (!$row) {
             $this->Input->setErrors([
-                'traffic_block' => [
-                    'disabled' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.disabled', true)
+                'module_row' => [
+                    'missing' => Language::_('VirtfusionDirectProvisioningMod.!error.module_row.missing', true)
                 ]
             ]);
             return;
@@ -917,21 +912,9 @@ class VirtfusionDirectProvisioningMod extends Module
 
     public function getServiceExtraDefinition($parent_package, $parent_service, $extra_package)
     {
-        $row = $this->getModuleRow();
         if (!$this->isTrafficBlockPackage($extra_package)
             || $this->isTrafficBlockPackage($parent_package)
-            || (int) ($parent_package->module_id ?? 0) !== (int) ($extra_package->module_id ?? 0)
-            || !$this->trafficBlocksEnabled($row)
-            || !$parent_service
-            || ($parent_service->status ?? null) !== 'active'
-            || (int) ($row->id ?? 0) !== (int) ($parent_service->module_row_id ?? 0)) {
-            return [];
-        }
-
-        $fields = $this->normalizeLegacyServiceFields(
-            $this->serviceFieldsToObject($parent_service->fields ?? [])
-        );
-        if (empty($fields->virtfusion_server_id)) {
+            || (int) ($parent_package->module_id ?? 0) !== (int) ($extra_package->module_id ?? 0)) {
             return [];
         }
 
@@ -941,19 +924,50 @@ class VirtfusionDirectProvisioningMod extends Module
         ];
     }
 
+    public function getServiceExtraAvailability(
+        $parent_package,
+        $parent_service,
+        $extra_package,
+        array $config_options = []
+    ) {
+        $unavailable = function ($group, $key, $message) {
+            $this->Input->setErrors([$group => [$key => $message]]);
+            return ['available' => false, 'definition' => [], 'review' => []];
+        };
+
+        $definition = $this->getServiceExtraDefinition(
+            $parent_package,
+            $parent_service,
+            $extra_package
+        );
+        if (empty($definition)) {
+            return $unavailable(
+                'service_extra',
+                'package',
+                Language::_('VirtfusionDirectProvisioningMod.!error.service_extra.package', true)
+            );
+        }
+
+        return [
+            'available' => true,
+            'definition' => $definition,
+            'review' => []
+        ];
+    }
+
     public function previewServiceExtra(
         $parent_package,
         $parent_service,
         $extra_package,
         array $config_options = []
     ) {
-        $definition = $this->getServiceExtraDefinition($parent_package, $parent_service, $extra_package);
-        if (!$definition) {
-            $this->Input->setErrors([
-                'service_extra' => [
-                    'package' => Language::_('VirtfusionDirectProvisioningMod.!error.service_extra.package', true)
-                ]
-            ]);
+        $availability = $this->getServiceExtraAvailability(
+            $parent_package,
+            $parent_service,
+            $extra_package,
+            $config_options
+        );
+        if (empty($availability['available'])) {
             return;
         }
 
@@ -970,7 +984,27 @@ class VirtfusionDirectProvisioningMod extends Module
         $fields = $this->normalizeLegacyServiceFields(
             $this->serviceFieldsToObject($parent_service->fields ?? [])
         );
-        $api = $this->getApiFromRow($this->getModuleRow());
+        if (!is_numeric($fields->virtfusion_server_id ?? null)
+            || (int) $fields->virtfusion_server_id < 1) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'server_id' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.server_id', true)
+                ]
+            ]);
+            return;
+        }
+
+        $row = $this->getModuleRow();
+        if (!$row) {
+            $this->Input->setErrors([
+                'module_row' => [
+                    'missing' => Language::_('VirtfusionDirectProvisioningMod.!error.module_row.missing', true)
+                ]
+            ]);
+            return;
+        }
+
+        $api = $this->getApiFromRow($row);
         $api->loadCommand('virtfusion_server');
         $server_api = new VirtfusionServer($api);
         $period = $this->getTrafficBlockPeriod($server_api, $fields->virtfusion_server_id);
@@ -1595,13 +1629,12 @@ class VirtfusionDirectProvisioningMod extends Module
             'hostname',
             'api_token',
             'admin_server_url',
-            'traffic_blocks_enabled',
             'allow_insecure_tls'
         ];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = ['traffic_blocks_enabled', 'allow_insecure_tls'];
+        $checkbox_fields = ['allow_insecure_tls'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {
@@ -1649,13 +1682,12 @@ class VirtfusionDirectProvisioningMod extends Module
             'hostname',
             'api_token',
             'admin_server_url',
-            'traffic_blocks_enabled',
             'allow_insecure_tls'
         ];
         $encrypted_fields = ['api_token'];
 
         // Set unset checkboxes
-        $checkbox_fields = ['traffic_blocks_enabled', 'allow_insecure_tls'];
+        $checkbox_fields = ['allow_insecure_tls'];
 
         foreach ($checkbox_fields as $checkbox_field) {
             if (!isset($vars[$checkbox_field])) {

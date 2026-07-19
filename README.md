@@ -42,7 +42,6 @@ Open the installed module and add a server with the following settings:
 | Hostname | VirtFusion hostname without `https://`, for example `vf.example.com`. |
 | API Token | VirtFusion API token. |
 | Admin Server URL Template | Optional admin-only server link. The default is `https://{hostname}/admin/servers/{server_id}`. |
-| Enable Traffic Block Purchases | Enables optional one-time Traffic Block products for services on this server. |
 | Allow insecure TLS certificates | Disables certificate verification for this server. Use only for a trusted self-signed installation. |
 
 Saving the server checks the API connection.
@@ -164,9 +163,10 @@ To create a Traffic Block product:
 3. Enter the package's default **Block Size (GB)**. For example, `1000` displays and provisions as `1 TB`.
 4. Add one-time pricing only.
 5. Optionally create a Quantity or Dropdown Configurable Option and enter its numeric ID in **Override Configurable Option ID**. Its internal name may be customized; when the customer submits a value, that positive whole-number GB value replaces the fixed Block Size.
-6. Enable **Traffic Block Purchases** on the parent server's module row.
 
 Install the separate [Service Extras](https://github.com/HomuraNetwork/plugin-service_extras) plugin to offer the Traffic Block after a server has been created. Create a rule, select the allowed parent server packages, select the product group containing the Traffic Block package, and explicitly add the Traffic Block package to the rule's offered products. The module identifies the action from the package's **Product Type**; no capability name is configured in the plugin.
+
+Service Extras displays the selected Traffic Block products before calling this module. When the customer requests a purchase preview, the module confirms that the parent package is a VirtFusion Server product, validates the selected capacity and billing period, and reads the current VirtFusion traffic period for the review.
 
 The purchase confirmation shows the current VirtFusion traffic period end date. Service Extras writes that time to the child service's scheduled cancellation date. If the VirtFusion period changes before payment, the module updates the service to the actual activation-period end before submitting the Traffic Block. Blesta then closes the child service through its normal cancellation automation. The module does not attempt to remove the remote Traffic Block because VirtFusion already controls its lifetime through the traffic period.
 

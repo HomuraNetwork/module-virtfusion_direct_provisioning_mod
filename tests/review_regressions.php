@@ -376,6 +376,19 @@ assertSameValue(
     'The module must derive a Service Extra definition from the selected package Product Type.'
 );
 assertSameValue(
+    true,
+    strpos($module_source, 'public function getServiceExtraAvailability') !== false
+        && strpos($module_source, "'available' => false") !== false
+        && strpos($module_source, "'available' => true") !== false,
+    'Traffic Block compatibility must be checked by the module during the purchase preview.'
+);
+assertSameValue(
+    false,
+    strpos($module_source, 'trafficBlocksEnabled') !== false
+        || strpos($module_source, "'traffic_blocks_enabled'") !== false,
+    'VirtFusion Server products must not require a separate Traffic Block module-row switch.'
+);
+assertSameValue(
     false,
     strpos($module_source, 'public function getServiceExtraCapabilities') !== false,
     'The module must not require an administrator-selected capability name.'
