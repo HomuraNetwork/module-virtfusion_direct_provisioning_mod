@@ -379,6 +379,15 @@ assertSameValue(
     'Invalid module expiry must not be passed to the Service Extras plugin.'
 );
 $module_source = file_get_contents(dirname(__DIR__) . '/virtfusion_direct_provisioning_mod.php');
+$language_source = file_get_contents(
+    dirname(__DIR__) . '/language/en_us/virtfusion_direct_provisioning_mod.php'
+);
+assertSameValue(
+    true,
+    strpos($language_source, 'valid until the traffic reset date shown above') !== false
+        && strpos($language_source, 'reservation API') === false,
+    'Traffic Block preview guidance must describe the customer-visible reset date without API details.'
+);
 assertSameValue(
     true,
     strpos($module_source, 'public function getServiceExtraDefinition') !== false,

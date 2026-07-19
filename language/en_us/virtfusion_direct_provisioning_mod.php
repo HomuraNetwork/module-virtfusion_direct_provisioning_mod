@@ -262,7 +262,7 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Bloc
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'The default Traffic Block capacity provisioned by this package.';
 
 // Service Extras
-$lang['VirtfusionDirectProvisioningMod.service_extra.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the service; VirtFusion does not provide a reservation API.';
+$lang['VirtfusionDirectProvisioningMod.service_extra.period_notice'] = 'This is a preview. Once activated, the Traffic Block will remain valid until the traffic reset date shown above.';
 
 // Option Fields
 $lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'ipv4';
