@@ -412,6 +412,19 @@ assertSameValue(
     strpos($module_source, "'_service_extra' => [") !== false,
     'Traffic Block previews must expose a machine-readable service end time.'
 );
+assertSameValue(
+    true,
+    strpos($module_source, 'private function getServiceExtraParentReference(') !== false
+        && strpos($module_source, "'parent_reference' => \$parent_reference") !== false
+        && strpos($module_source, "\$data->data->uuid") !== false,
+    'Traffic Block reviews must identify the parent server by its opaque VirtFusion UUID.'
+);
+assertSameValue(
+    true,
+    substr_count($module_source, "\$this->Date->cast(\$period['starts_at'], 'Y-m-d')") === 1
+        && substr_count($module_source, "\$this->Date->cast(\$period['ends_at'], 'Y-m-d')") === 1,
+    'Traffic Block preview period dates must not include midnight timestamps.'
+);
 $expiry_sync_position = strpos(
     $module_source,
     "syncTrafficBlockServiceEnd(\$service_id, \$period['ends_at'])"

@@ -534,6 +534,32 @@ class VirtfusionDirectProvisioningMod extends Module
         ];
     }
 
+    private function getServiceExtraParentReference($server_api, $server_id, $fallback = null)
+    {
+        $request = $server_api->get($server_id, true);
+        $success = $this->apiRequestSucceeded($request, [200]);
+        $this->log(
+            $this->getModuleRow()->meta->hostname . '| service extra server reference',
+            'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+            'output',
+            $success
+        );
+
+        if ($success) {
+            $data = json_decode($request['response']);
+            $uuid = trim((string) ($data->data->uuid ?? ''));
+            if (preg_match(
+                '/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i',
+                $uuid
+            )) {
+                return $uuid;
+            }
+        }
+
+        $fallback = trim((string) $fallback);
+        return $fallback !== '' ? $fallback : null;
+    }
+
     private function serviceExtraUtcExpiry($expires_at)
     {
         $expires_at = trim((string) $expires_at);
@@ -995,9 +1021,12 @@ class VirtfusionDirectProvisioningMod extends Module
             return;
         }
 
-        $api = $this->getApiFromRow($row);
-        $api->loadCommand('virtfusion_server');
-        $server_api = new VirtfusionServer($api);
+        $server_api = $this->getServerApiFromRow($row);
+        $parent_reference = $this->getServiceExtraParentReference(
+            $server_api,
+            $fields->virtfusion_server_id,
+            $fields->virtfusion_public_label ?? null
+        );
         $period = $this->getTrafficBlockPeriod($server_api, $fields->virtfusion_server_id);
         if (!$period) {
             return;
@@ -1017,11 +1046,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
         return [
             'traffic_block' => $this->formatTrafficBlockSize($amount),
-            'valid_from' => $this->Date->cast($period['starts_at'], 'date_time'),
-            'valid_until' => $this->Date->cast($period['ends_at'], 'date_time'),
+            'valid_from' => $this->Date->cast($period['starts_at'], 'Y-m-d'),
+            'valid_until' => $this->Date->cast($period['ends_at'], 'Y-m-d'),
             'notice' => Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
             '_service_extra' => [
-                'expires_at' => $expires_at
+                'expires_at' => $expires_at,
+                'parent_reference' => $parent_reference
             ]
         ];
     }
