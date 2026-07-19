@@ -263,6 +263,21 @@ assertSameValue(
     callPrivate($module, 'tasksBlockServerAction', ['vnc_disable', [['action' => 'Restart']], []]),
     'Disabling VNC must remain available as a cleanup action.'
 );
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'manage']),
+    'Unbuilt servers must retain the Manage Server action.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'vnc']),
+    'Unbuilt servers must reject actions other than Manage Server.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1], 'vnc']),
+    'Built servers must retain their normal actions.'
+);
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
 $add_rules = callPrivate($module, 'getServiceRules', [
     ['configoptions' => ['autoBuild' => 'true']],
@@ -383,6 +398,20 @@ assertSameValue(
 $module_source = file_get_contents(dirname(__DIR__) . '/virtfusion_direct_provisioning_mod.php');
 $language_source = file_get_contents(
     dirname(__DIR__) . '/language/en_us/virtfusion_direct_provisioning_mod.php'
+);
+$client_manage_template = file_get_contents(__DIR__ . '/../views/default/tabManage.pdt');
+$admin_manage_template = file_get_contents(__DIR__ . '/../views/default/tabAdminManage.pdt');
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'if ($server_unbuilt)') !== false
+        && strpos($client_manage_template, 'value="manage"') !== false,
+    'The client view must reduce an unbuilt server to its Manage Server action.'
+);
+assertSameValue(
+    true,
+    strpos($admin_manage_template, 'if ($server_unbuilt)') !== false
+        && strpos($admin_manage_template, '$admin_server_url') !== false,
+    'The admin view must reduce an unbuilt server to its direct management action.'
 );
 assertSameValue(
     true,

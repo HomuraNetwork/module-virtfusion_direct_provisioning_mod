@@ -105,6 +105,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.tasks.pending'] = 'VirtFusion has 
 $lang['VirtfusionDirectProvisioningMod.!error.password.missing'] = 'VirtFusion accepted the password reset but did not return the new password.';
 $lang['VirtfusionDirectProvisioningMod.!error.vnc.details'] = 'VirtFusion did not return the VNC WebSocket URL and password.';
 $lang['VirtfusionDirectProvisioningMod.!error.vnc.disable'] = 'VirtFusion could not disable the VNC console.';
+$lang['VirtfusionDirectProvisioningMod.!error.server.not_built'] = 'This server has not been built yet. Only Manage Server is available.';
 $lang['VirtfusionDirectProvisioningMod.!error.service_fields.migration'] = 'The Service Fields for service #%1$s could not be migrated to the current schema.';
 $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion action failed unexpectedly. Review the module log for the non-sensitive exception details.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';

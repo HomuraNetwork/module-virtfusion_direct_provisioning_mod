@@ -3830,8 +3830,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $data = json_decode($request['response']);
         $server_info = new stdClass();
-        $server_info->built = isset($data->data->built) && $data->data->built !== null ? 1 : 0;
+        $server_info->built = !empty($data->data->built) ? 1 : 0;
         $server_info->name = $data->data->name ?? null;
+        if (!$server_info->built) {
+            return $server_info;
+        }
+
         $server_info->cpu = $data->data->settings->resources->cpuCores ?? null;
         $server_info->disk = $data->data->settings->resources->storage ?? null;
         $server_info->memory = $data->data->settings->resources->memory ?? null;
@@ -3900,6 +3904,11 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return $server_info;
+    }
+
+    private function serverAllowsAction($server_info, $action)
+    {
+        return !$server_info || !empty($server_info->built) || $action === 'manage';
     }
 
     private function refreshServiceNetworkFields($service, $package, $service_fields)
@@ -4177,13 +4186,27 @@ class VirtfusionDirectProvisioningMod extends Module
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
 
+        if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
+            $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+            if ($server_info) {
+                $this->view->set('server_info', $server_info);
+            }
+        }
+
         if (!empty($post) && $row) {
-            if (($post['action'] ?? null) === 'refresh_ips') {
+            $action = $post['action'] ?? null;
+            if (!$this->serverAllowsAction($server_info, $action)) {
+                $this->Input->setErrors([
+                    'server' => [
+                        'not_built' => Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true)
+                    ]
+                ]);
+            } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
-            } elseif (($post['action'] ?? null) === 'refresh_state') {
+            } elseif ($action === 'refresh_state') {
                 $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
-            } elseif (($post['action'] ?? null) === 'remove_ip') {
+            } elseif ($action === 'remove_ip') {
                 $error = $this->removeIPAddress($package, $service, $post, true);
                 if ($error) {
                     $this->Input->setErrors(['api' => ['response' => $error]]);
@@ -4214,7 +4237,7 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff'], true)) {
             $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
@@ -4223,7 +4246,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->set('message', $message);
         $this->view->set('action_result', $action_result);
-        $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, true, $service_fields));
+        $this->view->set(
+            'ip_data',
+            $server_info && !empty($server_info->built)
+                ? $this->getClientIpAddresses($package, $service, null, null, true, $service_fields)
+                : null
+        );
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
         $this->view->set('service_id', $service->id);
@@ -4254,13 +4282,27 @@ class VirtfusionDirectProvisioningMod extends Module
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
 
+        if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
+            $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+            if ($server_info) {
+                $this->view->set('server_info', $server_info);
+            }
+        }
+
         if (!empty($post) && $row) {
-            if (($post['action'] ?? null) === 'refresh_ips') {
+            $action = $post['action'] ?? null;
+            if (!$this->serverAllowsAction($server_info, $action)) {
+                $this->Input->setErrors([
+                    'server' => [
+                        'not_built' => Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true)
+                    ]
+                ]);
+            } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
-            } elseif (($post['action'] ?? null) === 'refresh_state') {
+            } elseif ($action === 'refresh_state') {
                 $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
-            } elseif (($post['action'] ?? null) === 'remove_ip') {
+            } elseif ($action === 'remove_ip') {
                 $error = $this->removeIPAddress($package, $service, $post, false);
                 if ($error) {
                     $this->Input->setErrors(['api' => ['response' => $error]]);
@@ -4291,7 +4333,7 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff'], true)) {
             $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
@@ -4300,7 +4342,12 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->set('message', $message);
         $this->view->set('action_result', $action_result);
-        $this->view->set('ip_data', $this->getClientIpAddresses($package, $service, null, null, false, $service_fields));
+        $this->view->set(
+            'ip_data',
+            $server_info && !empty($server_info->built)
+                ? $this->getClientIpAddresses($package, $service, null, null, false, $service_fields)
+                : null
+        );
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
         $this->view->set(

@@ -8,6 +8,15 @@
     <?php } ?>
     <?php if (!empty($action_result)) { include __DIR__ . '/action_result.pdt'; } ?>
 
+    <?php $server_unbuilt = isset($server_info) && empty($server_info->built); ?>
+    <?php if ($server_unbuilt) { ?>
+    <div class="mb-3">
+        <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-primary w-100">
+            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage_admin'); ?>
+        </a>
+    </div>
+    <?php } else { ?>
+
     <?php if (($service_fields->virtfusion_restart_required ?? 'false') === 'true') { ?>
         <div class="alert alert-warning">
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.restart_recommended', true)); ?>
@@ -180,4 +189,5 @@
             </div>
         </div>
     </div>
+    <?php } ?>
 </div>
