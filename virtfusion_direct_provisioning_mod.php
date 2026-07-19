@@ -111,11 +111,11 @@ class VirtfusionDirectProvisioningMod extends Module
     private function formatTrafficBlockSize($amount)
     {
         $amount = (int) $amount;
-        if ($amount < 1000) {
+        if ($amount < 1024) {
             return $amount . ' GB';
         }
 
-        $terabytes = rtrim(rtrim(number_format($amount / 1000, 3, '.', ''), '0'), '.');
+        $terabytes = rtrim(rtrim(number_format($amount / 1024, 3, '.', ''), '0'), '.');
         return $terabytes . ' TB';
     }
 

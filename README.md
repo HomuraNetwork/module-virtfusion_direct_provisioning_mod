@@ -160,7 +160,7 @@ To create a Traffic Block product:
 
 1. Create another Blesta package using this module.
 2. Set **Product Type** to **Traffic Block**.
-3. Enter the package's default **Block Size (GB)**. For example, `1000` displays and provisions as `1 TB`.
+3. Enter the package's default **Block Size (GB)**. Displayed TB values use 1024 GB per TB; for example, `1024` displays and provisions as `1 TB`.
 4. Add one-time pricing only.
 5. Optionally add a Quantity or Dropdown Configurable Option named `traffic` or `addon_traffic`. The submitted positive whole-number GB value overrides the fixed Block Size. If both are present, `addon_traffic` takes priority.
 

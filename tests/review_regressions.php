@@ -344,8 +344,10 @@ assertSameValue(
     'Arbitrary Configurable Option names must not override the package Traffic Block size.'
 );
 assertSameValue('999 GB', callPrivate($traffic_module, 'formatTrafficBlockSize', [999]), 'GB values must remain in GB.');
-assertSameValue('1 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1000]), '1000 GB must display as 1 TB.');
-assertSameValue('1.5 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1500]), 'TB display must retain useful decimals.');
+assertSameValue('1000 GB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1000]), 'Values below 1024 GB must remain in GB.');
+assertSameValue('1 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1024]), '1024 GB must display as 1 TB.');
+assertSameValue('1.5 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [1536]), 'TB display must retain useful binary-unit decimals.');
+assertSameValue('10 TB', callPrivate($traffic_module, 'formatTrafficBlockSize', [10240]), '10240 GB must display as 10 TB.');
 $traffic_rules = callPrivate($traffic_module, 'getPackageRules', [[
     'meta' => ['virtfusion-service_type' => 'traffic_block']
 ]]);
@@ -460,10 +462,10 @@ $labeled_service = (object) ['fields' => [
 ]];
 assertSameValue($public_label, $module->getServiceName($labeled_service), 'New services must use the opaque public label.');
 $traffic_service = (object) ['fields' => [
-    (object) ['key' => 'virtfusion_traffic_block_gb', 'value' => '1000']
+    (object) ['key' => 'virtfusion_traffic_block_gb', 'value' => '10240']
 ]];
 assertSameValue(
-    '1 TB Traffic Block',
+    '10 TB Traffic Block',
     $traffic_module->getServiceName($traffic_service),
     'Traffic Block service names must include the normalized purchased capacity.'
 );
