@@ -15,7 +15,7 @@ class VirtfusionDirectProvisioningMod extends Module
     private const ADDITIONAL_TRAFFIC_OPTION = 'additionalTraffic';
     private const BACKUP_PLAN_OPTION = 'backupPlanId';
     private const CPU_THROTTLE_OPTION = 'cpuThrottle';
-    private const TRAFFIC_BLOCK_CAPABILITY = 'traffic_block';
+    private const TRAFFIC_BLOCK_PRODUCT_TYPE = 'traffic_block';
     private const TRAFFIC_BLOCK_AMOUNT_OPTION = 'amount';
     private const TRAFFIC_BLOCK_OPERATION_FIELD = 'vf_traffic_block_operation';
     private const RESOURCE_CHANGE_OPERATION_FIELD = 'vf_resource_change_operation';
@@ -76,7 +76,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function isTrafficBlockPackage($package)
     {
-        return ($package->meta->{'virtfusion-service_type'} ?? 'server') === self::TRAFFIC_BLOCK_CAPABILITY;
+        return ($package->meta->{'virtfusion-service_type'} ?? 'server') === self::TRAFFIC_BLOCK_PRODUCT_TYPE;
     }
 
     private function trafficBlocksEnabled($row)
@@ -507,6 +507,55 @@ class VirtfusionDirectProvisioningMod extends Module
         ];
     }
 
+    private function serviceExtraUtcExpiry($expires_at)
+    {
+        $expires_at = trim((string) $expires_at);
+        if ($expires_at === '') {
+            return null;
+        }
+
+        $has_timezone = (bool) preg_match('/(?:Z|[+-]\d{2}:?\d{2})$/i', $expires_at);
+        $timestamp = strtotime($expires_at . ($has_timezone ? '' : ' UTC'));
+        if ($timestamp === false) {
+            return null;
+        }
+
+        return gmdate('Y-m-d\TH:i:s\Z', $timestamp);
+    }
+
+    private function syncTrafficBlockServiceEnd($service_id, $ends_at)
+    {
+        $expires_at = $this->serviceExtraUtcExpiry($ends_at);
+        if ((int) $service_id < 1 || $expires_at === null) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'period' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.period', true)
+                ]
+            ]);
+            return false;
+        }
+
+        try {
+            $this->Record->where('id', '=', (int) $service_id)->update(
+                'services',
+                ['date_canceled' => gmdate('Y-m-d H:i:s', strtotime($expires_at))],
+                ['date_canceled']
+            );
+        } catch (\Throwable $e) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'expiry_save' => Language::_(
+                        'VirtfusionDirectProvisioningMod.!error.traffic_block.expiry_save',
+                        true
+                    )
+                ]
+            ]);
+            return false;
+        }
+
+        return true;
+    }
+
     private function trafficBlockServiceMeta(
         $server_id,
         $amount,
@@ -517,7 +566,6 @@ class VirtfusionDirectProvisioningMod extends Module
         ?array $operation = null
     ) {
         $values = [
-            'virtfusion_addon_capability' => self::TRAFFIC_BLOCK_CAPABILITY,
             'virtfusion_parent_server_id' => (int) $server_id,
             'virtfusion_traffic_block_gb' => (int) $amount,
             'virtfusion_traffic_block_month' => $month,
@@ -688,6 +736,10 @@ class VirtfusionDirectProvisioningMod extends Module
                     return;
                 }
 
+                if (!$this->syncTrafficBlockServiceEnd($service_id, $operation['ends_at'] ?? null)) {
+                    return;
+                }
+
                 if (($operation['status'] ?? null) === 'completed') {
                     return $this->completedTrafficBlockMeta($operation, $operation['block_id'] ?? null);
                 }
@@ -732,6 +784,9 @@ class VirtfusionDirectProvisioningMod extends Module
             }
 
             if (!$operation) {
+                if (!$this->syncTrafficBlockServiceEnd($service_id, $period['ends_at'])) {
+                    return;
+                }
                 $operation = [
                     'operation_key' => hash('sha256', implode(':', [
                         $service_id,
@@ -819,10 +874,13 @@ class VirtfusionDirectProvisioningMod extends Module
         }
     }
 
-    public function getProductAddonCapabilities($parent_package, $parent_service)
+    public function getServiceExtraDefinition($parent_package, $parent_service, $extra_package)
     {
         $row = $this->getModuleRow();
-        if (!$this->trafficBlocksEnabled($row)
+        if (!$this->isTrafficBlockPackage($extra_package)
+            || $this->isTrafficBlockPackage($parent_package)
+            || (int) ($parent_package->module_id ?? 0) !== (int) ($extra_package->module_id ?? 0)
+            || !$this->trafficBlocksEnabled($row)
             || !$parent_service
             || ($parent_service->status ?? null) !== 'active'
             || (int) ($row->id ?? 0) !== (int) ($parent_service->module_row_id ?? 0)) {
@@ -837,37 +895,29 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return [
-            self::TRAFFIC_BLOCK_CAPABILITY => [
-                'label' => Language::_('VirtfusionDirectProvisioningMod.product_addon.traffic_block', true),
-                'one_time' => true,
-                'requires_active_parent' => true,
-                'requires_provisioned_parent' => true,
-                'requires_parent_module_row' => true
-            ]
+            'allowed_periods' => ['onetime'],
+            'requires_parent_module_row' => true
         ];
     }
 
-    public function previewProductAddon(
-        $capability,
+    public function previewServiceExtra(
         $parent_package,
         $parent_service,
-        $addon_package,
+        $extra_package,
         array $config_options = []
     ) {
-        if ($capability !== self::TRAFFIC_BLOCK_CAPABILITY
-            || !$this->isTrafficBlockPackage($addon_package)
-            || (int) ($parent_package->module_id ?? 0) !== (int) ($addon_package->module_id ?? 0)) {
+        $definition = $this->getServiceExtraDefinition($parent_package, $parent_service, $extra_package);
+        if (!$definition) {
             $this->Input->setErrors([
-                'product_addon' => [
-                    'capability' => Language::_('VirtfusionDirectProvisioningMod.!error.product_addon.capability', true)
+                'service_extra' => [
+                    'package' => Language::_('VirtfusionDirectProvisioningMod.!error.service_extra.package', true)
                 ]
             ]);
             return;
         }
 
-        $capabilities = $this->getProductAddonCapabilities($parent_package, $parent_service);
         $amount = $this->getTrafficBlockAmount($config_options);
-        if (!isset($capabilities[$capability]) || !$amount || $amount < 1) {
+        if (!$amount || $amount < 1) {
             $this->Input->setErrors([
                 'traffic_block' => [
                     'amount' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.amount', true)
@@ -889,11 +939,24 @@ class VirtfusionDirectProvisioningMod extends Module
 
         Loader::loadHelpers($this, ['Date']);
 
+        $expires_at = $this->serviceExtraUtcExpiry($period['ends_at']);
+        if ($expires_at === null) {
+            $this->Input->setErrors([
+                'traffic_block' => [
+                    'period' => Language::_('VirtfusionDirectProvisioningMod.!error.traffic_block.period', true)
+                ]
+            ]);
+            return;
+        }
+
         return [
             'traffic_block' => $amount . ' GB',
             'valid_from' => $this->Date->cast($period['starts_at'], 'date_time'),
             'valid_until' => $this->Date->cast($period['ends_at'], 'date_time'),
-            'notice' => Language::_('VirtfusionDirectProvisioningMod.product_addon.period_notice', true)
+            'notice' => Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
+            '_service_extra' => [
+                'expires_at' => $expires_at
+            ]
         ];
     }
 
@@ -1817,12 +1880,12 @@ class VirtfusionDirectProvisioningMod extends Module
         $service_type_rule = [
             'valid' => [
                 'if_set' => true,
-                'rule' => ['in_array', ['server', self::TRAFFIC_BLOCK_CAPABILITY]],
+                'rule' => ['in_array', ['server', self::TRAFFIC_BLOCK_PRODUCT_TYPE]],
                 'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta.service_type.valid', true)
             ]
         ];
 
-        if ($service_type === self::TRAFFIC_BLOCK_CAPABILITY) {
+        if ($service_type === self::TRAFFIC_BLOCK_PRODUCT_TYPE) {
             return [
                 'meta[virtfusion-service_type]' => $service_type_rule
             ];
@@ -1887,7 +1950,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 'meta[virtfusion-service_type]',
                 [
                     'server' => Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type.server', true),
-                    self::TRAFFIC_BLOCK_CAPABILITY => Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block', true)
+                    self::TRAFFIC_BLOCK_PRODUCT_TYPE => Language::_('VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block', true)
                 ],
                 ($vars->meta['virtfusion-service_type'] ?? 'server'),
                 ['id' => 'virtfusion_direct_provisioning_mod_service_type']
@@ -2415,7 +2478,7 @@ class VirtfusionDirectProvisioningMod extends Module
     public function editService($package, $service, ?array $vars = null, $parent_package = null, $parent_service = null)
     {
         if ($this->isTrafficBlockPackage($package)) {
-            // Traffic blocks are one-shot audit services. Editing, suspending, or
+            // Traffic blocks are one-shot child services. Editing, suspending, or
             // canceling the Blesta record must not modify the remote block.
             return null;
         }

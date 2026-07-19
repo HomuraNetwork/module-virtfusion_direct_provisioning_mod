@@ -316,6 +316,54 @@ assertSameValue(
     (bool) preg_match('/^vf-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $public_label),
     'Public service labels must be UUIDv4 values.'
 );
+assertSameValue(
+    '2026-08-19T23:59:59Z',
+    callPrivate($module, 'serviceExtraUtcExpiry', ['2026-08-19 23:59:59']),
+    'Timezone-free VirtFusion period ends must be explicitly normalized as UTC.'
+);
+assertSameValue(
+    '2026-08-19T14:59:59Z',
+    callPrivate($module, 'serviceExtraUtcExpiry', ['2026-08-19T23:59:59+09:00']),
+    'Timezone-aware service expiry must preserve the exact instant.'
+);
+assertSameValue(
+    null,
+    callPrivate($module, 'serviceExtraUtcExpiry', ['invalid']),
+    'Invalid module expiry must not be passed to the Service Extras plugin.'
+);
+$module_source = file_get_contents(dirname(__DIR__) . '/virtfusion_direct_provisioning_mod.php');
+assertSameValue(
+    true,
+    strpos($module_source, 'public function getServiceExtraDefinition') !== false,
+    'The module must derive a Service Extra definition from the selected package Product Type.'
+);
+assertSameValue(
+    false,
+    strpos($module_source, 'public function getServiceExtraCapabilities') !== false,
+    'The module must not require an administrator-selected capability name.'
+);
+assertSameValue(
+    true,
+    strpos($module_source, 'public function previewServiceExtra') !== false,
+    'The module must provide a Service Extras purchase preview.'
+);
+assertSameValue(
+    true,
+    strpos($module_source, "'_service_extra' => [") !== false,
+    'Traffic Block previews must expose a machine-readable service end time.'
+);
+$expiry_sync_position = strpos(
+    $module_source,
+    "syncTrafficBlockServiceEnd(\$service_id, \$period['ends_at'])"
+);
+$remote_submit_position = strpos($module_source, 'addTrafficBlock($server_id');
+assertSameValue(
+    true,
+    $expiry_sync_position !== false
+        && $remote_submit_position !== false
+        && $expiry_sync_position < $remote_submit_position,
+    'Paid Traffic Blocks must save the actual period end before submitting a remote change.'
+);
 $opaque_service = (object) ['fields' => [
     (object) ['key' => 'virtfusion_server_id', 'value' => '499']
 ]];

@@ -158,14 +158,14 @@ Traffic Blocks are separate one-time child services. They are not server upgrade
 To create a Traffic Block product:
 
 1. Create another Blesta package using this module.
-2. Set **Product Type** to **Traffic Block (one-shot addon)**.
+2. Set **Product Type** to **Traffic Block**.
 3. Add one-time pricing only.
 4. Add a Configurable Option named `amount` whose value is the number of GB to purchase.
 5. Enable **Traffic Block Purchases** on the parent server's module row.
 
-Install the separate **Product Addons** plugin to offer the Traffic Block after a server has been created. In the plugin, create a `traffic_block` rule and choose the allowed parent server packages and Traffic Block packages.
+Install the separate [Service Extras](https://github.com/HomuraNetwork/plugin-service_extras) plugin to offer the Traffic Block after a server has been created. Create a rule, select the allowed parent server packages, select the product group containing the Traffic Block package, and explicitly add the Traffic Block package to the rule's offered products. The module identifies the action from the package's **Product Type**; no capability name is configured in the plugin.
 
-The purchase confirmation shows the current VirtFusion traffic period end date. VirtFusion controls when the Traffic Block expires; Blesta does not remove it at the service renewal date.
+The purchase confirmation shows the current VirtFusion traffic period end date. Service Extras writes that time to the child service's scheduled cancellation date. If the VirtFusion period changes before payment, the module updates the service to the actual activation-period end before submitting the Traffic Block. Blesta then closes the child service through its normal cancellation automation. The module does not attempt to remove the remote Traffic Block because VirtFusion already controls its lifetime through the traffic period.
 
 Pricing is defined by the Blesta package and Configurable Option. The module does not calculate the price.
 

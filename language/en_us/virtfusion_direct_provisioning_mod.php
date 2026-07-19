@@ -123,12 +123,13 @@ $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.reconcile'] = 'Only 
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.ambiguous'] = 'Multiple matching Traffic Blocks were found. Automatic reconciliation remains disabled.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.period_changed'] = 'The original VirtFusion traffic period has ended. This operation cannot be retried into a different period.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.period'] = 'VirtFusion did not return a current traffic billing period for this server.';
+$lang['VirtfusionDirectProvisioningMod.!error.traffic_block.expiry_save'] = 'The Traffic Block service end date could not be updated safely. No remote Traffic Block was submitted.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.onetime'] = 'Traffic Block package pricing must use the one-time period.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.immutable'] = 'A purchased Traffic Block is immutable and cannot be upgraded or downgraded.';
 $lang['VirtfusionDirectProvisioningMod.!error.resource.locked'] = 'Another resource change is running for this server. Try again after it finishes.';
 $lang['VirtfusionDirectProvisioningMod.!error.resource.conflict'] = 'A different incomplete resource change is already recorded for this service. Reconcile or retry that change first.';
 $lang['VirtfusionDirectProvisioningMod.!error.resource.partial'] = 'VirtFusion did not complete every resource change. The actual remote resources and completed steps were recorded; retry the same change to continue safely.';
-$lang['VirtfusionDirectProvisioningMod.!error.product_addon.capability'] = 'This product addon capability is not supported by the selected package.';
+$lang['VirtfusionDirectProvisioningMod.!error.service_extra.package'] = 'The selected package is not an available service extra for this parent service.';
 
 // Client Errors
 $lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
@@ -255,14 +256,13 @@ $lang['VirtfusionDirectProvisioningMod.ipAddresses.update_failed'] = 'The IP was
 // Package Fields
 $lang['VirtfusionDirectProvisioningMod.package_fields.service_type'] = 'Product Type';
 $lang['VirtfusionDirectProvisioningMod.package_fields.service_type.server'] = 'VirtFusion Server';
-$lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block'] = 'Traffic Block (one-shot addon)';
+$lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block'] = 'Traffic Block';
 $lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
 
-// Generic Product Addon capability
-$lang['VirtfusionDirectProvisioningMod.product_addon.traffic_block'] = 'Traffic Block';
-$lang['VirtfusionDirectProvisioningMod.product_addon.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the addon; VirtFusion does not provide a reservation API.';
+// Service Extras
+$lang['VirtfusionDirectProvisioningMod.service_extra.period_notice'] = 'The displayed VirtFusion period is a preview. The current period is queried again when payment activates the service; VirtFusion does not provide a reservation API.';
 
 // Option Fields
 $lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'ipv4';
