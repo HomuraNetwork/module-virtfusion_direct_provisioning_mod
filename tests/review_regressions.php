@@ -429,9 +429,10 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($language_source, 'valid until the traffic reset date shown above') !== false
+    strpos($language_source, 'valid until the traffic reset date') !== false
+        && strpos($language_source, 'shown above') === false
         && strpos($language_source, 'reservation API') === false,
-    'Traffic Block preview guidance must describe the customer-visible reset date without API details.'
+    'Traffic Block preview guidance must describe the reset date without layout or API assumptions.'
 );
 assertSameValue(
     true,
@@ -463,8 +464,10 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($module_source, "'_service_extra' => [") !== false,
-    'Traffic Block previews must expose a machine-readable service end time.'
+    strpos($module_source, "'_service_extra' => [") !== false
+        && strpos($module_source, "'review_html' => '<div class=\"alert alert-info") !== false
+        && strpos($module_source, 'htmlspecialchars(') !== false,
+    'Traffic Block previews must expose a machine-readable end time and escaped module review markup.'
 );
 assertSameValue(
     true,

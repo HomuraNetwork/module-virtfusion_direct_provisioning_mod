@@ -1048,10 +1048,16 @@ class VirtfusionDirectProvisioningMod extends Module
             'traffic_block' => $this->formatTrafficBlockSize($amount),
             'valid_from' => $this->Date->cast($period['starts_at'], 'Y-m-d'),
             'valid_until' => $this->Date->cast($period['ends_at'], 'Y-m-d'),
-            'notice' => Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
             '_service_extra' => [
                 'expires_at' => $expires_at,
-                'parent_reference' => $parent_reference
+                'parent_reference' => $parent_reference,
+                'review_html' => '<div class="alert alert-info mb-0" role="note">'
+                    . htmlspecialchars(
+                        Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
+                        ENT_QUOTES,
+                        'UTF-8'
+                    )
+                    . '</div>'
             ]
         ];
     }
