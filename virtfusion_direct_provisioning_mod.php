@@ -1044,20 +1044,29 @@ class VirtfusionDirectProvisioningMod extends Module
             return;
         }
 
+        $reset_date = $this->Date->cast($period['ends_at'], 'Y-m-d');
+        $review_heading = Language::_(
+            'VirtfusionDirectProvisioningMod.service_extra.period_heading',
+            true,
+            $reset_date
+        );
+        $review_notice = Language::_(
+            'VirtfusionDirectProvisioningMod.service_extra.period_notice',
+            true
+        );
+
         return [
             'traffic_block' => $this->formatTrafficBlockSize($amount),
             'valid_from' => $this->Date->cast($period['starts_at'], 'Y-m-d'),
-            'valid_until' => $this->Date->cast($period['ends_at'], 'Y-m-d'),
+            'valid_until' => $reset_date,
             '_service_extra' => [
                 'expires_at' => $expires_at,
                 'parent_reference' => $parent_reference,
-                'review_html' => '<div class="alert alert-info mb-0" role="note">'
-                    . htmlspecialchars(
-                        Language::_('VirtfusionDirectProvisioningMod.service_extra.period_notice', true),
-                        ENT_QUOTES,
-                        'UTF-8'
-                    )
-                    . '</div>'
+                'review_html' => '<div class="alert alert-info mb-0" role="note"><strong class="d-block mb-1">'
+                    . htmlspecialchars($review_heading, ENT_QUOTES, 'UTF-8')
+                    . '</strong><span>'
+                    . htmlspecialchars($review_notice, ENT_QUOTES, 'UTF-8')
+                    . '</span></div>'
             ]
         ];
     }

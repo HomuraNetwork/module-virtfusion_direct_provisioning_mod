@@ -429,10 +429,11 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($language_source, 'valid until the traffic reset date') !== false
+    strpos($language_source, 'Estimated traffic reset date: %1$s') !== false
+        && strpos($language_source, 'valid until this reset date') !== false
         && strpos($language_source, 'shown above') === false
         && strpos($language_source, 'reservation API') === false,
-    'Traffic Block preview guidance must describe the reset date without layout or API assumptions.'
+    'Traffic Block preview guidance must include the estimated date without layout or API assumptions.'
 );
 assertSameValue(
     true,
@@ -466,8 +467,10 @@ assertSameValue(
     true,
     strpos($module_source, "'_service_extra' => [") !== false
         && strpos($module_source, "'review_html' => '<div class=\"alert alert-info") !== false
+        && strpos($module_source, "'VirtfusionDirectProvisioningMod.service_extra.period_heading'") !== false
+        && strpos($module_source, '$reset_date') !== false
         && strpos($module_source, 'htmlspecialchars(') !== false,
-    'Traffic Block previews must expose a machine-readable end time and escaped module review markup.'
+    'Traffic Block previews must expose the end time and escaped markup containing its estimated date.'
 );
 assertSameValue(
     true,
