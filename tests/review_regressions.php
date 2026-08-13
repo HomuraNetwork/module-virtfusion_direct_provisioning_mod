@@ -86,6 +86,31 @@ class FakeResourceServerApi
     }
 }
 
+class FakeTaskServerApi
+{
+    public function get($server_id, $detailed = false)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [
+                    'built' => false,
+                    'name' => 'Building server',
+                    'tasks' => [
+                        'active' => ['action' => 'build_server'],
+                        'actions' => [
+                            'pending' => [[
+                                'id' => 126,
+                                'action' => 'Memory Update (2048MB => 1024MB)'
+                            ]]
+                        ]
+                    ]
+                ]
+            ])
+        ];
+    }
+}
+
 class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
 {
     public $state;
@@ -269,14 +294,45 @@ assertSameValue(
     'Unbuilt servers must retain the Manage Server action.'
 );
 assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'refresh_ips']),
+    'Unbuilt or freshly-created servers must still allow IP refresh checks.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'refresh_state']),
+    'Unbuilt servers must still allow state refresh checks.'
+);
+assertSameValue(
     false,
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'vnc']),
-    'Unbuilt servers must reject actions other than Manage Server.'
+    'Unbuilt servers must continue to block actions that require a built guest.'
 );
 assertSameValue(
     true,
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1], 'vnc']),
     'Built servers must retain their normal actions.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1, 'has_active_tasks' => true], 'restart']),
+    'An active VirtFusion build must block local server actions.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0, 'has_active_tasks' => true], 'manage']),
+    'An active VirtFusion build must still allow the control-panel handoff.'
+);
+assertSameValue(false, callPrivate($module, 'taskStateIsActive', [false]), 'A false active-task state must remain idle.');
+assertSameValue(true, callPrivate($module, 'taskStateIsActive', [(object) ['action' => 'build_server']]), 'An active task object must lock local actions.');
+$task_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$task_module->serverApi = new FakeTaskServerApi();
+$task_info = callPrivate($task_module, 'getRemoteServerInfo', [(object) [], 42]);
+assertSameValue(true, $task_info->has_active_tasks, 'Active build state must be read before an unbuilt server returns.');
+assertSameValue(
+    ['Memory Update (2048MB => 1024MB)'],
+    $task_info->pending_tasks,
+    'Pending VirtFusion action text must identify the exact resource change.'
 );
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
 $add_rules = callPrivate($module, 'getServiceRules', [
@@ -403,15 +459,33 @@ $client_manage_template = file_get_contents(__DIR__ . '/../views/default/tabMana
 $admin_manage_template = file_get_contents(__DIR__ . '/../views/default/tabAdminManage.pdt');
 assertSameValue(
     true,
-    strpos($client_manage_template, 'if ($server_unbuilt)') !== false
+    strpos($client_manage_template, 'elseif ($server_unbuilt)') !== false
         && strpos($client_manage_template, 'value="manage"') !== false,
     'The client view must reduce an unbuilt server to its Manage Server action.'
 );
 assertSameValue(
     true,
-    strpos($admin_manage_template, 'if ($server_unbuilt)') !== false
+    strpos($admin_manage_template, 'elseif ($server_unbuilt)') !== false
         && strpos($admin_manage_template, '$admin_server_url') !== false,
     'The admin view must reduce an unbuilt server to its direct management action.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, '$server_info->pending_tasks') !== false
+        && strpos($admin_manage_template, '$server_info->pending_tasks') !== false,
+    'Both Manage views must describe pending resource changes from VirtFusion task data.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'if ($server_busy)') !== false
+        && strpos($admin_manage_template, 'if ($server_busy)') !== false,
+    'Both Manage views must reduce an active build to the control-panel handoff.'
+);
+assertSameValue(
+    false,
+    strpos($client_manage_template, 'virtfusion_restart_required') !== false
+        || strpos($admin_manage_template, 'virtfusion_restart_required') !== false,
+    'Restart banners must not read locally persisted state.'
 );
 assertSameValue(
     true,
@@ -595,7 +669,7 @@ $service = (object) ['fields' => [
 ]];
 $merged = callPrivate($module, 'mergedServiceMeta', [
     $service,
-    ['virtfusion_restart_required' => 'true'],
+    ['virtfusion_public_label' => 'Test server'],
     [],
     ['vf_resource_change_operation']
 ]);

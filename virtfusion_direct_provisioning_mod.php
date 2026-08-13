@@ -346,9 +346,20 @@ class VirtfusionDirectProvisioningMod extends Module
         ];
     }
 
+    private function hasNetworkSnapshot($service_fields)
+    {
+        $service_fields = $this->normalizeLegacyServiceFields($service_fields);
+
+        return !empty($this->ipv4Addresses($service_fields))
+            || !empty($this->csvValues($service_fields->virtfusion_ipv6_cidr ?? null));
+    }
+
     private function canonicalServiceMeta($service)
     {
-        $legacy_keys = array_merge(self::LEGACY_NETWORK_FIELDS, ['virtfusion_build_status']);
+        $legacy_keys = array_merge(
+            self::LEGACY_NETWORK_FIELDS,
+            ['virtfusion_build_status', 'virtfusion_restart_required', 'virtfusion_restart_required_at']
+        );
         $has_legacy_fields = false;
         foreach (($service->fields ?? []) as $field) {
             if (in_array($field->key ?? null, $legacy_keys, true)) {
@@ -395,7 +406,9 @@ class VirtfusionDirectProvisioningMod extends Module
                 self::PRIMARY_IPV4_FIELD,
                 self::SECONDARY_IPV4_FIELD,
                 'virtfusion_build_status',
-                'virtfusion_ipv4_quantity'
+                'virtfusion_ipv4_quantity',
+                'virtfusion_restart_required',
+                'virtfusion_restart_required_at'
             ]
         );
     }
@@ -1147,20 +1160,6 @@ class VirtfusionDirectProvisioningMod extends Module
     private function currentNetworkSpeed($service)
     {
         return $this->getServiceConfigOptionValue($service, self::NETWORK_SPEED_OPTION);
-    }
-
-    private function setRestartRecommended($service_id, $recommended)
-    {
-        if (empty($service_id)) {
-            return;
-        }
-
-        Loader::loadModels($this, ['Services']);
-        $this->Services->editField($service_id, [
-            'key' => 'virtfusion_restart_required',
-            'value' => $recommended ? 'true' : 'false',
-            'encrypted' => false
-        ]);
     }
 
     private function mergedServiceMeta($service, array $overrides, array $encrypted_overrides = [], array $exclude = [])
@@ -2701,6 +2700,17 @@ class VirtfusionDirectProvisioningMod extends Module
                 foreach ($data['service_fields'] as $field => $value) {
                     $vars[$field] = $value;
                 }
+
+                if (!$this->hasNetworkSnapshot($service_fields)
+                    && isset($service_fields->virtfusion_server_id)
+                    && is_numeric($service_fields->virtfusion_server_id)) {
+                    $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                    foreach ([self::PRIMARY_IPV4_FIELD, self::SECONDARY_IPV4_FIELD, 'virtfusion_ipv6_cidr'] as $network_field) {
+                        if (isset($service_fields->{$network_field})) {
+                            $vars[$network_field] = $service_fields->{$network_field};
+                        }
+                    }
+                }
             }
         }
 
@@ -2718,8 +2728,7 @@ class VirtfusionDirectProvisioningMod extends Module
             'virtfusion_ipv6_cidr',
             'virtfusion_backup_plan_id',
             self::BUILD_STATE_FIELD,
-            'virtfusion_cpu_throttle',
-            'virtfusion_restart_required'
+            'virtfusion_cpu_throttle'
         ];
         $encrypted_fields = ['virtfusion_password'];
         $overrides = [];
@@ -2740,7 +2749,12 @@ class VirtfusionDirectProvisioningMod extends Module
             }),
             $encrypted_fields,
             array_merge(
-                [self::RESOURCE_CHANGE_OPERATION_FIELD, 'virtfusion_build_status'],
+                [
+                    self::RESOURCE_CHANGE_OPERATION_FIELD,
+                    'virtfusion_build_status',
+                    'virtfusion_restart_required',
+                    'virtfusion_restart_required_at'
+                ],
                 self::LEGACY_NETWORK_FIELDS
             )
         );
@@ -3390,6 +3404,15 @@ class VirtfusionDirectProvisioningMod extends Module
             $package_storage = isset($package_data->data->primaryStorage)
                 ? (int) $package_data->data->primaryStorage
                 : null;
+
+            if ($current_storage !== null && $package_storage !== null && $package_storage < $current_storage) {
+                $this->Input->setErrors([
+                    'configoptions' => [
+                        'storage' => Language::_('VirtfusionDirectProvisioningMod.!error.storage.downgrade', true)
+                    ]
+                ]);
+                return false;
+            }
         }
 
         if (isset($config_options['storage']) && $config_options['storage'] !== '' && $current_storage !== null) {
@@ -3398,15 +3421,6 @@ class VirtfusionDirectProvisioningMod extends Module
                 $this->Input->setErrors([
                     'configoptions' => [
                         'storage' => Language::_('VirtfusionDirectProvisioningMod.!error.storage.downgrade', true)
-                    ]
-                ]);
-                return false;
-            }
-
-            if ($requested_storage > $current_storage) {
-                $this->Input->setErrors([
-                    'configoptions' => [
-                        'storage' => Language::_('VirtfusionDirectProvisioningMod.!error.storage.package_required', true)
                     ]
                 ]);
                 return false;
@@ -3608,9 +3622,13 @@ class VirtfusionDirectProvisioningMod extends Module
 
                     return $this->mergedServiceMeta(
                         $service,
-                        ['virtfusion_restart_required' => 'true'],
                         [],
-                        [self::RESOURCE_CHANGE_OPERATION_FIELD]
+                        [],
+                        [
+                            self::RESOURCE_CHANGE_OPERATION_FIELD,
+                            'virtfusion_restart_required',
+                            'virtfusion_restart_required_at'
+                        ]
                     );
                 } else {
                     $this->Input->setErrors([
@@ -3847,6 +3865,17 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info = new stdClass();
         $server_info->built = !empty($data->data->built) ? 1 : 0;
         $server_info->name = $data->data->name ?? null;
+
+        $active_tasks = $data->data->tasks->active ?? false;
+        $pending_tasks = $data->data->tasks->actions->pending ?? [];
+        $server_info->has_active_tasks = $this->taskStateIsActive($active_tasks);
+        $server_info->has_pending_tasks = !empty($pending_tasks);
+        $server_info->tasks_active = $server_info->has_active_tasks || $server_info->has_pending_tasks;
+        $server_info->pending_tasks = [];
+        foreach ($pending_tasks as $task) {
+            $server_info->pending_tasks[] = $task->action ?? ('Task #' . ($task->id ?? '?'));
+        }
+
         if (!$server_info->built) {
             return $server_info;
         }
@@ -3858,8 +3887,17 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info->traffic_server = $data->data->settings->resources->traffic ?? null;
         $server_info->traffic = $server_info->traffic_total ?? $server_info->traffic_server;
         $server_info->traffic_reset = $data->data->traffic->public->currentPeriod->end ?? null;
-        $server_info->ipv4 = $data->data->network->interfaces[0]->ipv4[0]->address ?? null;
+        $server_info->ipv4_addresses = [];
+        foreach (($data->data->network->interfaces[0]->ipv4 ?? []) as $ip) {
+            if (!empty($ip->address)) {
+                $server_info->ipv4_addresses[] = $ip->address;
+            }
+        }
+        $server_info->ipv4 = $server_info->ipv4_addresses[0] ?? null;
         $server_info->ipv6 = $data->data->network->interfaces[0]->ipv6[0]->subnet ?? null;
+        $server_info->ipv6_cidr = isset($data->data->network->interfaces[0]->ipv6[0])
+            ? $data->data->network->interfaces[0]->ipv6[0]->subnet . '/' . $data->data->network->interfaces[0]->ipv6[0]->cidr
+            : null;
         $remote_state = isset($data->data->remoteState) && is_object($data->data->remoteState)
             ? $data->data->remoteState
             : null;
@@ -3875,16 +3913,6 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info->backup_plan = is_object($backup_plan)
             ? ($backup_plan->name ?? $backup_plan->id ?? null)
             : ($data->data->settings->backupPlan ?? null);
-
-        $active_tasks = $data->data->tasks->active ?? [];
-        $pending_tasks = $data->data->tasks->actions->pending ?? [];
-        $server_info->has_active_tasks = !empty($active_tasks);
-        $server_info->has_pending_tasks = !empty($pending_tasks);
-        $server_info->tasks_active = $server_info->has_active_tasks || $server_info->has_pending_tasks;
-        $server_info->pending_tasks = [];
-        foreach ($pending_tasks as $task) {
-            $server_info->pending_tasks[] = $task->action ?? ('Task #' . ($task->id ?? '?'));
-        }
 
         $traffic_request = $server_api->getTraffic($server_id);
         if ($this->apiRequestSucceeded($traffic_request, [200])) {
@@ -3930,9 +3958,32 @@ class VirtfusionDirectProvisioningMod extends Module
         return $server_info;
     }
 
+    private function taskStateIsActive($task_state)
+    {
+        if (is_bool($task_state)) {
+            return $task_state;
+        }
+
+        if (is_array($task_state)) {
+            return count($task_state) > 0;
+        }
+
+        if (is_object($task_state)) {
+            return count(get_object_vars($task_state)) > 0;
+        }
+
+        return !empty($task_state);
+    }
+
     private function serverAllowsAction($server_info, $action)
     {
-        return !$server_info || !empty($server_info->built) || $action === 'manage';
+        if ($server_info && !empty($server_info->has_active_tasks)) {
+            return $action === 'manage';
+        }
+
+        return !$server_info
+            || !empty($server_info->built)
+            || in_array($action, ['manage', 'refresh_ips', 'refresh_state'], true);
     }
 
     private function refreshServiceNetworkFields($service, $package, $service_fields)
@@ -4089,10 +4140,6 @@ class VirtfusionDirectProvisioningMod extends Module
                     return null;
                 }
 
-                if ($action === 'restart') {
-                    $this->setRestartRecommended($service->id, false);
-                }
-
                 return Language::_('VirtfusionDirectProvisioningMod.tabManage.action_success', true);
 
             case 'resetpass':
@@ -4215,16 +4262,19 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
+
+            if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
+                $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+            }
         }
 
         if (!empty($post) && $row) {
             $action = $post['action'] ?? null;
             if (!$this->serverAllowsAction($server_info, $action)) {
-                $this->Input->setErrors([
-                    'server' => [
-                        'not_built' => Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true)
-                    ]
-                ]);
+                $error = !empty($server_info->has_active_tasks)
+                    ? Language::_('VirtfusionDirectProvisioningMod.!error.tasks.active', true)
+                    : Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true);
+                $this->Input->setErrors(['server' => ['unavailable' => $error]]);
             } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
@@ -4311,16 +4361,19 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
+
+            if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
+                $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+            }
         }
 
         if (!empty($post) && $row) {
             $action = $post['action'] ?? null;
             if (!$this->serverAllowsAction($server_info, $action)) {
-                $this->Input->setErrors([
-                    'server' => [
-                        'not_built' => Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true)
-                    ]
-                ]);
+                $error = !empty($server_info->has_active_tasks)
+                    ? Language::_('VirtfusionDirectProvisioningMod.!error.tasks.active', true)
+                    : Language::_('VirtfusionDirectProvisioningMod.!error.server.not_built', true);
+                $this->Input->setErrors(['server' => ['unavailable' => $error]]);
             } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
                 $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
@@ -4875,9 +4928,6 @@ class VirtfusionDirectProvisioningMod extends Module
                     ];
                 }
 
-                if (in_array($resource, ['memory', 'cpuCores'], true)) {
-                    $updated_fields['virtfusion_restart_required'] = 'true';
-                }
             }
 
             $operation['status'] = 'completed';

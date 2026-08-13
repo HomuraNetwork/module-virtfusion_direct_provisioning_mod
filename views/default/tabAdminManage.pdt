@@ -9,7 +9,17 @@
     <?php if (!empty($action_result)) { include __DIR__ . '/action_result.pdt'; } ?>
 
     <?php $server_unbuilt = isset($server_info) && empty($server_info->built); ?>
-    <?php if ($server_unbuilt) { ?>
+    <?php $server_busy = isset($server_info) && !empty($server_info->has_active_tasks); ?>
+    <?php if ($server_busy) { ?>
+    <div class="alert alert-info">
+        <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.building', true)); ?>
+    </div>
+    <div class="mb-3">
+        <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-primary w-100">
+            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage_admin'); ?>
+        </a>
+    </div>
+    <?php } elseif ($server_unbuilt) { ?>
     <div class="mb-3">
         <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-primary w-100">
             <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage_admin'); ?>
@@ -17,21 +27,19 @@
     </div>
     <?php } else { ?>
 
-    <?php if (($service_fields->virtfusion_restart_required ?? 'false') === 'true') { ?>
+    <?php if (!empty($server_info->has_pending_tasks)) { ?>
         <div class="alert alert-warning">
-            <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.restart_recommended', true)); ?>
+            <div><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.pending_restart', true)); ?></div>
+            <ul class="mb-0 mt-2">
+                <?php foreach ($server_info->pending_tasks as $pending_task) { ?>
+                    <li><?php echo $this->Html->safe($pending_task); ?></li>
+                <?php } ?>
+            </ul>
         </div>
     <?php } ?>
     <?php if (($service_fields->virtfusion_build_state ?? '') === 'failed_or_unknown') { ?>
         <div class="alert alert-warning">
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_reconciliation_required', true)); ?>
-        </div>
-    <?php } ?>
-
-    <?php if (!empty($server_info->tasks_active)) { ?>
-        <div class="alert alert-info">
-            <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.pending', true)); ?>
-            <?php echo $this->Html->safe(implode(', ', $server_info->pending_tasks ?? [])); ?>
         </div>
     <?php } ?>
 
