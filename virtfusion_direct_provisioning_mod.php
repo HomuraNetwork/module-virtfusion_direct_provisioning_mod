@@ -2704,7 +2704,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 if (!$this->hasNetworkSnapshot($service_fields)
                     && isset($service_fields->virtfusion_server_id)
                     && is_numeric($service_fields->virtfusion_server_id)) {
-                    $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
+                    $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields, false);
                     foreach ([self::PRIMARY_IPV4_FIELD, self::SECONDARY_IPV4_FIELD, 'virtfusion_ipv6_cidr'] as $network_field) {
                         if (isset($service_fields->{$network_field})) {
                             $vars[$network_field] = $service_fields->{$network_field};
@@ -3986,7 +3986,7 @@ class VirtfusionDirectProvisioningMod extends Module
             || in_array($action, ['manage', 'refresh_ips', 'refresh_state'], true);
     }
 
-    private function refreshServiceNetworkFields($service, $package, $service_fields)
+    private function refreshServiceNetworkFields($service, $package, $service_fields, $persist = true)
     {
         $service_fields = $this->normalizeLegacyServiceFields($service_fields);
 
@@ -4030,9 +4030,16 @@ class VirtfusionDirectProvisioningMod extends Module
             $network_fields['virtfusion_ipv6_cidr'] = $ipv6->subnet . '/' . $ipv6->cidr;
         }
 
-        Loader::loadModels($this, ['Services']);
         foreach ($network_fields as $key => $value) {
             $service_fields->{$key} = $value;
+        }
+
+        if (!$persist) {
+            return $service_fields;
+        }
+
+        Loader::loadModels($this, ['Services']);
+        foreach ($network_fields as $key => $value) {
             $this->Services->editField($service->id, [
                 'key' => $key,
                 'value' => $value,
@@ -4263,6 +4270,8 @@ class VirtfusionDirectProvisioningMod extends Module
                 $this->view->set('server_info', $server_info);
             }
 
+            $this->view->set('storage_pending_ticket', $this->storagePendingTicket($service, $server_info));
+
             if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
             }
@@ -4361,6 +4370,8 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
+
+            $this->view->set('storage_pending_ticket', $this->storagePendingTicket($service, $server_info));
 
             if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
@@ -5128,6 +5139,28 @@ class VirtfusionDirectProvisioningMod extends Module
     }
 
     /**
+     * Determines whether the billed storage exceeds the disk actually
+     * provisioned on the server. VirtFusion only expands the primary disk
+     * through a package change, so a storage-option increase is billed but not
+     * applied until the provider resizes it manually.
+     *
+     * @param stdClass $service A stdClass object representing the current service
+     * @param stdClass|null $server_info A stdClass object from getRemoteServerInfo(), if available
+     * @return bool True when the billed storage option exceeds the remote disk
+     */
+    private function storagePendingTicket($service, $server_info = null)
+    {
+        if (!$server_info) {
+            return false;
+        }
+
+        $billed_storage = $this->getServiceConfigOptionValue($service, 'storage');
+        return is_numeric($billed_storage)
+            && is_numeric($server_info->disk ?? null)
+            && (int) $billed_storage > (int) $server_info->disk;
+    }
+
+    /**
      * Builds the IP-address card data for the client and admin Manage pages.
      *
      * @param stdClass $package A stdClass object representing the current package
@@ -5281,7 +5314,6 @@ class VirtfusionDirectProvisioningMod extends Module
             self::NETWORK_SPEED_OPTION,
             'networkSpeedInbound',
             'networkSpeedOutbound',
-            'storage',
             'storageProfile',
             'networkProfile',
             'firewallRulesets',

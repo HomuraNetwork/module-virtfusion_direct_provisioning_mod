@@ -716,7 +716,8 @@ $resource_module->PackageOptions = new class {
             (object) ['id' => 11, 'name' => 'vnc'],
             (object) ['id' => 12, 'name' => 'backupPlanId'],
             (object) ['id' => 13, 'name' => 'autoBuild'],
-            (object) ['id' => 14, 'name' => 'networkSpeed']
+            (object) ['id' => 14, 'name' => 'networkSpeed'],
+            (object) ['id' => 15, 'name' => 'storage']
         ];
     }
 };
@@ -729,6 +730,7 @@ $edit_hidden_options = callPrivate($resource_module, 'provisioningOptionVisibili
 assertSameValue(true, strpos($edit_hidden_options, '13') !== false, 'Service edits must hide autoBuild.');
 assertSameValue(true, strpos($edit_hidden_options, '14') !== false, 'Service edits must hide create-only networkSpeed.');
 assertSameValue(false, strpos($edit_hidden_options, '12') !== false, 'Service edits must keep backupPlanId available.');
+assertSameValue(false, strpos($edit_hidden_options, '15') !== false, 'Service edits must keep the storage option editable.');
 
 $no_build_vnc = callPrivate($resource_module, 'applyConfigurableServerOptions', [
     $row,
@@ -736,5 +738,35 @@ $no_build_vnc = callPrivate($resource_module, 'applyConfigurableServerOptions', 
     ['configoptions' => ['vnc' => 'true']]
 ]);
 assertSameValue('', $no_build_vnc['errors']['err_msg'], 'Services must ignore VNC config without an API call.');
+
+$storage_service = (object) ['options' => [
+    (object) ['option_name' => 'storage', 'option_type' => 'quantity', 'qty' => 200]
+]];
+assertSameValue(
+    true,
+    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => 100]]),
+    'Billed storage above the provisioned disk must flag a pending support ticket.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => 200]]),
+    'Billed storage matching the provisioned disk must not flag a ticket.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'storagePendingTicket', [$storage_service, null]),
+    'A missing server snapshot must not flag a storage ticket.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => null]]),
+    'An unknown remote disk must not flag a storage ticket.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'storage.ticket_required') !== false
+        && strpos($admin_manage_template, 'storage.ticket_required') !== false,
+    'Both Manage views must warn when billed storage exceeds the provisioned disk.'
+);
 
 echo "review regressions: ok\n";

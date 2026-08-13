@@ -56,6 +56,11 @@ $latest_backup = $server_available && !empty($server_info->latest_backup->create
             </ul>
         </div>
     <?php } ?>
+    <?php if (!empty($storage_pending_ticket)) { ?>
+        <div class="alert alert-warning">
+            <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.storage.ticket_required', true)); ?>
+        </div>
+    <?php } ?>
     <?php if (($service_fields->virtfusion_build_state ?? '') === 'failed_or_unknown') { ?>
         <div class="alert alert-warning">
             <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_reconciliation_required', true)); ?>
