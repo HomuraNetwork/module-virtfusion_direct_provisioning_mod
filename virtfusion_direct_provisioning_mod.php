@@ -4270,8 +4270,6 @@ class VirtfusionDirectProvisioningMod extends Module
                 $this->view->set('server_info', $server_info);
             }
 
-            $this->view->set('storage_pending_ticket', $this->storagePendingTicket($service, $server_info));
-
             if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
             }
@@ -4330,6 +4328,14 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->set('message', $message);
         $this->view->set('action_result', $action_result);
         $this->view->set(
+            'storage_mismatch',
+            $this->storageMismatch($row, $package, $service, $server_info)
+        );
+        $this->view->set(
+            'support_ticket_url',
+            $this->base_uri . 'plugin/support_manager/client_tickets/departments/'
+        );
+        $this->view->set(
             'ip_data',
             $server_info && !empty($server_info->built)
                 ? $this->getClientIpAddresses($package, $service, null, null, true, $service_fields)
@@ -4370,8 +4376,6 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
-
-            $this->view->set('storage_pending_ticket', $this->storagePendingTicket($service, $server_info));
 
             if (empty($post) && !$this->hasNetworkSnapshot($service_fields)) {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
@@ -4430,6 +4434,10 @@ class VirtfusionDirectProvisioningMod extends Module
 
         $this->view->set('message', $message);
         $this->view->set('action_result', $action_result);
+        $this->view->set(
+            'storage_mismatch',
+            $this->storageMismatch($row, $package, $service, $server_info)
+        );
         $this->view->set(
             'ip_data',
             $server_info && !empty($server_info->built)
@@ -5139,25 +5147,61 @@ class VirtfusionDirectProvisioningMod extends Module
     }
 
     /**
-     * Determines whether the billed storage exceeds the disk actually
-     * provisioned on the server. VirtFusion only expands the primary disk
-     * through a package change, so a storage-option increase is billed but not
-     * applied until the provider resizes it manually.
+     * Compares the storage included by the service with the disk provisioned in
+     * VirtFusion. A configurable storage value overrides the package default.
      *
+     * @param stdClass|null $module_row A stdClass object representing the module row
+     * @param stdClass $package A stdClass object representing the current package
      * @param stdClass $service A stdClass object representing the current service
      * @param stdClass|null $server_info A stdClass object from getRemoteServerInfo(), if available
-     * @return bool True when the billed storage option exceeds the remote disk
+     * @return stdClass|null Expected and actual storage when they differ
      */
-    private function storagePendingTicket($service, $server_info = null)
+    private function storageMismatch($module_row, $package, $service, $server_info = null)
     {
-        if (!$server_info) {
-            return false;
+        if (!$server_info || !is_numeric($server_info->disk ?? null)) {
+            return null;
         }
 
-        $billed_storage = $this->getServiceConfigOptionValue($service, 'storage');
-        return is_numeric($billed_storage)
-            && is_numeric($server_info->disk ?? null)
-            && (int) $billed_storage > (int) $server_info->disk;
+        $expected_storage = $this->getServiceConfigOptionValue($service, 'storage');
+        if (!is_numeric($expected_storage)) {
+            $package_id = $package->meta->package_id ?? null;
+            if (!$module_row || !is_numeric($package_id)) {
+                return null;
+            }
+
+            try {
+                $package_request = $this->getServerApiFromRow($module_row)->getPkg($package_id);
+                if (!$this->apiRequestSucceeded($package_request, [200])) {
+                    return null;
+                }
+
+                $package_data = json_decode((string) ($package_request['response'] ?? ''));
+                $expected_storage = $package_data->data->primaryStorage ?? null;
+            } catch (Throwable $e) {
+                $this->log(
+                    ($module_row->meta->hostname ?? 'virtfusion') . '| storage package lookup',
+                    get_class($e),
+                    'output',
+                    false
+                );
+                return null;
+            }
+        }
+
+        if (!is_numeric($expected_storage)) {
+            return null;
+        }
+
+        $expected_storage = (int) $expected_storage;
+        $actual_storage = (int) $server_info->disk;
+        if ($expected_storage === $actual_storage) {
+            return null;
+        }
+
+        return (object) [
+            'expected' => $expected_storage,
+            'actual' => $actual_storage
+        ];
     }
 
     /**

@@ -57,7 +57,7 @@ class FakeResourceServerApi
     {
         return [
             'info' => ['http_code' => 200],
-            'response' => json_encode(['data' => ['traffic' => 100]])
+            'response' => json_encode(['data' => ['traffic' => 100, 'primaryStorage' => 150]])
         ];
     }
 
@@ -459,13 +459,13 @@ $client_manage_template = file_get_contents(__DIR__ . '/../views/default/tabMana
 $admin_manage_template = file_get_contents(__DIR__ . '/../views/default/tabAdminManage.pdt');
 assertSameValue(
     true,
-    strpos($client_manage_template, 'elseif ($server_unbuilt)') !== false
+    strpos($client_manage_template, 'if ($server_unbuilt)') !== false
         && strpos($client_manage_template, 'value="manage"') !== false,
     'The client view must reduce an unbuilt server to its Manage Server action.'
 );
 assertSameValue(
     true,
-    strpos($admin_manage_template, 'elseif ($server_unbuilt)') !== false
+    strpos($admin_manage_template, 'if ($server_unbuilt)') !== false
         && strpos($admin_manage_template, '$admin_server_url') !== false,
     'The admin view must reduce an unbuilt server to its direct management action.'
 );
@@ -479,7 +479,7 @@ assertSameValue(
     true,
     strpos($client_manage_template, 'if ($server_busy)') !== false
         && strpos($admin_manage_template, 'if ($server_busy)') !== false,
-    'Both Manage views must reduce an active build to the control-panel handoff.'
+    'Both Manage views must overlay active builds while retaining the control-panel handoff.'
 );
 assertSameValue(
     false,
@@ -743,30 +743,73 @@ $storage_service = (object) ['options' => [
     (object) ['option_name' => 'storage', 'option_type' => 'quantity', 'qty' => 200]
 ]];
 assertSameValue(
-    true,
-    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => 100]]),
-    'Billed storage above the provisioned disk must flag a pending support ticket.'
+    200,
+    callPrivate($resource_module, 'storageMismatch', [
+        $row,
+        $resource_package,
+        $storage_service,
+        (object) ['disk' => 100]
+    ])->expected,
+    'Configurable storage must take precedence over the package disk.'
 );
 assertSameValue(
-    false,
-    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => 200]]),
-    'Billed storage matching the provisioned disk must not flag a ticket.'
+    null,
+    callPrivate($resource_module, 'storageMismatch', [
+        $row,
+        $resource_package,
+        $storage_service,
+        (object) ['disk' => 200]
+    ]),
+    'Matching service and VirtFusion storage must not flag a ticket.'
 );
 assertSameValue(
-    false,
-    callPrivate($module, 'storagePendingTicket', [$storage_service, null]),
+    null,
+    callPrivate($resource_module, 'storageMismatch', [$row, $resource_package, $storage_service, null]),
     'A missing server snapshot must not flag a storage ticket.'
 );
 assertSameValue(
-    false,
-    callPrivate($module, 'storagePendingTicket', [$storage_service, (object) ['disk' => null]]),
+    null,
+    callPrivate($resource_module, 'storageMismatch', [
+        $row,
+        $resource_package,
+        $storage_service,
+        (object) ['disk' => null]
+    ]),
     'An unknown remote disk must not flag a storage ticket.'
+);
+$package_storage_mismatch = callPrivate($resource_module, 'storageMismatch', [
+    $row,
+    $resource_package,
+    (object) ['options' => []],
+    (object) ['disk' => 100]
+]);
+assertSameValue(150, $package_storage_mismatch->expected, 'The VF package disk must be used without a storage option.');
+assertSameValue(100, $package_storage_mismatch->actual, 'The mismatch must include the actual VF disk.');
+assertSameValue(
+    true,
+    callPrivate($resource_module, 'storageMismatch', [
+        $row,
+        $resource_package,
+        (object) ['options' => []],
+        (object) ['disk' => 200]
+    ]) !== null,
+    'Any package and VirtFusion disk mismatch must require manual adjustment.'
 );
 assertSameValue(
     true,
     strpos($client_manage_template, 'storage.ticket_required') !== false
-        && strpos($admin_manage_template, 'storage.ticket_required') !== false,
-    'Both Manage views must warn when billed storage exceeds the provisioned disk.'
+        && strpos($admin_manage_template, 'storage.ticket_required') !== false
+        && strpos($client_manage_template, 'alert alert-danger') !== false
+        && strpos($client_manage_template, 'storage.open_ticket') !== false,
+    'Manage views must show a red storage mismatch warning and client ticket link.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'vf-task-overlay') !== false
+        && strpos($admin_manage_template, 'vf-task-overlay') !== false
+        && strpos($client_manage_template, 'vf-task-refresh 5s') !== false
+        && strpos($admin_manage_template, 'vf-task-refresh 5s') !== false,
+    'Active VF tasks must use the five-second Manage-page waiting overlay.'
 );
 
 echo "review regressions: ok\n";
