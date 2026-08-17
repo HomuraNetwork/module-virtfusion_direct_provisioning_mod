@@ -3,7 +3,7 @@ $vf_network = $server_info->network_addresses ?? (object) ['ipv4' => [], 'ipv6_b
 ?>
 <div class="card mb-3">
     <div class="card-header">
-        <strong><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.header'); ?></strong>
+        <strong><?php $this->_('VirtfusionDirectProvisioningMod.service_info.network'); ?></strong>
     </div>
     <div class="card-body">
         <div class="row g-3">
@@ -24,6 +24,16 @@ $vf_network = $server_info->network_addresses ?? (object) ['ipv4' => [], 'ipv6_b
                     <?php } ?>
                 </div>
             <?php } ?>
+        </div>
+        <div class="row g-3 mt-1 pt-3 border-top">
+            <div class="col-md-6 d-flex justify-content-between gap-3">
+                <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.port_speed_inbound'); ?></span>
+                <strong><?php echo $this->Html->safe($server_info->network_in ?? ($empty_value ?? '—')); ?></strong>
+            </div>
+            <div class="col-md-6 d-flex justify-content-between gap-3">
+                <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.port_speed_outbound'); ?></span>
+                <strong><?php echo $this->Html->safe($server_info->network_out ?? ($empty_value ?? '—')); ?></strong>
+            </div>
         </div>
     </div>
 </div>

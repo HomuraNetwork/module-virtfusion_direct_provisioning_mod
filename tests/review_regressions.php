@@ -24,6 +24,9 @@ class Language
         if ($key === 'VirtfusionDirectProvisioningMod.service_name.traffic_block') {
             return ($arguments[2] ?? '') . ' Traffic Block';
         }
+        if ($key === 'VirtfusionDirectProvisioningMod.service_info.unlimited') {
+            return 'Unlimited';
+        }
         return $key;
     }
 }
@@ -245,13 +248,21 @@ class FakeLiveServerApi
         return [
             'info' => ['http_code' => 200],
             'response' => json_encode([
-                'data' => [[
-                    'id' => 19,
-                    'name' => 'Laptop',
-                    'type' => 'OpenSSH',
-                    'enabled' => true,
-                    'publicKey' => 'ssh-ed25519 ' . base64_encode(str_repeat('e', 64)) . ' laptop@test'
-                ]]
+                'data' => [
+                    [
+                        'id' => 19,
+                        'name' => 'Laptop',
+                        'type' => 'OpenSSH',
+                        'enabled' => true,
+                        'publicKey' => 'ssh-ed25519 ' . base64_encode(str_repeat('e', 64)) . ' laptop@test'
+                    ],
+                    [
+                        'id' => 20,
+                        'name' => 'Key Without Enabled Flag',
+                        'type' => 'OpenSSH',
+                        'publicKey' => 'ssh-ed25519 ' . base64_encode(str_repeat('f', 64)) . ' second@test'
+                    ]
+                ]
             ])
         ];
     }
@@ -563,6 +574,11 @@ assertSameValue('Ubuntu', $live_info->os_templates[0]->name, 'OS templates must 
 assertSameValue(49, $live_info->os_templates[0]->templates[0]->id, 'OS templates must retain their VirtFusion ID.');
 assertSameValue(7, $live_info->owner_id, 'The remote server owner must be retained for SSH key imports.');
 assertSameValue('Laptop', $live_info->ssh_keys[0]->name, 'Enabled owner SSH keys must be available to the reinstall form.');
+assertSameValue(
+    'Key Without Enabled Flag',
+    $live_info->ssh_keys[1]->name,
+    'SSH keys without an enabled field must remain available unless explicitly disabled.'
+);
 assertSameValue(true, strpos($live_info->ssh_keys[0]->fingerprint, 'SHA256:') === 0, 'Owner SSH keys must expose a SHA256 fingerprint.');
 assertSameValue(false, property_exists($live_info->ssh_keys[0], 'publicKey'), 'SSH public key material must not be exposed to the view.');
 assertSameValue(
@@ -579,6 +595,7 @@ assertSameValue(false, callPrivate($live_module, 'serverHasSshKeys', [$live_info
 assertSameValue(false, callPrivate($module, 'sshPublicKeyIsValid', ['-----BEGIN OPENSSH PRIVATE KEY-----']), 'Private key input must be rejected.');
 assertSameValue('999 B', callPrivate($module, 'formatTrafficBytes', [999]), 'Small traffic values must retain byte units.');
 assertSameValue('1.5 KB', callPrivate($module, 'formatTrafficBytes', [1500]), 'Traffic formatting must scale without false precision.');
+assertSameValue('Unlimited', callPrivate($module, 'formatNetworkSpeed', [0]), 'A zero VirtFusion port speed must display as unlimited.');
 $allocation_only_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
 $allocation_only_module->serverApi = new FakeAllocationOnlyServerApi();
 $allocation_only_info = callPrivate($allocation_only_module, 'getRemoteServerInfo', [(object) [], 42]);
@@ -709,6 +726,25 @@ assertSameValue(
     $build_api->builds[3]['vars'],
     'Password login must request an emailed credential without submitting SSH keys.'
 );
+$optional_hostname_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'hostname' => '',
+        'password_login' => '1'
+    ],
+    $live_info
+]);
+assertSameValue('build', $optional_hostname_result['type'], 'Reinstall must allow an omitted hostname.');
+assertSameValue(
+    ['operatingSystemId' => 49, 'email' => true],
+    $build_api->builds[4]['vars'],
+    'An empty optional hostname must be omitted from the VirtFusion build request.'
+);
 $build_module->Input->errors = [];
 $missing_auth_result = callPrivate($build_module, 'handleServerAction', [
     (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
@@ -728,7 +764,7 @@ assertSameValue(
     isset($build_module->Input->errors['ssh_key_ids']['required']),
     'The missing SSH key error must identify every valid authentication choice.'
 );
-assertSameValue(4, count($build_api->builds), 'A missing authentication choice must not call the build API.');
+assertSameValue(5, count($build_api->builds), 'A missing authentication choice must not call the build API.');
 assertSameValue('built', $build_module->Services->fields['virtfusion_build_state']['value'], 'Manual installation must persist build state.');
 assertSameValue(true, $build_module->Services->fields['virtfusion_password']['encrypted'], 'The new build password must stay encrypted.');
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
@@ -902,16 +938,16 @@ assertSameValue(
     strpos($client_manage_template, 'server_overview.pdt') !== false
         && strpos($server_overview_template, 'traffic_total') !== false
         && strpos($server_overview_template, 'traffic_server') !== false
-        && strpos($server_overview_template, "traffic_reset, 'date'") !== false,
-    'The client traffic panel must show total and server traffic with a date-only reset.'
+        && strpos($server_overview_template, "traffic_reset, 'M j, Y'") !== false,
+    'The client traffic panel must show total and server traffic with a concise next-reset date.'
 );
 assertSameValue(
     true,
     strpos($admin_manage_template, 'server_overview.pdt') !== false
         && strpos($server_overview_template, 'traffic_total') !== false
         && strpos($server_overview_template, 'traffic_server') !== false
-        && strpos($server_overview_template, "traffic_reset, 'date'") !== false,
-    'The admin traffic panel must show total and server traffic with a date-only reset.'
+        && strpos($server_overview_template, "traffic_reset, 'M j, Y'") !== false,
+    'The admin traffic panel must show total and server traffic with a concise next-reset date.'
 );
 assertSameValue(
     true,
@@ -1103,19 +1139,24 @@ assertSameValue(
         && strpos($server_overview_template, 'traffic_in_display') !== false
         && strpos($server_overview_template, 'traffic_out_display') !== false
         && strpos($server_overview_template, 'vf-traffic-totals') !== false
+        && strpos($server_overview_template, 'vf-server-stat-heading') !== false
+        && strpos($server_overview_template, 'network_in') === false
+        && strpos($server_overview_template, 'network_out') === false
         && strpos($server_overview_template, 'col-lg-6 vf-server-overview-section') === false,
-    'The shared overview must stack resources above split inbound and outbound traffic.'
+    'The shared overview must compact resource headings and stack them above split traffic without port speed.'
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'server_actions.pdt') < strpos($client_manage_template, 'server_overview.pdt')
-        && strpos($admin_manage_template, 'server_actions.pdt') < strpos($admin_manage_template, 'server_overview.pdt')
+    strpos($client_manage_template, 'server_actions.pdt') === false
+        && strpos($admin_manage_template, 'server_actions.pdt') === false
+        && strpos($server_overview_template, 'server_actions.pdt') !== false
+        && strpos($server_overview_template, 'value="refresh_ips"') !== false
         && strpos($client_manage_template, 'server_os_management.pdt') > strpos($client_manage_template, 'network_addresses.pdt')
         && strpos($client_manage_template, 'server_more_features.pdt') > strpos($client_manage_template, 'server_os_management.pdt')
         && strpos($server_os_management_template, 'os_install.pdt') !== false
         && strpos($server_more_features_template, 'os_install.pdt') === false
         && strpos($server_more_features_template, 'value="manage"') !== false,
-    'Frequent actions must stay above status while OS reinstall and the VirtFusion handoff remain separate lower sections.'
+    'Actions and refresh must stay inside the overview while OS reinstall and the VirtFusion handoff remain separate lower sections.'
 );
 assertSameValue(
     true,
@@ -1174,10 +1215,11 @@ assertSameValue(
         && strpos($module_source, "case 'build':") !== false
         && strpos($module_source, "case 'rebuild':") !== false
         && strpos($module_source, "'operatingSystemId' => (int) \$template_id") !== false
-        && strpos($module_source, "'hostname' => \$hostname") !== false
+        && strpos($module_source, "if (\$hostname !== '')") !== false
+        && strpos($module_source, "\$build_params['hostname'] = \$hostname") !== false
         && strpos($module_source, "\$build_params['sshKeys'] = \$ssh_key_ids") !== false
-        && strpos($module_source, "'email' => \$password_login") !== false,
-    'OS reinstall must submit its template, hostname, selected owner keys, and explicit password-login preference.'
+        && strpos($module_source, "\$build_params['email'] = \$password_login") !== false,
+    'OS reinstall must submit its template, optional hostname, selected owner keys, and explicit password-login preference.'
 );
 assertSameValue(
     true,
@@ -1185,11 +1227,14 @@ assertSameValue(
         && strpos($os_build_options_template, 'name="ssh_key_ids[]"') !== false
         && strpos($os_build_options_template, 'name="ssh_public_key"') !== false
         && strpos($os_build_options_template, 'name="password_login"') !== false
+        && strpos($os_build_options_template, 'data-vf-auth-mode="ssh" checked') !== false
+        && strpos($os_build_options_template, 'data-vf-ssh-empty') !== false
         && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
         && strpos($os_build_options_template, 'publicKey') === false
-        && strpos($os_build_options_template, ' checked') === false
+        && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
+        && preg_match('/name="hostname"[^>]*required/s', $os_build_options_template) === 0
         && strpos($os_install_template, 'sshKeyRequired') !== false,
-    'The OS popup must require an explicit key, import, or password choice without exposing stored key material or preselecting a key.'
+    'The OS popup must use explicit auth blocks, show an empty key state, keep hostname optional, and never preselect a saved key.'
 );
 assertSameValue(
     true,
@@ -1197,8 +1242,10 @@ assertSameValue(
         && strpos($admin_manage_template, 'network_addresses.pdt') !== false
         && strpos($network_template, "'ipv4'") !== false
         && strpos($network_template, "'ipv6_blocks'") !== false
+        && strpos($network_template, 'port_speed_inbound') !== false
+        && strpos($network_template, 'port_speed_outbound') !== false
         && strpos($network_template, "['main', 'base', 'extra', 'ipv6']") === false,
-    'Manage must display only the normalized remote IPv4 list and IPv6 blocks.'
+    'Manage network must display normalized IP lists and inbound/outbound port speed.'
 );
 assertSameValue(
     false,
@@ -1350,11 +1397,12 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'storage.ticket_required') !== false
-        && strpos($admin_manage_template, 'storage.ticket_required') !== false
-        && strpos($client_manage_template, 'alert alert-danger') !== false
-        && strpos($client_manage_template, 'storage.open_ticket') !== false,
-    'Manage views must show a red storage mismatch warning and client ticket link.'
+    strpos($client_manage_template, 'storage.ticket_required') === false
+        && strpos($admin_manage_template, 'storage.ticket_required') === false
+        && strpos($server_overview_template, 'vf-server-stat-warning') !== false
+        && strpos($server_overview_template, 'storage.disk_mismatch') !== false
+        && strpos($server_overview_template, 'storage.open_ticket') !== false,
+    'Storage mismatch must appear inside the Disk resource block with the client ticket link.'
 );
 assertSameValue(
     true,

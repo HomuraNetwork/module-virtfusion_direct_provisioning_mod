@@ -115,7 +115,7 @@
         if (!hasBuildProgress) {
             patchSection(current, incoming, 'task');
         }
-        ['notices', 'actions', 'overview', 'network', 'operating-system', 'more-features'].forEach(function (name) {
+        ['notices', 'overview', 'network', 'operating-system', 'more-features'].forEach(function (name) {
             patchSection(current, incoming, name);
         });
         updateResponseMessage(current, data, isPolling);

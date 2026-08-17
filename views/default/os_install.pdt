@@ -148,7 +148,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var openButton = document.querySelector('[data-vf-os-open="<?php echo $vf_os_prefix; ?>"]');
     var hostname = installer.querySelector('[data-vf-hostname]');
     var form = installer.querySelector('form');
-    var passwordLogin = installer.querySelector('[data-vf-password-login]');
+    var authModeInputs = installer.querySelectorAll('[data-vf-auth-mode]');
     var keyAuthControls = installer.querySelectorAll('[data-vf-key-auth-control]');
     var sshKeyCheckboxes = installer.querySelectorAll('input[name="ssh_key_ids[]"]');
     var importToggle = installer.querySelector('[data-vf-ssh-import-toggle]');
@@ -156,6 +156,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var keyName = installer.querySelector('[data-vf-ssh-key-name]');
     var publicKey = installer.querySelector('[data-vf-ssh-public-key]');
     var initialHostname = hostname ? hostname.value : '';
+    var initialImport = importToggle ? importToggle.checked : false;
     var emptyLabel = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.tabManage.select_os_template', true)); ?>;
     var sshKeyRequired = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_required', true)); ?>;
     var catalog = [];
@@ -184,14 +185,11 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         sshKeyCheckboxes.forEach(function (checkbox) {
             checkbox.checked = false;
         });
-        if (passwordLogin) {
-            passwordLogin.checked = false;
-        }
+        authModeInputs.forEach(function (input) {
+            input.checked = input.getAttribute('data-vf-auth-mode') === 'ssh';
+        });
         if (importToggle) {
-            importToggle.checked = false;
-        }
-        if (importPanel) {
-            importPanel.hidden = true;
+            importToggle.checked = initialImport;
         }
         [keyName, publicKey].forEach(function (field) {
             if (field) {
@@ -211,16 +209,27 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         });
         if (category.value !== '' || template.value !== '' || sshKeySelected
             || (hostname && hostname.value !== initialHostname)
-            || (importToggle && importToggle.checked)
-            || (passwordLogin && passwordLogin.checked)) {
+            || (importToggle && importToggle.checked !== initialImport)
+            || usingPasswordLogin()) {
             installer.setAttribute('data-vf-dirty', 'true');
         } else {
             installer.removeAttribute('data-vf-dirty');
         }
     }
 
+    function usingPasswordLogin() {
+        var selected = installer.querySelector('[data-vf-auth-mode]:checked');
+        return selected && selected.getAttribute('data-vf-auth-mode') === 'password';
+    }
+
     function syncAuthenticationMode() {
-        var usePassword = passwordLogin && passwordLogin.checked;
+        var usePassword = usingPasswordLogin();
+        authModeInputs.forEach(function (input) {
+            var choice = input.closest('.vf-auth-choice');
+            if (choice) {
+                choice.classList.toggle('is-selected', input.checked);
+            }
+        });
         keyAuthControls.forEach(function (control) {
             control.classList.toggle('text-muted', usePassword);
             control.setAttribute('aria-disabled', usePassword ? 'true' : 'false');
@@ -311,16 +320,16 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             markDirty();
         });
     });
-    if (passwordLogin) {
-        passwordLogin.addEventListener('change', function () {
+    authModeInputs.forEach(function (input) {
+        input.addEventListener('change', function () {
             clearAuthenticationError();
             syncAuthenticationMode();
             markDirty();
         });
-    }
+    });
     if (importToggle && importPanel && keyName && publicKey) {
         importToggle.addEventListener('change', function () {
-            var enabled = importToggle.checked && !(passwordLogin && passwordLogin.checked);
+            var enabled = importToggle.checked && !usingPasswordLogin();
             clearAuthenticationError();
             syncAuthenticationMode();
             if (!enabled) {
@@ -338,7 +347,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     }
     if (form) {
         form.addEventListener('submit', function (event) {
-            var usePassword = passwordLogin && passwordLogin.checked;
+            var usePassword = usingPasswordLogin();
             var selectedKey = Array.prototype.some.call(sshKeyCheckboxes, function (checkbox) {
                 return checkbox.checked;
             });

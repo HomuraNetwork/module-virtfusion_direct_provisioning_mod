@@ -177,6 +177,10 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
+        if ((float) $value === 0.0) {
+            return Language::_('VirtfusionDirectProvisioningMod.service_info.unlimited', true);
+        }
+
         $megabits = ((float) $value * 8) / 1000;
         $unit = 'Mbps';
         $display = $megabits;
@@ -4103,9 +4107,15 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $data = json_decode($request['response']);
+        $key_list = $data->data ?? [];
+        if (is_object($key_list)) {
+            $key_list = $key_list->data
+                ?? ($key_list->keys ?? ($key_list->sshKeys ?? []));
+        }
         $keys = [];
-        foreach (($data->data ?? []) as $key) {
-            if (!isset($key->id) || !is_numeric($key->id) || empty($key->enabled)) {
+        foreach ((array) $key_list as $key) {
+            if (!isset($key->id) || !is_numeric($key->id)
+                || (property_exists($key, 'enabled') && !$this->boolValue($key->enabled))) {
                 continue;
             }
             $public_key = (string) ($key->publicKey ?? ($key->public ?? ''));
@@ -4467,7 +4477,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
 
                 $hostname = trim((string) ($post['hostname'] ?? ''));
-                if (!$this->hostnameIsValid($hostname)) {
+                if ($hostname !== '' && !$this->hostnameIsValid($hostname)) {
                     $this->Input->setErrors([
                         'hostname' => [
                             'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.hostname', true)
@@ -4565,11 +4575,11 @@ class VirtfusionDirectProvisioningMod extends Module
                     }
                 }
 
-                $build_params = [
-                    'operatingSystemId' => (int) $template_id,
-                    'hostname' => $hostname,
-                    'email' => $password_login
-                ];
+                $build_params = ['operatingSystemId' => (int) $template_id];
+                if ($hostname !== '') {
+                    $build_params['hostname'] = $hostname;
+                }
+                $build_params['email'] = $password_login;
                 if (!empty($ssh_key_ids)) {
                     $build_params['sshKeys'] = $ssh_key_ids;
                 }
