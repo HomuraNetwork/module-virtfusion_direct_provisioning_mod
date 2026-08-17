@@ -287,6 +287,12 @@ class FakeBuildServerApi
 {
     public $builds = [];
     public $createdSshKeys = [];
+    public $queueStatus = [
+        'serverId' => 42,
+        'finished' => false,
+        'failed' => false,
+        'progress' => 35
+    ];
 
     public function get($server_id, $detailed = false)
     {
@@ -315,6 +321,24 @@ class FakeBuildServerApi
         return [
             'info' => ['http_code' => 201],
             'response' => json_encode(['data' => ['id' => 88]])
+        ];
+    }
+
+    public function resetPassword($server_id, array $vars)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => ['queueId' => 7692, 'expectedPassword' => 'expected-password']
+            ])
+        ];
+    }
+
+    public function getQueue($queue_id)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode(['data' => $this->queueStatus])
         ];
     }
 }
@@ -543,6 +567,11 @@ assertSameValue(
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0, 'has_active_tasks' => true], 'manage']),
     'An active VirtFusion build must still allow the control-panel handoff.'
 );
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1, 'has_active_tasks' => true], 'resetpass_status']),
+    'An active VirtFusion task must not block read-only password queue polling.'
+);
 assertSameValue(false, callPrivate($module, 'taskStateIsActive', [false]), 'A false active-task state must remain idle.');
 assertSameValue(true, callPrivate($module, 'taskStateIsActive', [(object) ['action' => 'build_server']]), 'An active task object must lock local actions.');
 $task_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
@@ -625,6 +654,62 @@ $build_module->Input = new class {
         $this->errors = $errors;
     }
 };
+$password_reset_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'resetpass'],
+    $live_info
+]);
+assertSameValue('password', $password_reset_result['type'], 'A password reset must return a sensitive result.');
+assertSameValue('expected-password', $password_reset_result['password'], 'The expected reset password must be displayed once.');
+assertSameValue(7692, $password_reset_result['queue_id'], 'The reset queue ID must be retained for status polling.');
+$password_pending_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'resetpass_status', 'queue_id' => '7692'],
+    $live_info
+]);
+assertSameValue(
+    ['type' => 'password_status', 'status' => 'pending', 'progress' => 35.0],
+    $password_pending_result,
+    'A running reset queue must expose only its normalized status and progress.'
+);
+$build_api->queueStatus['finished'] = true;
+$build_api->queueStatus['progress'] = 100;
+$password_complete_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'resetpass_status', 'queue_id' => '7692'],
+    $live_info
+]);
+assertSameValue('complete', $password_complete_result['status'], 'A finished reset queue must be reported as complete.');
+$build_api->queueStatus['failed'] = true;
+$password_failed_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'resetpass_status', 'queue_id' => '7692'],
+    $live_info
+]);
+assertSameValue('failed', $password_failed_result['status'], 'A failed reset queue must override completion.');
+$build_api->queueStatus['serverId'] = 99;
+$password_foreign_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'resetpass_status', 'queue_id' => '7692'],
+    $live_info
+]);
+assertSameValue('unknown', $password_foreign_result['status'], 'A queue belonging to another server must never be exposed.');
+$build_api->queueStatus = ['serverId' => 42, 'finished' => false, 'failed' => false, 'progress' => 35];
 $build_result = callPrivate($build_module, 'handleServerAction', [
     (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
     $build_api,
@@ -895,6 +980,7 @@ $server_actions_template = file_get_contents(__DIR__ . '/../views/default/server
 $server_more_features_template = file_get_contents(__DIR__ . '/../views/default/server_more_features.pdt');
 $server_os_management_template = file_get_contents(__DIR__ . '/../views/default/server_os_management.pdt');
 $action_confirm_template = file_get_contents(__DIR__ . '/../views/default/action_confirm.pdt');
+$action_result_template = file_get_contents(__DIR__ . '/../views/default/action_result.pdt');
 $manage_ajax_template = file_get_contents(__DIR__ . '/../views/default/manage_ajax.pdt');
 $os_install_template = file_get_contents(__DIR__ . '/../views/default/os_install.pdt');
 $os_build_options_template = file_get_contents(__DIR__ . '/../views/default/os_build_options.pdt');
@@ -1153,10 +1239,14 @@ assertSameValue(
         && strpos($server_overview_template, 'value="refresh_ips"') !== false
         && strpos($client_manage_template, 'server_os_management.pdt') > strpos($client_manage_template, 'network_addresses.pdt')
         && strpos($client_manage_template, 'server_more_features.pdt') > strpos($client_manage_template, 'server_os_management.pdt')
+        && strpos($server_actions_template, 'data-vf-action-row="power"') !== false
+        && strpos($server_actions_template, 'data-vf-action-row="maintenance"') !== false
+        && strpos($server_actions_template, 'value="resetpass"') !== false
+        && strpos($server_actions_template, 'os_install.pdt') !== false
         && strpos($server_os_management_template, 'os_install.pdt') !== false
         && strpos($server_more_features_template, 'os_install.pdt') === false
         && strpos($server_more_features_template, 'value="manage"') !== false,
-    'Actions and refresh must stay inside the overview while OS reinstall and the VirtFusion handoff remain separate lower sections.'
+    'Power actions must stay in the overview while password reset and reinstall share a second action row.'
 );
 assertSameValue(
     true,
@@ -1181,11 +1271,29 @@ assertSameValue(
         && strpos($manage_ajax_template, "patchSection(current, incoming, 'feedback')") !== false
         && strpos($manage_ajax_template, 'event.defaultPrevented') !== false
         && strpos($manage_ajax_template, 'Date.now() % 5000') !== false
+        && strpos($manage_ajax_template, 'releaseSubmittedModal') !== false
+        && strpos($manage_ajax_template, "document.querySelectorAll('.modal-backdrop')") !== false
         && strpos($client_manage_template, 'data-vf-refresh-seconds=') !== false
         && strpos($admin_manage_template, 'data-vf-refresh-seconds=') !== false
         && strpos($client_manage_template, 'data-vf-refresh-section=') !== false
         && strpos($admin_manage_template, 'data-vf-refresh-section=') !== false,
     'Manage actions and timed refreshes must patch independent sections through AJAX in both views.'
+);
+assertSameValue(
+    true,
+    strpos($server_api_source, "'queue/' . (int) \$queueId") !== false
+        && strpos($module_source, "case 'resetpass_status':") !== false
+        && strpos($action_result_template, 'data-vf-password-status-response') !== false
+        && strpos($action_result_template, 'window.setTimeout(checkStatus, 5000)') !== false
+        && strpos($action_result_template, 'vf-password-control') !== false
+        && strpos($action_result_template, "queue->errors") === false,
+    'Password reset must poll its queue, present a compact copy control, and avoid exposing raw queue errors.'
+);
+assertSameValue(
+    true,
+    strpos($os_install_template, 'max-height: calc(100dvh - 2rem)') !== false
+        && strpos($os_install_template, 'overflow-y: auto') !== false,
+    'The reinstall modal must remain vertically scrollable within the viewport.'
 );
 assertSameValue(
     true,

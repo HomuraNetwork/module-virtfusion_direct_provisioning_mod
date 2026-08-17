@@ -178,6 +178,25 @@
         form.submit();
     }
 
+    function releaseSubmittedModal(form, current) {
+        var modal = form.closest('.modal') || current.querySelector('.modal.show');
+        var backdrops = document.querySelectorAll('.modal-backdrop');
+        if (!modal && backdrops.length === 0) {
+            return;
+        }
+        if (modal) {
+            modal.classList.remove('show');
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+            modal.removeAttribute('aria-modal');
+        }
+        backdrops.forEach(function (backdrop) {
+            backdrop.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+    }
+
     if (!window.virtfusionManageAjaxBound) {
         window.virtfusionManageAjaxBound = true;
         document.addEventListener('submit', function (event) {
@@ -207,6 +226,7 @@
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
             }).then(function (data) {
+                releaseSubmittedModal(form, current);
                 updateManage(current, data, false);
                 schedule(current);
             }).catch(function () {

@@ -79,6 +79,11 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/resetPassword', 'POST', $vars);
     }
 
+    public function getQueue($queueId)
+    {
+        return $this->api->submit('queue/' . (int) $queueId, 'GET');
+    }
+
     public function setVnc($serverId, $action)
     {
         return $this->api->submit('servers/' . $serverId . '/vnc', 'POST', ['action' => $action]);

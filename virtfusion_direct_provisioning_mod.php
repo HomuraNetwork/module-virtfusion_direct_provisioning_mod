@@ -4261,7 +4261,7 @@ class VirtfusionDirectProvisioningMod extends Module
     private function serverAllowsAction($server_info, $action)
     {
         if ($server_info && !empty($server_info->has_active_tasks)) {
-            return $action === 'manage';
+            return in_array($action, ['manage', 'resetpass_status'], true);
         }
 
         return !$server_info
@@ -4461,7 +4461,39 @@ class VirtfusionDirectProvisioningMod extends Module
 
                 return [
                     'type' => 'password',
-                    'password' => $password
+                    'password' => $password,
+                    'queue_id' => (int) ($data->data->queueId ?? 0)
+                ];
+
+            case 'resetpass_status':
+                $queue_id = filter_var($post['queue_id'] ?? null, FILTER_VALIDATE_INT, [
+                    'options' => ['min_range' => 1]
+                ]);
+                if ($queue_id === false) {
+                    return ['type' => 'password_status', 'status' => 'unknown', 'progress' => null];
+                }
+
+                $request = $server_api->getQueue($queue_id);
+                if (!$this->apiRequestSucceeded($request, [200])) {
+                    return ['type' => 'password_status', 'status' => 'unknown', 'progress' => null];
+                }
+
+                $data = json_decode($request['response']);
+                $queue = $data->data ?? null;
+                if (!$queue || (isset($queue->serverId) && (int) $queue->serverId !== (int) $server_id)) {
+                    return ['type' => 'password_status', 'status' => 'unknown', 'progress' => null];
+                }
+
+                $progress = isset($queue->progress) && is_numeric($queue->progress)
+                    ? max(0, min(100, (float) $queue->progress))
+                    : null;
+                $failed = !empty($queue->failed);
+                $finished = !empty($queue->finished) || ($progress !== null && $progress >= 100);
+
+                return [
+                    'type' => 'password_status',
+                    'status' => $failed ? 'failed' : ($finished ? 'complete' : 'pending'),
+                    'progress' => $progress
                 ];
 
             case 'build':
@@ -4767,7 +4799,7 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'build', 'rebuild'], true)) {
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'build', 'rebuild'], true)) {
             $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($refreshed_server_info) {
                 $server_info = $refreshed_server_info;
@@ -4886,7 +4918,7 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'build', 'rebuild'], true)) {
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'build', 'rebuild'], true)) {
             $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($refreshed_server_info) {
                 $server_info = $refreshed_server_info;

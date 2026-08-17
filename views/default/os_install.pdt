@@ -20,6 +20,14 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
 }
 ?>
 <?php if (!empty($vf_os_catalog)) { ?>
+<style>
+.vf-os-modal.show { overflow-x: hidden; overflow-y: auto; }
+.vf-os-modal .modal-dialog { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); margin-top: 1rem; margin-bottom: 1rem; }
+.vf-os-modal .modal-content { max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); }
+.vf-os-modal .modal-content > form { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; }
+.vf-os-modal .modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.vf-os-modal .modal-footer { flex: 0 0 auto; }
+</style>
 <?php if ($vf_is_reinstall) { ?>
 <div class="vf-server-action-item">
     <button

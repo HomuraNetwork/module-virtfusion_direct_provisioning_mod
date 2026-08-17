@@ -54,7 +54,7 @@ $empty_value = '—';
         <?php if ($server_available && !$server_unbuilt) { include __DIR__ . '/network_addresses.pdt'; } ?>
     </div>
     <div data-vf-refresh-section="operating-system">
-        <?php if ($server_available) { include __DIR__ . '/server_os_management.pdt'; } ?>
+        <?php if ($server_available && $server_unbuilt) { include __DIR__ . '/server_os_management.pdt'; } ?>
     </div>
     <div data-vf-refresh-section="more-features">
         <?php if ($server_available) { include __DIR__ . '/server_more_features.pdt'; } ?>

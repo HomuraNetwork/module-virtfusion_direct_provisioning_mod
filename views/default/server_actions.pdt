@@ -1,6 +1,7 @@
 <style>
 .vf-server-actions { padding: 1rem 1.25rem 1.25rem; border-bottom: 1px solid #dee2e6; }
 .vf-server-action-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.vf-server-action-list + .vf-server-action-list { margin-top: 0.5rem; padding-top: 0.75rem; border-top: 1px solid #e9ecef; }
 .vf-server-action-item { flex: 1 1 9.5rem; min-width: 0; }
 .vf-server-action-item form { height: 100%; }
 .vf-server-action-item .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; min-height: 2.5rem; }
@@ -13,15 +14,7 @@
     <div class="mb-2">
         <strong id="virtfusionServerActionsHeading"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.actions'); ?></strong>
     </div>
-    <div class="vf-server-action-list">
-        <div class="vf-server-action-item">
-            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="vnc" class="btn btn-outline-primary w-100" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
-                    <i class="fas fa-desktop" aria-hidden="true"></i>
-                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.vnc_console'); ?>
-                </button>
-            <?php $this->Form->end(); ?>
-        </div>
+    <div class="vf-server-action-list" data-vf-action-row="power">
         <?php if ($running === false) { ?>
         <div class="vf-server-action-item">
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
@@ -51,6 +44,16 @@
         </div>
         <?php } ?>
         <?php } ?>
+    </div>
+    <div class="vf-server-action-list" data-vf-action-row="maintenance">
+        <div class="vf-server-action-item">
+            <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                <button type="submit" name="action" value="vnc" class="btn btn-outline-primary w-100" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                    <i class="fas fa-desktop" aria-hidden="true"></i>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.vnc_console'); ?>
+                </button>
+            <?php $this->Form->end(); ?>
+        </div>
         <div class="vf-server-action-item">
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
                 <button
@@ -66,6 +69,7 @@
                 </button>
             <?php $this->Form->end(); ?>
         </div>
+        <?php include __DIR__ . '/os_install.pdt'; ?>
     </div>
 </section>
 <?php include __DIR__ . '/action_confirm.pdt'; ?>
