@@ -1,0 +1,128 @@
+<?php
+$vf_is_reinstall = !empty($server_info->built);
+$vf_os_action = $vf_is_reinstall ? 'rebuild' : 'build';
+$vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClientOs';
+$vf_os_catalog = [];
+foreach (($server_info->os_templates ?? []) as $vf_template_group) {
+    $vf_group_templates = [];
+    foreach (($vf_template_group->templates ?? []) as $vf_template) {
+        $vf_group_templates[] = [
+            'id' => (int) $vf_template->id,
+            'label' => (string) $vf_template->label
+        ];
+    }
+    if (!empty($vf_group_templates)) {
+        $vf_os_catalog[] = [
+            'name' => (string) $vf_template_group->name,
+            'templates' => $vf_group_templates
+        ];
+    }
+}
+?>
+<?php if (!empty($vf_os_catalog)) { ?>
+<div class="card <?php echo $vf_is_reinstall ? 'border-danger mt-3' : 'mb-3'; ?>" data-vf-os-installer="<?php echo $vf_os_prefix; ?>">
+    <div class="card-header">
+        <strong><?php $this->_($vf_is_reinstall
+            ? 'VirtfusionDirectProvisioningMod.tabManage.reinstall'
+            : 'VirtfusionDirectProvisioningMod.tabManage.install'); ?></strong>
+    </div>
+    <div class="card-body">
+        <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label" for="<?php echo $vf_os_prefix; ?>Category">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.os_family'); ?>
+                    </label>
+                    <select class="form-control form-select" id="<?php echo $vf_os_prefix; ?>Category" data-vf-os-category required <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                        <option value=""><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.select_os_family'); ?></option>
+                        <?php foreach ($vf_os_catalog as $vf_group_index => $vf_group) { ?>
+                            <option value="<?php echo (int) $vf_group_index; ?>"><?php echo $this->Html->safe($vf_group['name']); ?></option>
+                        <?php } ?>
+                    </select>
+                </div>
+                <div class="col-md">
+                    <label class="form-label" for="<?php echo $vf_os_prefix; ?>Template">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.os_template'); ?>
+                    </label>
+                    <select class="form-control form-select" id="<?php echo $vf_os_prefix; ?>Template" name="operating_system_id" data-vf-os-template required disabled>
+                        <option value=""><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.select_os_template'); ?></option>
+                    </select>
+                </div>
+                <div class="col-md-auto">
+                    <button
+                        type="submit"
+                        name="action"
+                        value="<?php echo $vf_os_action; ?>"
+                        class="btn <?php echo $vf_is_reinstall ? 'btn-danger' : 'btn-primary'; ?> w-100"
+                        data-vf-os-submit
+                        <?php if ($vf_is_reinstall) { ?>onclick="return confirm(<?php echo $this->Html->safe(json_encode(Language::_('VirtfusionDirectProvisioningMod.confirm.reinstall', true))); ?>);"<?php } ?>
+                        disabled
+                    >
+                        <i class="fas <?php echo $vf_is_reinstall ? 'fa-sync-alt' : 'fa-play'; ?>" aria-hidden="true"></i>
+                        <?php $this->_($vf_is_reinstall
+                            ? 'VirtfusionDirectProvisioningMod.tabManage.reinstall_button'
+                            : 'VirtfusionDirectProvisioningMod.tabManage.install_button'); ?>
+                    </button>
+                </div>
+            </div>
+        <?php $this->Form->end(); ?>
+    </div>
+    <script type="application/json" data-vf-os-catalog><?php echo json_encode(
+        $vf_os_catalog,
+        JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+    ); ?></script>
+</div>
+<script type="text/javascript">
+(function () {
+    var installer = document.querySelector('[data-vf-os-installer="<?php echo $vf_os_prefix; ?>"]');
+    if (!installer) {
+        return;
+    }
+    var category = installer.querySelector('[data-vf-os-category]');
+    var template = installer.querySelector('[data-vf-os-template]');
+    var submit = installer.querySelector('[data-vf-os-submit]');
+    var catalogElement = installer.querySelector('[data-vf-os-catalog]');
+    var emptyLabel = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.tabManage.select_os_template', true)); ?>;
+    var catalog = [];
+    try {
+        catalog = JSON.parse(catalogElement.textContent || '[]');
+    } catch (error) {
+        return;
+    }
+
+    function resetTemplates() {
+        template.replaceChildren();
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = emptyLabel;
+        template.appendChild(placeholder);
+    }
+
+    function markDirty() {
+        if (category.value !== '' || template.value !== '') {
+            installer.setAttribute('data-vf-dirty', 'true');
+        } else {
+            installer.removeAttribute('data-vf-dirty');
+        }
+    }
+
+    category.addEventListener('change', function () {
+        resetTemplates();
+        var group = category.value === '' ? null : catalog[Number(category.value)];
+        (group && group.templates ? group.templates : []).forEach(function (item) {
+            var option = document.createElement('option');
+            option.value = String(item.id);
+            option.textContent = item.label;
+            template.appendChild(option);
+        });
+        template.disabled = !group || !group.templates || group.templates.length === 0;
+        submit.disabled = true;
+        markDirty();
+    });
+    template.addEventListener('change', function () {
+        submit.disabled = template.value === '';
+        markDirty();
+    });
+}());
+</script>
+<?php } ?>

@@ -109,6 +109,175 @@ class FakeTaskServerApi
             ])
         ];
     }
+
+    public function getTemplates($server_id)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [[
+                    'name' => 'Ubuntu',
+                    'templates' => [[
+                        'id' => 49,
+                        'name' => 'Ubuntu Server',
+                        'version' => '24.04 LTS',
+                        'variant' => 'Minimal'
+                    ]]
+                ]]
+            ])
+        ];
+    }
+}
+
+class FakeLiveServerApi
+{
+    public function get($server_id, $detailed = false)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [
+                    'built' => true,
+                    'name' => 'Live server',
+                    'state' => 'running',
+                    'tasks' => ['active' => false, 'actions' => ['pending' => []]],
+                    'settings' => [
+                        'resources' => [
+                            'cpuCores' => 4,
+                            'memory' => 6144,
+                            'storage' => 120,
+                            'traffic' => 2000
+                        ],
+                        'backupPlan' => 0
+                    ],
+                    'traffic' => [
+                        'public' => [
+                            'currentPeriod' => [
+                                'limit' => 2500,
+                                'end' => '2026-08-31T23:59:59+00:00'
+                            ]
+                        ]
+                    ],
+                    'network' => [
+                        'interfaces' => [[
+                            'mac' => '00:11:22:33:44:55',
+                            'ipv4' => [[
+                                'address' => '192.0.2.42',
+                                'gateway' => '192.0.2.1'
+                            ]],
+                            'ipv6' => [[
+                                'subnet' => '2001:db8:42::',
+                                'cidr' => 64,
+                                'gateway' => '2001:db8:42::1'
+                            ]],
+                            'inAverage' => 1000,
+                            'outAverage' => 1000
+                        ]]
+                    ],
+                    'remoteState' => [
+                        'running' => true,
+                        'state' => 'running',
+                        'cpu' => 9.8,
+                        'memory' => [
+                            'memtotal' => '419924',
+                            'memfree' => '159096',
+                            'memavailable' => '319428'
+                        ],
+                        'agent' => [
+                            'fsinfo' => [[
+                                'name' => 'vda3',
+                                'mountpoint' => '/',
+                                'total-bytes' => 9913355264,
+                                'used-bytes' => 2701046784,
+                                'type' => 'ext4'
+                            ]]
+                        ]
+                    ]
+                ]
+            ])
+        ];
+    }
+
+    public function getTraffic($server_id)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [
+                    'monthly' => [[
+                        'start' => '2026-08-01T00:00:00+00:00',
+                        'end' => '2026-08-31T23:59:59+00:00',
+                        'rx' => 1847110337,
+                        'tx' => 1270421,
+                        'total' => 1848380758,
+                        'limit' => 2000,
+                        'blocks' => [['traffic' => 500]]
+                    ]]
+                ]
+            ])
+        ];
+    }
+
+    public function getTemplates($server_id)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [[
+                    'name' => 'Ubuntu',
+                    'templates' => [
+                        [
+                            'id' => 49,
+                            'name' => 'Ubuntu Server',
+                            'version' => '24.04 LTS',
+                            'variant' => 'Minimal'
+                        ]
+                    ]
+                ]]
+            ])
+        ];
+    }
+}
+
+class FakeAllocationOnlyServerApi extends FakeLiveServerApi
+{
+    public function get($server_id, $detailed = false)
+    {
+        $request = parent::get($server_id, $detailed);
+        $data = json_decode($request['response']);
+        $data->data->remoteState = (object) [
+            'running' => true,
+            'state' => 'running'
+        ];
+        $request['response'] = json_encode($data);
+        return $request;
+    }
+}
+
+class FakeBuildServerApi
+{
+    public $builds = [];
+
+    public function get($server_id, $detailed = false)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => ['tasks' => ['active' => false, 'actions' => ['pending' => []]]]
+            ])
+        ];
+    }
+
+    public function build($server_id, array $vars)
+    {
+        $this->builds[] = ['server_id' => $server_id, 'vars' => $vars];
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => ['settings' => ['decryptedPassword' => 'new-build-password']]
+            ])
+        ];
+    }
 }
 
 class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
@@ -116,6 +285,8 @@ class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
     public $state;
     public $serverApi;
     public $PackageOptions;
+    public $Services;
+    public $Input;
 
     protected function getServerApiFromRow($row)
     {
@@ -304,6 +475,11 @@ assertSameValue(
     'Unbuilt servers must still allow state refresh checks.'
 );
 assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'build']),
+    'Unbuilt servers must allow a user-selected OS build.'
+);
+assertSameValue(
     false,
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0], 'vnc']),
     'Unbuilt servers must continue to block actions that require a built guest.'
@@ -317,6 +493,11 @@ assertSameValue(
     false,
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1, 'has_active_tasks' => true], 'restart']),
     'An active VirtFusion build must block local server actions.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 0, 'has_active_tasks' => true], 'build']),
+    'An active VirtFusion task must block another OS build.'
 );
 assertSameValue(
     true,
@@ -334,6 +515,82 @@ assertSameValue(
     $task_info->pending_tasks,
     'Pending VirtFusion action text must identify the exact resource change.'
 );
+assertSameValue(49, $task_info->os_templates[0]->templates[0]->id, 'Unbuilt servers must load templates for manual installation.');
+$live_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$live_module->serverApi = new FakeLiveServerApi();
+$live_info = callPrivate($live_module, 'getRemoteServerInfo', [(object) [], 42]);
+assertSameValue(4, $live_info->cpu, 'The resource panel must use the CPU allocation currently reported by VirtFusion.');
+assertSameValue(6144, $live_info->memory, 'The resource panel must use the memory currently reported by VirtFusion.');
+assertSameValue(120, $live_info->disk, 'The resource panel must use the disk currently reported by VirtFusion.');
+assertSameValue(9.8, $live_info->resource_usage->cpu, 'CPU utilization must use the remoteState percentage.');
+assertSameValue(23.9, $live_info->resource_usage->memory, 'Memory utilization must use guest available memory.');
+assertSameValue(27.2, $live_info->resource_usage->disk, 'Disk utilization must use the guest root filesystem.');
+assertSameValue(['192.0.2.42'], $live_info->network_addresses->ipv4, 'Manage must expose a flat remote IPv4 list.');
+assertSameValue(['2001:db8:42::/64'], $live_info->network_addresses->ipv6_blocks, 'Manage must expose remote IPv6 blocks.');
+assertSameValue('1.85 GB', $live_info->traffic_in_display, 'Inbound traffic must be formatted independently.');
+assertSameValue('1.27 MB', $live_info->traffic_out_display, 'Outbound traffic must be formatted independently.');
+assertSameValue('1.85 GB', $live_info->traffic_used_display, 'Total traffic must use the API total.');
+assertSameValue(2500, $live_info->traffic_total, 'Traffic blocks must be included in the available traffic total.');
+assertSameValue('Ubuntu', $live_info->os_templates[0]->name, 'OS templates must retain their VirtFusion group.');
+assertSameValue(49, $live_info->os_templates[0]->templates[0]->id, 'OS templates must retain their VirtFusion ID.');
+assertSameValue(
+    'Ubuntu Server 24.04 LTS - Minimal',
+    $live_info->os_templates[0]->templates[0]->label,
+    'OS template labels must include the useful version and variant.'
+);
+assertSameValue(true, callPrivate($live_module, 'serverHasOsTemplate', [$live_info, 49]), 'Available OS template IDs must validate.');
+assertSameValue(false, callPrivate($live_module, 'serverHasOsTemplate', [$live_info, 999]), 'Unknown OS template IDs must be rejected.');
+assertSameValue('999 B', callPrivate($module, 'formatTrafficBytes', [999]), 'Small traffic values must retain byte units.');
+assertSameValue('1.5 KB', callPrivate($module, 'formatTrafficBytes', [1500]), 'Traffic formatting must scale without false precision.');
+$allocation_only_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$allocation_only_module->serverApi = new FakeAllocationOnlyServerApi();
+$allocation_only_info = callPrivate($allocation_only_module, 'getRemoteServerInfo', [(object) [], 42]);
+assertSameValue(null, $allocation_only_info->resource_usage->cpu, 'Missing CPU telemetry must not create a percentage.');
+assertSameValue(null, $allocation_only_info->resource_usage->memory, 'Missing memory telemetry must not create a percentage.');
+assertSameValue(null, $allocation_only_info->resource_usage->disk, 'Missing disk telemetry must not create a percentage.');
+$build_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$build_api = new FakeBuildServerApi();
+$build_module->Services = new class {
+    public $fields = [];
+
+    public function editField($service_id, array $field)
+    {
+        $this->fields[$field['key']] = $field;
+    }
+
+    public function errors()
+    {
+        return false;
+    }
+};
+$build_module->Input = new class {
+    public $errors = [];
+
+    public function setErrors(array $errors)
+    {
+        $this->errors = $errors;
+    }
+};
+$build_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    ['action' => 'build', 'operating_system_id' => 49],
+    $live_info
+]);
+assertSameValue(
+    'VirtfusionDirectProvisioningMod.tabManage.install_started',
+    $build_result,
+    'A valid unbuilt-server OS selection must start installation.'
+);
+assertSameValue(
+    ['operatingSystemId' => 49, 'email' => true],
+    $build_api->builds[0]['vars'],
+    'Manual OS installation must submit only the selected template and credential email flag.'
+);
+assertSameValue('built', $build_module->Services->fields['virtfusion_build_state']['value'], 'Manual installation must persist build state.');
+assertSameValue(true, $build_module->Services->fields['virtfusion_password']['encrypted'], 'The new build password must stay encrypted.');
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
 $add_rules = callPrivate($module, 'getServiceRules', [
     ['configoptions' => ['autoBuild' => 'true']],
@@ -457,17 +714,23 @@ $language_source = file_get_contents(
 );
 $client_manage_template = file_get_contents(__DIR__ . '/../views/default/tabManage.pdt');
 $admin_manage_template = file_get_contents(__DIR__ . '/../views/default/tabAdminManage.pdt');
+$server_overview_template = file_get_contents(__DIR__ . '/../views/default/server_overview.pdt');
+$manage_ajax_template = file_get_contents(__DIR__ . '/../views/default/manage_ajax.pdt');
+$os_install_template = file_get_contents(__DIR__ . '/../views/default/os_install.pdt');
+$network_template = file_get_contents(__DIR__ . '/../views/default/network_addresses.pdt');
+$client_service_info_template = file_get_contents(__DIR__ . '/../views/default/client_service_info.pdt');
+$server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
 assertSameValue(
     true,
     strpos($client_manage_template, 'if ($server_unbuilt)') !== false
         && strpos($client_manage_template, 'value="manage"') !== false,
-    'The client view must reduce an unbuilt server to its Manage Server action.'
+    'The client view must retain a control-panel handoff for an unbuilt server.'
 );
 assertSameValue(
     true,
     strpos($admin_manage_template, 'if ($server_unbuilt)') !== false
         && strpos($admin_manage_template, '$admin_server_url') !== false,
-    'The admin view must reduce an unbuilt server to its direct management action.'
+    'The admin view must retain a control-panel handoff for an unbuilt server.'
 );
 assertSameValue(
     true,
@@ -489,16 +752,18 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'traffic_total') !== false
-        && strpos($client_manage_template, 'traffic_server') !== false
-        && strpos($client_manage_template, "traffic_reset, 'date'") !== false,
+    strpos($client_manage_template, 'server_overview.pdt') !== false
+        && strpos($server_overview_template, 'traffic_total') !== false
+        && strpos($server_overview_template, 'traffic_server') !== false
+        && strpos($server_overview_template, "traffic_reset, 'date'") !== false,
     'The client traffic panel must show total and server traffic with a date-only reset.'
 );
 assertSameValue(
     true,
-    strpos($admin_manage_template, 'traffic_total') !== false
-        && strpos($admin_manage_template, 'traffic_server') !== false
-        && strpos($admin_manage_template, "traffic_reset, 'date'") !== false,
+    strpos($admin_manage_template, 'server_overview.pdt') !== false
+        && strpos($server_overview_template, 'traffic_total') !== false
+        && strpos($server_overview_template, 'traffic_server') !== false
+        && strpos($server_overview_template, "traffic_reset, 'date'") !== false,
     'The admin traffic panel must show total and server traffic with a date-only reset.'
 );
 assertSameValue(
@@ -661,6 +926,89 @@ assertSameValue(
     strpos($vnc_template, '<script type="module"') !== false,
     'The VNC initializer must not rely on module scripts executing after an AJAX tab replacement.'
 );
+assertSameValue(
+    true,
+    strpos($vnc_template, 'value="manage"') !== false
+        && strpos($vnc_template, "['target' => '_blank']") !== false,
+    'Opening VirtFusion from VNC must request a one-time login before opening a new window.'
+);
+assertSameValue(
+    true,
+    strpos($vnc_template, 'data-bs-dismiss="modal"') !== false
+        && strpos($vnc_template, 'keyboard: true') !== false
+        && strpos($vnc_template, 'hidden.bs.modal') !== false,
+    'The VNC popup must allow dismissal and disable the remote console after closing.'
+);
+assertSameValue(
+    true,
+    strpos($server_overview_template, '$vf_resources') !== false
+        && strpos($server_overview_template, 'data-resource-meter=') !== false
+        && strpos($server_overview_template, 'resource_usage') !== false
+        && strpos($server_overview_template, 'is_numeric($vf_usage)') !== false
+        && strpos($server_overview_template, 'traffic_in_display') !== false
+        && strpos($server_overview_template, 'traffic_out_display') !== false,
+    'The shared overview must conditionally render resource usage and split inbound and outbound traffic.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'manage_ajax.pdt') !== false
+        && strpos($admin_manage_template, 'manage_ajax.pdt') !== false
+        && strpos($manage_ajax_template, "headers: {'X-Requested-With': 'XMLHttpRequest'}") !== false
+        && strpos($manage_ajax_template, "method: 'GET'") !== false
+        && strpos($manage_ajax_template, 'data-vf-refresh-seconds') !== false
+        && strpos($manage_ajax_template, 'data-vf-dirty') !== false
+        && strpos($client_manage_template, 'data-vf-refresh-seconds=') !== false
+        && strpos($admin_manage_template, 'data-vf-refresh-seconds=') !== false,
+    'Manage actions and timed partial refreshes must prefer AJAX in both views.'
+);
+assertSameValue(
+    true,
+    substr_count($module_source, "setMessage('silent', '')") === 2,
+    'Module POST actions must suppress Blesta generic success messages.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'os_install.pdt') !== false
+        && strpos($admin_manage_template, 'os_install.pdt') !== false
+        && strpos($os_install_template, "'build'") !== false
+        && strpos($os_install_template, "'rebuild'") !== false
+        && strpos($os_install_template, 'data-vf-os-category') !== false
+        && strpos($os_install_template, 'data-vf-os-template') !== false
+        && strpos($os_install_template, 'confirm.reinstall') !== false,
+    'Both Manage views must expose two-level OS build and reinstall controls.'
+);
+assertSameValue(
+    true,
+    strpos($server_api_source, "'/templates', 'GET'") !== false
+        && strpos($module_source, "case 'build':") !== false
+        && strpos($module_source, "case 'rebuild':") !== false
+        && strpos($module_source, "'operatingSystemId' => (int) \$template_id") !== false
+        && strpos($module_source, "'email' => true") !== false,
+    'OS reinstall must use the server template list and request an emailed credential from VirtFusion.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'network_addresses.pdt') !== false
+        && strpos($admin_manage_template, 'network_addresses.pdt') !== false
+        && strpos($network_template, "'ipv4'") !== false
+        && strpos($network_template, "'ipv6_blocks'") !== false
+        && strpos($network_template, "['main', 'base', 'extra', 'ipv6']") === false,
+    'Manage must display only the normalized remote IPv4 list and IPv6 blocks.'
+);
+assertSameValue(
+    false,
+    strpos($client_service_info_template, 'ip_data') !== false
+        || strpos($client_service_info_template, 'virtfusion_primary_ipv4') !== false,
+    'Stored network snapshots must not be rendered in the client service summary.'
+);
+assertSameValue(
+    true,
+    strpos($server_overview_template, 'backup_plan') === false
+        && strpos($server_overview_template, 'latest_backup') === false
+        && strpos($module_source, 'getBackups($server_id)') === false
+        && strpos($server_api_source, 'function getBackups') === false,
+    'The Manage overview must not display or request backup information.'
+);
 
 $service = (object) ['fields' => [
     (object) ['key' => 'virtfusion_server_id', 'value' => '42', 'encrypted' => 0],
@@ -807,9 +1155,11 @@ assertSameValue(
     true,
     strpos($client_manage_template, 'vf-task-overlay') !== false
         && strpos($admin_manage_template, 'vf-task-overlay') !== false
-        && strpos($client_manage_template, 'vf-task-refresh 5s') !== false
-        && strpos($admin_manage_template, 'vf-task-refresh 5s') !== false,
-    'Active VF tasks must use the five-second Manage-page waiting overlay.'
+        && strpos($client_manage_template, '$server_busy ? 5 : 60') !== false
+        && strpos($admin_manage_template, '$server_busy ? 5 : 60') !== false
+        && strpos($client_manage_template, 'window.location.replace') === false
+        && strpos($admin_manage_template, 'window.location.replace') === false,
+    'Active VF tasks must use five-second AJAX polling without reloading the page.'
 );
 
 echo "review regressions: ok\n";

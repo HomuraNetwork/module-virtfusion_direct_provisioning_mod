@@ -1,0 +1,137 @@
+<script type="text/javascript">
+(function () {
+    if (!window.fetch || !window.FormData) {
+        return;
+    }
+
+    function runScripts(container) {
+        container.querySelectorAll('script').forEach(function (oldScript) {
+            var script = document.createElement('script');
+            Array.prototype.forEach.call(oldScript.attributes, function (attribute) {
+                script.setAttribute(attribute.name, attribute.value);
+            });
+            script.textContent = oldScript.textContent;
+            oldScript.replaceWith(script);
+        });
+    }
+
+    function currentRoot(id) {
+        return document.getElementById(id);
+    }
+
+    function replaceManage(current, data) {
+        var holder = document.createElement('div');
+        holder.innerHTML = data.content || '';
+        var replacement = holder.querySelector('#' + current.id) || holder.firstElementChild;
+        if (!replacement) {
+            throw new Error('VirtFusion Manage response did not include tab content.');
+        }
+
+        document.querySelectorAll('.virtfusion-module-response-message').forEach(function (message) {
+            message.remove();
+        });
+        current.replaceWith(replacement);
+        if (data.message && String(data.message).trim() !== '') {
+            var message = document.createElement('div');
+            message.className = 'virtfusion-module-response-message mb-3';
+            message.innerHTML = data.message;
+            replacement.parentNode.insertBefore(message, replacement);
+        }
+        runScripts(replacement);
+        return replacement;
+    }
+
+    function requestJson(url, options) {
+        return window.fetch(url, options).then(function (response) {
+            if (!response.ok) {
+                throw new Error('VirtFusion Manage request failed.');
+            }
+            return response.json();
+        });
+    }
+
+    function isUserBusy(current) {
+        var focused = document.activeElement;
+        return document.hidden
+            || current.querySelector('.modal.show')
+            || current.querySelector('[data-vf-os-installer][data-vf-dirty="true"]')
+            || (focused && current.contains(focused) && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName));
+    }
+
+    function schedule(current) {
+        window.clearTimeout(window.virtfusionManageRefreshTimer);
+        if (!current || !current.isConnected) {
+            return;
+        }
+        var seconds = Number(current.getAttribute('data-vf-refresh-seconds')) || 60;
+        window.virtfusionManageRefreshTimer = window.setTimeout(function () {
+            var liveCurrent = currentRoot(current.id);
+            if (!liveCurrent) {
+                return;
+            }
+            if (isUserBusy(liveCurrent)) {
+                schedule(liveCurrent);
+                return;
+            }
+            requestJson(liveCurrent.getAttribute('data-vf-refresh-url') || window.location.href, {
+                method: 'GET',
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            }).then(function (data) {
+                replaceManage(liveCurrent, data);
+            }).catch(function () {
+                schedule(liveCurrent);
+            });
+        }, seconds * 1000);
+    }
+
+    function submitNormally(form, submitter) {
+        if (submitter && submitter.name) {
+            var actionField = document.createElement('input');
+            actionField.type = 'hidden';
+            actionField.name = submitter.name;
+            actionField.value = submitter.value;
+            form.appendChild(actionField);
+        }
+        form.submit();
+    }
+
+    if (!window.virtfusionManageAjaxBound) {
+        window.virtfusionManageAjaxBound = true;
+        document.addEventListener('submit', function (event) {
+            var form = event.target;
+            if (!form || !form.closest || form.target === '_blank') {
+                return;
+            }
+            var current = form.closest('#tabManage, #tabAdminManage');
+            if (!current) {
+                return;
+            }
+
+            event.preventDefault();
+            window.clearTimeout(window.virtfusionManageRefreshTimer);
+            var submitter = event.submitter || document.activeElement;
+            var formData = new FormData(form);
+            if (submitter && submitter.name && !formData.has(submitter.name)) {
+                formData.append(submitter.name, submitter.value);
+            }
+            if (submitter) {
+                submitter.disabled = true;
+            }
+
+            requestJson(form.action, {
+                method: 'POST',
+                body: formData,
+                credentials: 'same-origin',
+                headers: {'X-Requested-With': 'XMLHttpRequest'}
+            }).then(function (data) {
+                replaceManage(current, data);
+            }).catch(function () {
+                submitNormally(form, submitter);
+            });
+        });
+    }
+
+    schedule(document.querySelector('#tabManage, #tabAdminManage'));
+}());
+</script>

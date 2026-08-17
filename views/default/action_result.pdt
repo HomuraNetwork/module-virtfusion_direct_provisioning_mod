@@ -76,6 +76,7 @@
 .virtfusion-vnc-footer > * {
     margin-left: 0.5rem;
 }
+.virtfusion-vnc-dismiss { font-size: 1.25rem; line-height: 1; }
 #virtfusionVncModal:fullscreen {
     width: 100vw;
     height: 100vh;
@@ -106,7 +107,7 @@
     }
 }
 </style>
-<div class="modal fade" id="virtfusionVncModal" tabindex="-1" aria-labelledby="virtfusionVncHeading" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+<div class="modal fade" id="virtfusionVncModal" tabindex="-1" aria-labelledby="virtfusionVncHeading" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
@@ -114,6 +115,7 @@
                     <h5 class="modal-title" id="virtfusionVncHeading"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.heading'); ?></h5>
                     <div class="small text-muted" id="virtfusionVncStatus" aria-live="polite"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.connecting'); ?></div>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary virtfusion-vnc-dismiss" data-bs-dismiss="modal" data-dismiss="modal" aria-label="Close">&times;</button>
             </div>
             <div class="modal-body d-flex flex-column p-0 bg-dark">
                 <div class="virtfusion-vnc-panel virtfusion-vnc-controls d-flex flex-wrap align-items-center border-bottom p-2">
@@ -159,13 +161,14 @@
                 </div>
             </div>
             <div class="modal-footer virtfusion-vnc-footer">
-                <?php if (!empty($action_result['console_url'])) { ?>
-                <a href="<?php echo $this->Html->safe($action_result['console_url']); ?>" target="_blank" rel="noopener" class="btn btn-outline-secondary">
-                    <?php $this->_('VirtfusionDirectProvisioningMod.vnc.open_virtfusion'); ?>
-                </a>
-                <?php } ?>
-                <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                    <button type="submit" name="action" value="vnc_disable" class="btn btn-primary" id="virtfusionCloseVnc">
+                <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                    <button type="submit" name="action" value="manage" class="btn btn-outline-secondary">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.open_virtfusion'); ?>
+                    </button>
+                <?php $this->Form->end(); ?>
+                <?php $this->Form->create($_SERVER['REQUEST_URI'], ['id' => 'virtfusionCloseVncForm']); ?>
+                    <?php $this->Form->fieldHidden('action', 'vnc_disable'); ?>
+                    <button type="button" class="btn btn-primary" id="virtfusionCloseVnc">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.close'); ?>
                     </button>
                 <?php $this->Form->end(); ?>
@@ -193,6 +196,7 @@
     var sendClipboard = document.getElementById('virtfusionSendClipboard');
     var copyClipboard = document.getElementById('virtfusionCopyClipboard');
     var closeButton = document.getElementById('virtfusionCloseVnc');
+    var closeForm = document.getElementById('virtfusionCloseVncForm');
     if (!modalElement || !screen || !statusElement) {
         return;
     }
@@ -200,6 +204,7 @@
     var RFB = null;
     var rfb = null;
     var connectionState = 'disconnected';
+    var disableRequested = false;
 
     function updateControls() {
         var connected = connectionState === 'connected';
@@ -306,8 +311,8 @@
             && window.bootstrap.Modal
             && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
             var modal = window.bootstrap.Modal.getOrCreateInstance(modalElement, {
-                backdrop: 'static',
-                keyboard: false
+                backdrop: true,
+                keyboard: true
             });
             modalElement.addEventListener('shown.bs.modal', loadConsole, {once: true});
             modal.show();
@@ -318,8 +323,8 @@
             window.jQuery(modalElement)
                 .one('shown.bs.modal', loadConsole)
                 .modal({
-                    backdrop: 'static',
-                    keyboard: false,
+                    backdrop: true,
+                    keyboard: true,
                     show: true
                 });
             return;
@@ -330,6 +335,41 @@
         modalElement.removeAttribute('aria-hidden');
         modalElement.setAttribute('aria-modal', 'true');
         loadConsole();
+    }
+
+    function disableVnc() {
+        if (disableRequested || !closeForm) {
+            return;
+        }
+        disableRequested = true;
+        if (rfb) {
+            rfb.disconnect();
+            rfb = null;
+        }
+        if (!window.fetch || !window.FormData) {
+            closeForm.submit();
+            return;
+        }
+        window.fetch(closeForm.action, {
+            method: 'POST',
+            body: new FormData(closeForm),
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        }).catch(function () {});
+    }
+
+    function hideModal() {
+        if (window.bootstrap && window.bootstrap.Modal) {
+            window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+            return;
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(modalElement).modal('hide');
+            return;
+        }
+        modalElement.style.display = 'none';
+        modalElement.classList.remove('show');
+        disableVnc();
     }
 
     if (reconnectButton) {
@@ -418,11 +458,14 @@
         }
     }
     if (closeButton) {
-        closeButton.addEventListener('click', function () {
-            if (rfb) {
-                rfb.disconnect();
-            }
+        closeButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            hideModal();
         });
+    }
+    modalElement.addEventListener('hidden.bs.modal', disableVnc);
+    if (window.jQuery) {
+        window.jQuery(modalElement).one('hidden.bs.modal', disableVnc);
     }
 
     showModal();

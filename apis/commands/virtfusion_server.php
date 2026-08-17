@@ -34,6 +34,11 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/build', 'POST', $vars);
     }
 
+    public function getTemplates($serverId)
+    {
+        return $this->api->submit('servers/' . $serverId . '/templates', 'GET');
+    }
+
     public function get($serverId, $remoteState = false)
     {
         $path = 'servers/' . $serverId;
@@ -122,11 +127,6 @@ class VirtfusionServer
             'POST',
             ['month' => (int) $month, 'amount' => (int) $amount]
         );
-    }
-
-    public function getBackups($serverId)
-    {
-        return $this->api->submit('backups/server/' . $serverId, 'GET');
     }
 
     public function addIpv4Qty($serverId, $qty, $interface = 'primary')

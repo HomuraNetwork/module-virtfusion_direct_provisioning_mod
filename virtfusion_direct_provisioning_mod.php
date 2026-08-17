@@ -1122,6 +1122,26 @@ class VirtfusionDirectProvisioningMod extends Module
         return $fallback;
     }
 
+    private function formatTrafficBytes($bytes)
+    {
+        if (!is_numeric($bytes)) {
+            return null;
+        }
+
+        $bytes = max(0, (float) $bytes);
+        if ($bytes >= 1000000000) {
+            return rtrim(rtrim(number_format($bytes / 1000000000, 2, '.', ''), '0'), '.') . ' GB';
+        }
+        if ($bytes >= 1000000) {
+            return rtrim(rtrim(number_format($bytes / 1000000, 2, '.', ''), '0'), '.') . ' MB';
+        }
+        if ($bytes >= 1000) {
+            return rtrim(rtrim(number_format($bytes / 1000, 2, '.', ''), '0'), '.') . ' KB';
+        }
+
+        return (int) $bytes . ' B';
+    }
+
     private function getServiceConfigOptionValue($service, $option_name)
     {
         foreach (($service->options ?? []) as $option) {
@@ -3876,6 +3896,38 @@ class VirtfusionDirectProvisioningMod extends Module
             $server_info->pending_tasks[] = $task->action ?? ('Task #' . ($task->id ?? '?'));
         }
 
+        $server_info->os_templates = $this->getServerOsTemplates($server_api, $server_id);
+        $server_info->network_addresses = (object) [
+            'ipv4' => [],
+            'ipv6_blocks' => []
+        ];
+        $network_interfaces = array_merge(
+            (array) ($data->data->network->interfaces ?? []),
+            (array) ($data->data->network->secondaryInterfaces ?? [])
+        );
+        foreach ($network_interfaces as $interface) {
+            foreach (($interface->ipv4 ?? []) as $ipv4) {
+                $address = trim((string) ($ipv4->address ?? ''));
+                if ($address !== '' && filter_var($address, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                    $server_info->network_addresses->ipv4[] = $address;
+                }
+            }
+            foreach (($interface->ipv6 ?? []) as $ipv6) {
+                $subnet = trim((string) ($ipv6->subnet ?? ''));
+                $cidr = $ipv6->cidr ?? null;
+                if ($subnet !== '' && filter_var($subnet, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)
+                    && is_numeric($cidr) && (int) $cidr >= 0 && (int) $cidr <= 128) {
+                    $server_info->network_addresses->ipv6_blocks[] = $subnet . '/' . (int) $cidr;
+                }
+            }
+        }
+        $server_info->network_addresses->ipv4 = array_values(array_unique(
+            $server_info->network_addresses->ipv4
+        ));
+        $server_info->network_addresses->ipv6_blocks = array_values(array_unique(
+            $server_info->network_addresses->ipv6_blocks
+        ));
+
         if (!$server_info->built) {
             return $server_info;
         }
@@ -3887,33 +3939,70 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info->traffic_server = $data->data->settings->resources->traffic ?? null;
         $server_info->traffic = $server_info->traffic_total ?? $server_info->traffic_server;
         $server_info->traffic_reset = $data->data->traffic->public->currentPeriod->end ?? null;
-        $server_info->ipv4_addresses = [];
-        foreach (($data->data->network->interfaces[0]->ipv4 ?? []) as $ip) {
-            if (!empty($ip->address)) {
-                $server_info->ipv4_addresses[] = $ip->address;
-            }
-        }
+        $server_info->ipv4_addresses = $server_info->network_addresses->ipv4;
         $server_info->ipv4 = $server_info->ipv4_addresses[0] ?? null;
-        $server_info->ipv6 = $data->data->network->interfaces[0]->ipv6[0]->subnet ?? null;
-        $server_info->ipv6_cidr = isset($data->data->network->interfaces[0]->ipv6[0])
-            ? $data->data->network->interfaces[0]->ipv6[0]->subnet . '/' . $data->data->network->interfaces[0]->ipv6[0]->cidr
+        $server_info->ipv6_cidr = $server_info->network_addresses->ipv6_blocks[0] ?? null;
+        $server_info->ipv6 = $server_info->ipv6_cidr
+            ? explode('/', $server_info->ipv6_cidr, 2)[0]
             : null;
         $remote_state = isset($data->data->remoteState) && is_object($data->data->remoteState)
             ? $data->data->remoteState
             : null;
         $server_info->power = $remote_state->running ?? null;
         $server_info->status = $remote_state->state ?? ($data->data->state ?? null);
+        $server_info->resource_usage = (object) [
+            'cpu' => null,
+            'memory' => null,
+            'disk' => null
+        ];
+        if (isset($remote_state->cpu) && is_numeric($remote_state->cpu)) {
+            $server_info->resource_usage->cpu = round(
+                min(100, max(0, (float) $remote_state->cpu)),
+                1
+            );
+        }
+
+        $remote_memory = $remote_state->memory ?? null;
+        $memory_total = is_object($remote_memory) && isset($remote_memory->memtotal)
+            && is_numeric($remote_memory->memtotal)
+            ? (float) $remote_memory->memtotal
+            : 0;
+        $memory_available = is_object($remote_memory) && isset($remote_memory->memavailable)
+            && is_numeric($remote_memory->memavailable)
+            ? (float) $remote_memory->memavailable
+            : null;
+        if ($memory_available === null && is_object($remote_memory) && isset($remote_memory->memfree)
+            && is_numeric($remote_memory->memfree)) {
+            $memory_available = (float) $remote_memory->memfree;
+        }
+        if ($memory_total > 0 && $memory_available !== null) {
+            $memory_used = min($memory_total, max(0, $memory_total - $memory_available));
+            $server_info->resource_usage->memory = round(($memory_used / $memory_total) * 100, 1);
+        }
+
+        $remote_filesystems = isset($remote_state->agent) && is_object($remote_state->agent)
+            ? ($remote_state->agent->fsinfo ?? [])
+            : [];
+        foreach ($remote_filesystems as $filesystem) {
+            if (($filesystem->mountpoint ?? null) !== '/'
+                || !isset($filesystem->{'total-bytes'}, $filesystem->{'used-bytes'})
+                || !is_numeric($filesystem->{'total-bytes'})
+                || !is_numeric($filesystem->{'used-bytes'})
+                || (float) $filesystem->{'total-bytes'} <= 0) {
+                continue;
+            }
+
+            $disk_total = (float) $filesystem->{'total-bytes'};
+            $disk_used = min($disk_total, max(0, (float) $filesystem->{'used-bytes'}));
+            $server_info->resource_usage->disk = round(($disk_used / $disk_total) * 100, 1);
+            break;
+        }
         $server_info->network_in = $this->formatNetworkSpeed(
             $data->data->network->interfaces[0]->inAverage ?? null
         );
         $server_info->network_out = $this->formatNetworkSpeed(
             $data->data->network->interfaces[0]->outAverage ?? null
         );
-        $backup_plan = $data->data->backupPlan ?? null;
-        $server_info->backup_plan = is_object($backup_plan)
-            ? ($backup_plan->name ?? $backup_plan->id ?? null)
-            : ($data->data->settings->backupPlan ?? null);
-
         $traffic_request = $server_api->getTraffic($server_id);
         if ($this->apiRequestSucceeded($traffic_request, [200])) {
             $traffic_data = json_decode($traffic_request['response']);
@@ -3924,7 +4013,15 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($current_month) {
                 $server_info->traffic_server = $current_month->limit ?? $server_info->traffic_server;
                 $server_info->traffic_reset = $current_month->end ?? $server_info->traffic_reset;
-                $server_info->traffic_used = round(((float) ($current_month->total ?? 0)) / 1000000000, 2);
+                $traffic_in = (float) ($current_month->rx ?? 0);
+                $traffic_out = (float) ($current_month->tx ?? 0);
+                $traffic_total = (float) ($current_month->total ?? ($traffic_in + $traffic_out));
+                $server_info->traffic_in = round($traffic_in / 1000000000, 4);
+                $server_info->traffic_out = round($traffic_out / 1000000000, 4);
+                $server_info->traffic_used = round($traffic_total / 1000000000, 4);
+                $server_info->traffic_in_display = $this->formatTrafficBytes($traffic_in);
+                $server_info->traffic_out_display = $this->formatTrafficBytes($traffic_out);
+                $server_info->traffic_used_display = $this->formatTrafficBytes($traffic_total);
                 $server_info->traffic_blocks = 0;
                 foreach (($current_month->blocks ?? []) as $block) {
                     $server_info->traffic_blocks += (int) ($block->traffic ?? 0);
@@ -3942,20 +4039,94 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        $backup_request = $server_api->getBackups($server_id);
-        $server_info->backup_count = 0;
-        $server_info->latest_backup = null;
-        if ($this->apiRequestSucceeded($backup_request, [200])) {
-            $backup_data = json_decode($backup_request['response']);
-            $backups = (array) ($backup_data->data ?? []);
-            usort($backups, function ($left, $right) {
-                return strtotime($right->created ?? '') <=> strtotime($left->created ?? '');
-            });
-            $server_info->backup_count = count($backups);
-            $server_info->latest_backup = $backups[0] ?? null;
+        return $server_info;
+    }
+
+    private function getServerOsTemplates($server_api, $server_id)
+    {
+        $request = $server_api->getTemplates($server_id);
+        if (!$this->apiRequestSucceeded($request, [200])) {
+            return [];
         }
 
-        return $server_info;
+        $data = json_decode($request['response']);
+        $groups = [];
+        foreach (($data->data ?? []) as $group) {
+            $templates = [];
+            foreach (($group->templates ?? []) as $template) {
+                if (!isset($template->id) || !is_numeric($template->id)) {
+                    continue;
+                }
+
+                $label = trim(implode(' ', array_filter([
+                    $template->name ?? null,
+                    $template->version ?? null
+                ], static function ($value) {
+                    return $value !== null && $value !== '';
+                })));
+                if (!empty($template->variant)) {
+                    $label .= ($label === '' ? '' : ' - ') . $template->variant;
+                }
+
+                $templates[] = (object) [
+                    'id' => (int) $template->id,
+                    'label' => $label !== '' ? $label : ('Template #' . (int) $template->id)
+                ];
+            }
+
+            if (!empty($templates)) {
+                $groups[] = (object) [
+                    'name' => (string) ($group->name ?? 'Other'),
+                    'templates' => $templates
+                ];
+            }
+        }
+
+        return $groups;
+    }
+
+    private function serverHasOsTemplate($server_info, $template_id)
+    {
+        if (!$server_info || !is_numeric($template_id)) {
+            return false;
+        }
+
+        foreach (($server_info->os_templates ?? []) as $group) {
+            foreach (($group->templates ?? []) as $template) {
+                if ((int) ($template->id ?? 0) === (int) $template_id) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private function persistRebuildDetails($service_id, $template_id, $request)
+    {
+        Loader::loadModels($this, ['Services']);
+        $this->Services->editField((int) $service_id, [
+            'key' => 'virtfusion-os_template',
+            'value' => (int) $template_id,
+            'encrypted' => false
+        ]);
+        $this->Services->editField((int) $service_id, [
+            'key' => self::BUILD_STATE_FIELD,
+            'value' => 'built',
+            'encrypted' => false
+        ]);
+
+        $data = json_decode($request['response'] ?? '');
+        $password = (string) ($data->data->settings->decryptedPassword ?? '');
+        if ($password !== '') {
+            $this->Services->editField((int) $service_id, [
+                'key' => 'virtfusion_password',
+                'value' => $password,
+                'encrypted' => true
+            ]);
+        }
+
+        return !$this->Services->errors();
     }
 
     private function taskStateIsActive($task_state)
@@ -3983,7 +4154,7 @@ class VirtfusionDirectProvisioningMod extends Module
 
         return !$server_info
             || !empty($server_info->built)
-            || in_array($action, ['manage', 'refresh_ips', 'refresh_state'], true);
+            || in_array($action, ['manage', 'build', 'refresh_ips', 'refresh_state'], true);
     }
 
     private function refreshServiceNetworkFields($service, $package, $service_fields, $persist = true)
@@ -4087,20 +4258,22 @@ class VirtfusionDirectProvisioningMod extends Module
         return !in_array($action, ['boot', 'restart', 'shutdown', 'poweroff'], true);
     }
 
-    private function handleServerAction($module_row, $server_api, $service, $service_fields, array $post)
+    private function handleServerAction(
+        $module_row,
+        $server_api,
+        $service,
+        $service_fields,
+        array $post,
+        $server_info = null
+    )
     {
         $server_id = $service_fields->virtfusion_server_id;
         $action = $post['action'] ?? 'manage';
-        $server_uuid = null;
 
-        if (in_array($action, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'vnc', 'vnc_disable'], true)) {
+        if (in_array($action, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'build', 'rebuild', 'vnc', 'vnc_disable'], true)) {
             $state_request = $server_api->get($server_id, true);
             if ($this->apiRequestSucceeded($state_request, [200])) {
                 $state_data = json_decode($state_request['response']);
-                $candidate_uuid = (string) ($state_data->data->uuid ?? '');
-                if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $candidate_uuid)) {
-                    $server_uuid = $candidate_uuid;
-                }
                 $active = $state_data->data->tasks->active ?? [];
                 $pending = $state_data->data->tasks->actions->pending ?? [];
                 if ($this->tasksBlockServerAction($action, $active, $pending)) {
@@ -4179,6 +4352,50 @@ class VirtfusionDirectProvisioningMod extends Module
                     'password' => $password
                 ];
 
+            case 'build':
+            case 'rebuild':
+                $template_id = $post['operating_system_id'] ?? null;
+                if (!$this->serverHasOsTemplate($server_info, $template_id)) {
+                    $this->Input->setErrors([
+                        'operating_system_id' => [
+                            'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.template', true)
+                        ]
+                    ]);
+                    return null;
+                }
+
+                $request = $server_api->build($server_id, [
+                    'operatingSystemId' => (int) $template_id,
+                    'email' => true
+                ]);
+                $success = $this->apiRequestSucceeded($request, [200]);
+                $this->log(
+                    $module_row->meta->hostname . '| ' . $action . ' server',
+                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    'output',
+                    $success
+                );
+
+                if (!$success) {
+                    $this->Input->setErrors(['api' => ['response' => $this->apiErrorMessage($request)]]);
+                    return null;
+                }
+
+                $details_saved = $this->persistRebuildDetails($service->id, $template_id, $request);
+                $this->log(
+                    $module_row->meta->hostname . '| save rebuild details',
+                    $details_saved ? 'Saved' : 'Not saved',
+                    'output',
+                    $details_saved
+                );
+
+                return Language::_(
+                    $action === 'build'
+                        ? 'VirtfusionDirectProvisioningMod.tabManage.install_started'
+                        : 'VirtfusionDirectProvisioningMod.tabManage.reinstall_started',
+                    true
+                );
+
             case 'vnc':
                 $request = $server_api->setVnc($server_id, 'enable');
                 $success = isset($request['info']) && $request['info']['http_code'] == 200;
@@ -4204,10 +4421,7 @@ class VirtfusionDirectProvisioningMod extends Module
                     return [
                         'type' => 'vnc',
                         'websocket_url' => $websocket_url,
-                        'password' => $password,
-                        'console_url' => $server_uuid
-                            ? 'https://' . $module_row->meta->hostname . '/server/' . rawurlencode($server_uuid) . '/vnc'
-                            : null
+                        'password' => $password
                     ];
                 }
 
@@ -4263,6 +4477,9 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info = null;
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
+        if (!empty($post)) {
+            $this->setMessage('silent', '');
+        }
 
         if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
             $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
@@ -4284,7 +4501,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 $this->Input->setErrors(['server' => ['unavailable' => $error]]);
             } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
-                $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+                $message = null;
             } elseif ($action === 'refresh_state') {
                 $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
             } elseif ($action === 'remove_ip') {
@@ -4302,7 +4519,14 @@ class VirtfusionDirectProvisioningMod extends Module
                     $api->loadCommand('virtfusion_server');
 
                     $server_api = new VirtfusionServer($api);
-                    $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    $result = $this->handleServerAction(
+                        $row,
+                        $server_api,
+                        $service,
+                        $service_fields,
+                        $post ?? [],
+                        $server_info
+                    );
                     if (is_array($result)) {
                         $action_result = $result;
                         if (($result['type'] ?? null) === 'vnc') {
@@ -4318,8 +4542,15 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff'], true)) {
-            $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'build', 'rebuild'], true)) {
+            $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+            if ($refreshed_server_info) {
+                $server_info = $refreshed_server_info;
+            }
+            if (in_array($action, ['build', 'rebuild'], true) && $message !== null && $server_info) {
+                $server_info->has_active_tasks = true;
+                $server_info->tasks_active = true;
+            }
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
@@ -4334,12 +4565,6 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->set(
             'support_ticket_url',
             $this->base_uri . 'plugin/support_manager/client_tickets/departments/'
-        );
-        $this->view->set(
-            'ip_data',
-            $server_info && !empty($server_info->built)
-                ? $this->getClientIpAddresses($package, $service, null, null, true, $service_fields)
-                : null
         );
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
@@ -4370,6 +4595,9 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info = null;
         $row = $this->getModuleRow();
         $post = !empty($post) ? $post : $_POST;
+        if (!empty($post)) {
+            $this->setMessage('silent', '');
+        }
 
         if ($row && property_exists($service_fields, 'virtfusion_server_id') && is_numeric($service_fields->virtfusion_server_id)) {
             $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
@@ -4391,7 +4619,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 $this->Input->setErrors(['server' => ['unavailable' => $error]]);
             } elseif ($action === 'refresh_ips') {
                 $service_fields = $this->refreshServiceNetworkFields($service, $package, $service_fields);
-                $message = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.refreshed', true);
+                $message = null;
             } elseif ($action === 'refresh_state') {
                 $message = Language::_('VirtfusionDirectProvisioningMod.tabManage.state_refreshed', true);
             } elseif ($action === 'remove_ip') {
@@ -4409,7 +4637,14 @@ class VirtfusionDirectProvisioningMod extends Module
                     $api->loadCommand('virtfusion_server');
 
                     $server_api = new VirtfusionServer($api);
-                    $result = $this->handleServerAction($row, $server_api, $service, $service_fields, $post ?? []);
+                    $result = $this->handleServerAction(
+                        $row,
+                        $server_api,
+                        $service,
+                        $service_fields,
+                        $post ?? [],
+                        $server_info
+                    );
                     if (is_array($result)) {
                         $action_result = $result;
                         if (($result['type'] ?? null) === 'vnc') {
@@ -4425,8 +4660,15 @@ class VirtfusionDirectProvisioningMod extends Module
             }
         }
 
-        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff'], true)) {
-            $server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+        if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'build', 'rebuild'], true)) {
+            $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
+            if ($refreshed_server_info) {
+                $server_info = $refreshed_server_info;
+            }
+            if (in_array($action, ['build', 'rebuild'], true) && $message !== null && $server_info) {
+                $server_info->has_active_tasks = true;
+                $server_info->tasks_active = true;
+            }
             if ($server_info) {
                 $this->view->set('server_info', $server_info);
             }
@@ -4437,12 +4679,6 @@ class VirtfusionDirectProvisioningMod extends Module
         $this->view->set(
             'storage_mismatch',
             $this->storageMismatch($row, $package, $service, $server_info)
-        );
-        $this->view->set(
-            'ip_data',
-            $server_info && !empty($server_info->built)
-                ? $this->getClientIpAddresses($package, $service, null, null, false, $service_fields)
-                : null
         );
         $this->view->set('service_fields', $service_fields);
         $this->view->set('package', $package);
@@ -5306,15 +5542,6 @@ class VirtfusionDirectProvisioningMod extends Module
                     ? $this->formatTrafficBlockSize($service_fields->virtfusion_traffic_block_gb)
                     : null
             );
-        } else {
-            $this->view->set('ip_data', $this->getClientIpAddresses(
-                $package,
-                $service,
-                null,
-                null,
-                true,
-                $service_fields
-            ));
         }
 
         return $this->view->fetch();

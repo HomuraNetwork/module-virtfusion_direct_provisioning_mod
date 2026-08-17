@@ -1,0 +1,29 @@
+<?php
+$vf_network = $server_info->network_addresses ?? (object) ['ipv4' => [], 'ipv6_blocks' => []];
+?>
+<div class="card mb-3">
+    <div class="card-header">
+        <strong><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.header'); ?></strong>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <?php foreach ([
+                'ipv4' => $vf_network->ipv4 ?? [],
+                'ipv6_blocks' => $vf_network->ipv6_blocks ?? []
+            ] as $vf_address_type => $vf_addresses) { ?>
+                <div class="col-md-6">
+                    <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.' . $vf_address_type); ?></div>
+                    <?php if (empty($vf_addresses)) { ?>
+                        <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                    <?php } else { ?>
+                        <ul class="list-unstyled mb-0">
+                            <?php foreach ($vf_addresses as $vf_address) { ?>
+                                <li class="mb-2"><code class="text-break"><?php echo $this->Html->safe($vf_address); ?></code></li>
+                            <?php } ?>
+                        </ul>
+                    <?php } ?>
+                </div>
+            <?php } ?>
+        </div>
+    </div>
+</div>
