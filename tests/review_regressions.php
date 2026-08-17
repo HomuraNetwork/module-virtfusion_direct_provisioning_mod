@@ -139,6 +139,8 @@ class FakeLiveServerApi
                 'data' => [
                     'built' => true,
                     'name' => 'Live server',
+                    'hostname' => 'live.example.com',
+                    'owner' => ['id' => 7],
                     'state' => 'running',
                     'tasks' => ['active' => false, 'actions' => ['pending' => []]],
                     'settings' => [
@@ -237,6 +239,22 @@ class FakeLiveServerApi
             ])
         ];
     }
+
+    public function getUserSshKeys($user_id)
+    {
+        return [
+            'info' => ['http_code' => 200],
+            'response' => json_encode([
+                'data' => [[
+                    'id' => 19,
+                    'name' => 'Laptop',
+                    'type' => 'OpenSSH',
+                    'enabled' => true,
+                    'publicKey' => 'ssh-ed25519 ' . base64_encode(str_repeat('e', 64)) . ' laptop@test'
+                ]]
+            ])
+        ];
+    }
 }
 
 class FakeAllocationOnlyServerApi extends FakeLiveServerApi
@@ -257,6 +275,7 @@ class FakeAllocationOnlyServerApi extends FakeLiveServerApi
 class FakeBuildServerApi
 {
     public $builds = [];
+    public $createdSshKeys = [];
 
     public function get($server_id, $detailed = false)
     {
@@ -276,6 +295,15 @@ class FakeBuildServerApi
             'response' => json_encode([
                 'data' => ['settings' => ['decryptedPassword' => 'new-build-password']]
             ])
+        ];
+    }
+
+    public function createSshKey(array $vars)
+    {
+        $this->createdSshKeys[] = $vars;
+        return [
+            'info' => ['http_code' => 201],
+            'response' => json_encode(['data' => ['id' => 88]])
         ];
     }
 }
@@ -533,6 +561,10 @@ assertSameValue('1.85 GB', $live_info->traffic_used_display, 'Total traffic must
 assertSameValue(2500, $live_info->traffic_total, 'Traffic blocks must be included in the available traffic total.');
 assertSameValue('Ubuntu', $live_info->os_templates[0]->name, 'OS templates must retain their VirtFusion group.');
 assertSameValue(49, $live_info->os_templates[0]->templates[0]->id, 'OS templates must retain their VirtFusion ID.');
+assertSameValue(7, $live_info->owner_id, 'The remote server owner must be retained for SSH key imports.');
+assertSameValue('Laptop', $live_info->ssh_keys[0]->name, 'Enabled owner SSH keys must be available to the reinstall form.');
+assertSameValue(true, strpos($live_info->ssh_keys[0]->fingerprint, 'SHA256:') === 0, 'Owner SSH keys must expose a SHA256 fingerprint.');
+assertSameValue(false, property_exists($live_info->ssh_keys[0], 'publicKey'), 'SSH public key material must not be exposed to the view.');
 assertSameValue(
     'Ubuntu Server 24.04 LTS - Minimal',
     $live_info->os_templates[0]->templates[0]->label,
@@ -540,6 +572,11 @@ assertSameValue(
 );
 assertSameValue(true, callPrivate($live_module, 'serverHasOsTemplate', [$live_info, 49]), 'Available OS template IDs must validate.');
 assertSameValue(false, callPrivate($live_module, 'serverHasOsTemplate', [$live_info, 999]), 'Unknown OS template IDs must be rejected.');
+assertSameValue(true, callPrivate($module, 'hostnameIsValid', ['server.example.com']), 'A normal FQDN must pass reinstall validation.');
+assertSameValue(false, callPrivate($module, 'hostnameIsValid', ['invalid_hostname']), 'Invalid hostnames must not reach VirtFusion.');
+assertSameValue(true, callPrivate($live_module, 'serverHasSshKeys', [$live_info, [19]]), 'The owner SSH key list must authorize a selected key.');
+assertSameValue(false, callPrivate($live_module, 'serverHasSshKeys', [$live_info, [999]]), 'An SSH key outside the owner list must be rejected.');
+assertSameValue(false, callPrivate($module, 'sshPublicKeyIsValid', ['-----BEGIN OPENSSH PRIVATE KEY-----']), 'Private key input must be rejected.');
 assertSameValue('999 B', callPrivate($module, 'formatTrafficBytes', [999]), 'Small traffic values must retain byte units.');
 assertSameValue('1.5 KB', callPrivate($module, 'formatTrafficBytes', [1500]), 'Traffic formatting must scale without false precision.');
 $allocation_only_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
@@ -576,19 +613,122 @@ $build_result = callPrivate($build_module, 'handleServerAction', [
     $build_api,
     (object) ['id' => 77, 'client_id' => 5],
     (object) ['virtfusion_server_id' => 42],
-    ['action' => 'build', 'operating_system_id' => 49],
+    [
+        'action' => 'build',
+        'operating_system_id' => 49,
+        'hostname' => 'new.example.com',
+        'ssh_key_ids' => ['19']
+    ],
     $live_info
 ]);
 assertSameValue(
-    'VirtfusionDirectProvisioningMod.tabManage.install_started',
-    $build_result,
-    'A valid unbuilt-server OS selection must start installation.'
+    'build',
+    $build_result['type'],
+    'A valid OS installation must return a persistent build progress result.'
 );
+assertSameValue('build', $build_result['action'], 'The build progress result must retain the requested action.');
+assertSameValue('ssh_key', $build_result['auth_mode'], 'Selecting a key must use SSH key authentication.');
+assertSameValue(null, $build_result['password'], 'SSH key installs must not expose the generated password.');
 assertSameValue(
-    ['operatingSystemId' => 49, 'email' => true],
+    [
+        'operatingSystemId' => 49,
+        'hostname' => 'new.example.com',
+        'email' => false,
+        'sshKeys' => [19]
+    ],
     $build_api->builds[0]['vars'],
-    'Manual OS installation must submit only the selected template and credential email flag.'
+    'Manual OS installation must submit the validated hostname and selected owner SSH keys.'
 );
+$valid_public_key = 'ssh-ed25519 ' . base64_encode(str_repeat('k', 64)) . ' imported@test';
+$import_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'hostname' => 'reinstalled.example.com',
+        'ssh_key_name' => 'Imported Key',
+        'ssh_public_key' => $valid_public_key
+    ],
+    $live_info
+]);
+assertSameValue(
+    'build',
+    $import_result['type'],
+    'A validated public key must be importable during reinstall.'
+);
+assertSameValue('ssh_key', $import_result['auth_mode'], 'Imported keys must retain SSH key authentication mode.');
+assertSameValue(
+    ['userId' => 7, 'name' => 'Imported Key', 'publicKey' => $valid_public_key],
+    $build_api->createdSshKeys[0],
+    'SSH key imports must target the remote server owner.'
+);
+assertSameValue([88], $build_api->builds[1]['vars']['sshKeys'], 'A newly imported SSH key must be applied immediately.');
+$existing_public_key = 'ssh-ed25519 ' . base64_encode(str_repeat('e', 64)) . ' duplicate@test';
+$duplicate_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'hostname' => 'duplicate.example.com',
+        'ssh_key_name' => 'Duplicate Laptop Key',
+        'ssh_public_key' => $existing_public_key
+    ],
+    $live_info
+]);
+assertSameValue('build', $duplicate_result['type'], 'Reusing an existing public key must still start reinstall.');
+assertSameValue(1, count($build_api->createdSshKeys), 'Importing the same public key must not create a duplicate VirtFusion key.');
+assertSameValue([19], $build_api->builds[2]['vars']['sshKeys'], 'A duplicate import must reuse the existing key ID.');
+$password_build_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'hostname' => 'password.example.com',
+        'password_login' => '1'
+    ],
+    $live_info
+]);
+assertSameValue('build', $password_build_result['type'], 'Password login must still return build progress.');
+assertSameValue('password', $password_build_result['auth_mode'], 'Password login must be explicit in the build result.');
+assertSameValue('new-build-password', $password_build_result['password'], 'Password login must display the generated password.');
+assertSameValue(
+    [
+        'operatingSystemId' => 49,
+        'hostname' => 'password.example.com',
+        'email' => true
+    ],
+    $build_api->builds[3]['vars'],
+    'Password login must request an emailed credential without submitting SSH keys.'
+);
+$build_module->Input->errors = [];
+$missing_auth_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'hostname' => 'missing-key.example.com'
+    ],
+    $live_info
+]);
+assertSameValue(null, $missing_auth_result, 'SSH key mode must reject reinstall without a selected or imported key.');
+assertSameValue(
+    true,
+    isset($build_module->Input->errors['ssh_key_ids']['required']),
+    'The missing SSH key error must identify every valid authentication choice.'
+);
+assertSameValue(4, count($build_api->builds), 'A missing authentication choice must not call the build API.');
 assertSameValue('built', $build_module->Services->fields['virtfusion_build_state']['value'], 'Manual installation must persist build state.');
 assertSameValue(true, $build_module->Services->fields['virtfusion_password']['encrypted'], 'The new build password must stay encrypted.');
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
@@ -715,21 +855,26 @@ $language_source = file_get_contents(
 $client_manage_template = file_get_contents(__DIR__ . '/../views/default/tabManage.pdt');
 $admin_manage_template = file_get_contents(__DIR__ . '/../views/default/tabAdminManage.pdt');
 $server_overview_template = file_get_contents(__DIR__ . '/../views/default/server_overview.pdt');
+$server_actions_template = file_get_contents(__DIR__ . '/../views/default/server_actions.pdt');
+$server_more_features_template = file_get_contents(__DIR__ . '/../views/default/server_more_features.pdt');
+$server_os_management_template = file_get_contents(__DIR__ . '/../views/default/server_os_management.pdt');
+$action_confirm_template = file_get_contents(__DIR__ . '/../views/default/action_confirm.pdt');
 $manage_ajax_template = file_get_contents(__DIR__ . '/../views/default/manage_ajax.pdt');
 $os_install_template = file_get_contents(__DIR__ . '/../views/default/os_install.pdt');
+$os_build_options_template = file_get_contents(__DIR__ . '/../views/default/os_build_options.pdt');
 $network_template = file_get_contents(__DIR__ . '/../views/default/network_addresses.pdt');
 $client_service_info_template = file_get_contents(__DIR__ . '/../views/default/client_service_info.pdt');
 $server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
 assertSameValue(
     true,
-    strpos($client_manage_template, 'if ($server_unbuilt)') !== false
-        && strpos($client_manage_template, 'value="manage"') !== false,
+    strpos($client_manage_template, '$server_unbuilt') !== false
+        && strpos($server_more_features_template, 'value="manage"') !== false,
     'The client view must retain a control-panel handoff for an unbuilt server.'
 );
 assertSameValue(
     true,
-    strpos($admin_manage_template, 'if ($server_unbuilt)') !== false
-        && strpos($admin_manage_template, '$admin_server_url') !== false,
+    strpos($admin_manage_template, '$server_unbuilt') !== false
+        && strpos($server_more_features_template, '$admin_server_url') !== false,
     'The admin view must retain a control-panel handoff for an unbuilt server.'
 );
 assertSameValue(
@@ -740,9 +885,11 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'if ($server_busy)') !== false
-        && strpos($admin_manage_template, 'if ($server_busy)') !== false,
-    'Both Manage views must overlay active builds while retaining the control-panel handoff.'
+    strpos($client_manage_template, 'if ($server_busy &&') !== false
+        && strpos($admin_manage_template, 'if ($server_busy &&') !== false
+        && strpos($client_manage_template, 'task_status.pdt') !== false
+        && strpos($admin_manage_template, 'task_status.pdt') !== false,
+    'Both Manage views must show active build status while retaining the control-panel handoff.'
 );
 assertSameValue(
     false,
@@ -934,6 +1081,14 @@ assertSameValue(
 );
 assertSameValue(
     true,
+    strpos($vnc_template, 'data-vf-build-progress') !== false
+        && strpos($vnc_template, 'data-vf-build-refresh') !== false
+        && strpos($vnc_template, 'vf-build-progress-bar') !== false
+        && strpos($manage_ajax_template, 'syncBuildProgress') !== false,
+    'OS installation must retain animated progress and turn it into a refreshable completion state.'
+);
+assertSameValue(
+    true,
     strpos($vnc_template, 'data-bs-dismiss="modal"') !== false
         && strpos($vnc_template, 'keyboard: true') !== false
         && strpos($vnc_template, 'hidden.bs.modal') !== false,
@@ -946,8 +1101,29 @@ assertSameValue(
         && strpos($server_overview_template, 'resource_usage') !== false
         && strpos($server_overview_template, 'is_numeric($vf_usage)') !== false
         && strpos($server_overview_template, 'traffic_in_display') !== false
-        && strpos($server_overview_template, 'traffic_out_display') !== false,
-    'The shared overview must conditionally render resource usage and split inbound and outbound traffic.'
+        && strpos($server_overview_template, 'traffic_out_display') !== false
+        && strpos($server_overview_template, 'vf-traffic-totals') !== false
+        && strpos($server_overview_template, 'col-lg-6 vf-server-overview-section') === false,
+    'The shared overview must stack resources above split inbound and outbound traffic.'
+);
+assertSameValue(
+    true,
+    strpos($client_manage_template, 'server_actions.pdt') < strpos($client_manage_template, 'server_overview.pdt')
+        && strpos($admin_manage_template, 'server_actions.pdt') < strpos($admin_manage_template, 'server_overview.pdt')
+        && strpos($client_manage_template, 'server_os_management.pdt') > strpos($client_manage_template, 'network_addresses.pdt')
+        && strpos($client_manage_template, 'server_more_features.pdt') > strpos($client_manage_template, 'server_os_management.pdt')
+        && strpos($server_os_management_template, 'os_install.pdt') !== false
+        && strpos($server_more_features_template, 'os_install.pdt') === false
+        && strpos($server_more_features_template, 'value="manage"') !== false,
+    'Frequent actions must stay above status while OS reinstall and the VirtFusion handoff remain separate lower sections.'
+);
+assertSameValue(
+    true,
+    strpos($server_actions_template, 'data-vf-confirm=') !== false
+        && strpos($server_actions_template, 'onclick="return confirm') === false
+        && strpos($action_confirm_template, "document.addEventListener('submit'") !== false
+        && strpos($action_confirm_template, 'data-vf-confirm-submit') !== false,
+    'Power and password actions must use the shared second-step confirmation modal.'
 );
 assertSameValue(
     true,
@@ -957,9 +1133,18 @@ assertSameValue(
         && strpos($manage_ajax_template, "method: 'GET'") !== false
         && strpos($manage_ajax_template, 'data-vf-refresh-seconds') !== false
         && strpos($manage_ajax_template, 'data-vf-dirty') !== false
+        && strpos($manage_ajax_template, "form.getAttribute('action')") !== false
+        && strpos($manage_ajax_template, 'requestJson(form.action') === false
+        && strpos($manage_ajax_template, 'data-vf-refresh-section') !== false
+        && strpos($manage_ajax_template, 'current.replaceWith') === false
+        && strpos($manage_ajax_template, "patchSection(current, incoming, 'feedback')") !== false
+        && strpos($manage_ajax_template, 'event.defaultPrevented') !== false
+        && strpos($manage_ajax_template, 'Date.now() % 5000') !== false
         && strpos($client_manage_template, 'data-vf-refresh-seconds=') !== false
-        && strpos($admin_manage_template, 'data-vf-refresh-seconds=') !== false,
-    'Manage actions and timed partial refreshes must prefer AJAX in both views.'
+        && strpos($admin_manage_template, 'data-vf-refresh-seconds=') !== false
+        && strpos($client_manage_template, 'data-vf-refresh-section=') !== false
+        && strpos($admin_manage_template, 'data-vf-refresh-section=') !== false,
+    'Manage actions and timed refreshes must patch independent sections through AJAX in both views.'
 );
 assertSameValue(
     true,
@@ -968,23 +1153,43 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'os_install.pdt') !== false
-        && strpos($admin_manage_template, 'os_install.pdt') !== false
+    strpos($client_manage_template, 'server_os_management.pdt') !== false
+        && strpos($admin_manage_template, 'server_os_management.pdt') !== false
+        && strpos($server_os_management_template, 'os_install.pdt') !== false
         && strpos($os_install_template, "'build'") !== false
         && strpos($os_install_template, "'rebuild'") !== false
         && strpos($os_install_template, 'data-vf-os-category') !== false
         && strpos($os_install_template, 'data-vf-os-template') !== false
-        && strpos($os_install_template, 'confirm.reinstall') !== false,
-    'Both Manage views must expose two-level OS build and reinstall controls.'
+        && strpos($os_install_template, 'confirm.reinstall') !== false
+        && strpos($os_install_template, 'data-vf-os-open') !== false
+        && strpos($os_install_template, 'hidden.bs.modal') !== false
+        && strpos($os_install_template, 'onclick="return confirm') === false,
+    'Both Manage views must expose two-level OS build controls and a modal reinstall flow.'
 );
 assertSameValue(
     true,
     strpos($server_api_source, "'/templates', 'GET'") !== false
+        && strpos($server_api_source, "'ssh_keys/user/'") !== false
+        && strpos($server_api_source, "'ssh_keys', 'POST'") !== false
         && strpos($module_source, "case 'build':") !== false
         && strpos($module_source, "case 'rebuild':") !== false
         && strpos($module_source, "'operatingSystemId' => (int) \$template_id") !== false
-        && strpos($module_source, "'email' => true") !== false,
-    'OS reinstall must use the server template list and request an emailed credential from VirtFusion.'
+        && strpos($module_source, "'hostname' => \$hostname") !== false
+        && strpos($module_source, "\$build_params['sshKeys'] = \$ssh_key_ids") !== false
+        && strpos($module_source, "'email' => \$password_login") !== false,
+    'OS reinstall must submit its template, hostname, selected owner keys, and explicit password-login preference.'
+);
+assertSameValue(
+    true,
+    strpos($os_build_options_template, 'name="hostname"') !== false
+        && strpos($os_build_options_template, 'name="ssh_key_ids[]"') !== false
+        && strpos($os_build_options_template, 'name="ssh_public_key"') !== false
+        && strpos($os_build_options_template, 'name="password_login"') !== false
+        && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
+        && strpos($os_build_options_template, 'publicKey') === false
+        && strpos($os_build_options_template, ' checked') === false
+        && strpos($os_install_template, 'sshKeyRequired') !== false,
+    'The OS popup must require an explicit key, import, or password choice without exposing stored key material or preselecting a key.'
 );
 assertSameValue(
     true,
@@ -1153,8 +1358,8 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'vf-task-overlay') !== false
-        && strpos($admin_manage_template, 'vf-task-overlay') !== false
+    strpos($client_manage_template, 'task_status.pdt') !== false
+        && strpos($admin_manage_template, 'task_status.pdt') !== false
         && strpos($client_manage_template, '$server_busy ? 5 : 60') !== false
         && strpos($admin_manage_template, '$server_busy ? 5 : 60') !== false
         && strpos($client_manage_template, 'window.location.replace') === false

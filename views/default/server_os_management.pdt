@@ -1,0 +1,8 @@
+<section class="vf-server-os-management vf-server-secondary-section mb-4" aria-labelledby="virtfusionOsManagementHeading">
+    <div class="mb-2">
+        <strong id="virtfusionOsManagementHeading"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.operating_system'); ?></strong>
+    </div>
+    <div class="vf-server-action-list">
+        <?php include __DIR__ . '/os_install.pdt'; ?>
+    </div>
+</section>

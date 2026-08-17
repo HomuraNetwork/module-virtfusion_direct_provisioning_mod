@@ -19,28 +19,6 @@
         return document.getElementById(id);
     }
 
-    function replaceManage(current, data) {
-        var holder = document.createElement('div');
-        holder.innerHTML = data.content || '';
-        var replacement = holder.querySelector('#' + current.id) || holder.firstElementChild;
-        if (!replacement) {
-            throw new Error('VirtFusion Manage response did not include tab content.');
-        }
-
-        document.querySelectorAll('.virtfusion-module-response-message').forEach(function (message) {
-            message.remove();
-        });
-        current.replaceWith(replacement);
-        if (data.message && String(data.message).trim() !== '') {
-            var message = document.createElement('div');
-            message.className = 'virtfusion-module-response-message mb-3';
-            message.innerHTML = data.message;
-            replacement.parentNode.insertBefore(message, replacement);
-        }
-        runScripts(replacement);
-        return replacement;
-    }
-
     function requestJson(url, options) {
         return window.fetch(url, options).then(function (response) {
             if (!response.ok) {
@@ -48,6 +26,101 @@
             }
             return response.json();
         });
+    }
+
+    function responseRoot(current, data) {
+        var holder = document.createElement('div');
+        holder.innerHTML = data.content || '';
+        var incoming = holder.querySelector('#' + current.id);
+        if (!incoming) {
+            throw new Error('VirtFusion Manage response did not include tab content.');
+        }
+        return incoming;
+    }
+
+    function patchSection(current, incoming, name) {
+        var selector = '[data-vf-refresh-section="' + name + '"]';
+        var liveSection = current.querySelector(selector);
+        var incomingSection = incoming.querySelector(selector);
+        if (!liveSection || !incomingSection) {
+            return;
+        }
+        var replacement = incomingSection.cloneNode(true);
+        liveSection.replaceWith(replacement);
+        runScripts(replacement);
+    }
+
+    function syncBuildProgress(current) {
+        var progress = current.querySelector('[data-vf-build-progress]');
+        var taskStatus = current.querySelector('[data-vf-task-status]');
+        if (taskStatus) {
+            taskStatus.hidden = !!progress;
+        }
+        if (!progress || current.getAttribute('data-vf-busy') === 'true'
+            || progress.getAttribute('data-vf-complete') === 'true') {
+            return;
+        }
+
+        progress.setAttribute('data-vf-complete', 'true');
+        progress.setAttribute('aria-busy', 'false');
+        progress.classList.remove('alert-info', 'border-info');
+        progress.classList.add('alert-success', 'border-success');
+        progress.querySelectorAll('[data-vf-build-active]').forEach(function (element) {
+            element.hidden = true;
+        });
+        var title = progress.querySelector('[data-vf-build-title]');
+        var message = progress.querySelector('[data-vf-build-message]');
+        var refresh = progress.querySelector('[data-vf-build-refresh]');
+        if (title) {
+            title.textContent = progress.getAttribute('data-vf-complete-title') || '';
+        }
+        if (message) {
+            message.textContent = progress.getAttribute('data-vf-complete-hint') || '';
+        }
+        if (refresh) {
+            refresh.hidden = false;
+        }
+    }
+
+    function updateResponseMessage(current, data, isPolling) {
+        if (isPolling) {
+            return;
+        }
+        var host = current.querySelector('[data-vf-response-host]');
+        if (!host) {
+            return;
+        }
+        host.replaceChildren();
+        if (!data.message || String(data.message).trim() === '') {
+            return;
+        }
+        var message = document.createElement('div');
+        message.className = 'virtfusion-module-response-message mb-3';
+        message.innerHTML = data.message;
+        host.appendChild(message);
+    }
+
+    function updateManage(current, data, isPolling) {
+        var incoming = responseRoot(current, data);
+        ['data-vf-busy', 'data-vf-refresh-seconds', 'data-vf-refresh-url'].forEach(function (attribute) {
+            if (incoming.hasAttribute(attribute)) {
+                current.setAttribute(attribute, incoming.getAttribute(attribute));
+            }
+        });
+
+        if (!isPolling) {
+            patchSection(current, incoming, 'feedback');
+        }
+        var hasBuildProgress = !!current.querySelector('[data-vf-build-progress]');
+        if (!hasBuildProgress) {
+            patchSection(current, incoming, 'task');
+        }
+        ['notices', 'actions', 'overview', 'network', 'operating-system', 'more-features'].forEach(function (name) {
+            patchSection(current, incoming, name);
+        });
+        updateResponseMessage(current, data, isPolling);
+        syncBuildProgress(current);
+        return current;
     }
 
     function isUserBusy(current) {
@@ -58,12 +131,25 @@
             || (focused && current.contains(focused) && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName));
     }
 
+    function refresh(current, isPolling) {
+        return requestJson(current.getAttribute('data-vf-refresh-url') || window.location.href, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+        }).then(function (data) {
+            return updateManage(current, data, isPolling);
+        });
+    }
+
     function schedule(current) {
         window.clearTimeout(window.virtfusionManageRefreshTimer);
         if (!current || !current.isConnected) {
             return;
         }
         var seconds = Number(current.getAttribute('data-vf-refresh-seconds')) || 60;
+        var delay = seconds === 5
+            ? 5000 - (Date.now() % 5000)
+            : seconds * 1000;
         window.virtfusionManageRefreshTimer = window.setTimeout(function () {
             var liveCurrent = currentRoot(current.id);
             if (!liveCurrent) {
@@ -73,16 +159,12 @@
                 schedule(liveCurrent);
                 return;
             }
-            requestJson(liveCurrent.getAttribute('data-vf-refresh-url') || window.location.href, {
-                method: 'GET',
-                credentials: 'same-origin',
-                headers: {'X-Requested-With': 'XMLHttpRequest'}
-            }).then(function (data) {
-                replaceManage(liveCurrent, data);
+            refresh(liveCurrent, true).then(function () {
+                schedule(liveCurrent);
             }).catch(function () {
                 schedule(liveCurrent);
             });
-        }, seconds * 1000);
+        }, delay);
     }
 
     function submitNormally(form, submitter) {
@@ -100,7 +182,7 @@
         window.virtfusionManageAjaxBound = true;
         document.addEventListener('submit', function (event) {
             var form = event.target;
-            if (!form || !form.closest || form.target === '_blank') {
+            if (event.defaultPrevented || !form || !form.closest || form.target === '_blank') {
                 return;
             }
             var current = form.closest('#tabManage, #tabAdminManage');
@@ -119,19 +201,46 @@
                 submitter.disabled = true;
             }
 
-            requestJson(form.action, {
+            requestJson(form.getAttribute('action') || window.location.href, {
                 method: 'POST',
                 body: formData,
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
             }).then(function (data) {
-                replaceManage(current, data);
+                updateManage(current, data, false);
+                schedule(current);
             }).catch(function () {
                 submitNormally(form, submitter);
             });
         });
+
+        document.addEventListener('click', function (event) {
+            var refreshButton = event.target.closest && event.target.closest('[data-vf-build-refresh]');
+            if (!refreshButton) {
+                return;
+            }
+            var current = refreshButton.closest('#tabManage, #tabAdminManage');
+            if (!current) {
+                return;
+            }
+            event.preventDefault();
+            refreshButton.disabled = true;
+            window.clearTimeout(window.virtfusionManageRefreshTimer);
+            refresh(current, true).then(function () {
+                var progress = current.querySelector('[data-vf-build-progress]');
+                if (progress) {
+                    progress.remove();
+                }
+                schedule(current);
+            }).catch(function () {
+                refreshButton.disabled = false;
+                schedule(current);
+            });
+        });
     }
 
-    schedule(document.querySelector('#tabManage, #tabAdminManage'));
+    var initial = document.querySelector('#tabManage, #tabAdminManage');
+    syncBuildProgress(initial);
+    schedule(initial);
 }());
 </script>

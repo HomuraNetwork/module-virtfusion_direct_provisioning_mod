@@ -1,0 +1,90 @@
+<?php
+$vf_current_hostname = trim((string) ($server_info->hostname ?? ''));
+$vf_ssh_keys = $server_info->ssh_keys ?? [];
+?>
+<div class="row g-3 mt-1" data-vf-os-options>
+    <div class="col-12">
+        <label class="form-label" for="<?php echo $vf_os_prefix; ?>Hostname">
+            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.hostname'); ?>
+        </label>
+        <input
+            type="text"
+            class="form-control"
+            id="<?php echo $vf_os_prefix; ?>Hostname"
+            name="hostname"
+            value="<?php echo $this->Html->safe($vf_current_hostname); ?>"
+            maxlength="255"
+            pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?){2,}"
+            placeholder="server.example.com"
+            required
+            data-vf-hostname
+        >
+    </div>
+    <div class="col-12">
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="<?php echo $vf_os_prefix; ?>PasswordLogin" name="password_login" value="1" data-vf-password-login>
+            <label class="form-check-label" for="<?php echo $vf_os_prefix; ?>PasswordLogin">
+                <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.password_login'); ?>
+            </label>
+        </div>
+        <div class="small text-warning mt-1">
+            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.password_login_warning'); ?>
+        </div>
+    </div>
+    <?php if (!empty($vf_ssh_keys)) { ?>
+    <fieldset class="col-12" data-vf-key-auth-control>
+        <legend class="form-label mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ssh_keys'); ?></legend>
+        <div class="small text-muted mb-2">
+            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ssh_key_choice'); ?>
+        </div>
+        <div class="border rounded p-2" style="max-height: 9rem; overflow-y: auto;">
+            <?php foreach ($vf_ssh_keys as $vf_ssh_key) { ?>
+            <div class="form-check">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    name="ssh_key_ids[]"
+                    value="<?php echo (int) $vf_ssh_key->id; ?>"
+                    id="<?php echo $vf_os_prefix; ?>SshKey<?php echo (int) $vf_ssh_key->id; ?>"
+                >
+                <label class="form-check-label" for="<?php echo $vf_os_prefix; ?>SshKey<?php echo (int) $vf_ssh_key->id; ?>">
+                    <span><?php echo $this->Html->safe($vf_ssh_key->name); ?></span>
+                    <?php if (!empty($vf_ssh_key->type)) { ?>
+                        <span class="small text-muted"><?php echo $this->Html->safe($vf_ssh_key->type); ?></span>
+                    <?php } ?>
+                    <span class="d-block small text-muted">
+                        <?php if (!empty($vf_ssh_key->fingerprint)) { ?>
+                            <code><?php echo $this->Html->safe($vf_ssh_key->fingerprint); ?></code>
+                            <span class="mx-1">&middot;</span>
+                        <?php } ?>
+                        #<?php echo (int) $vf_ssh_key->id; ?>
+                    </span>
+                </label>
+            </div>
+            <?php } ?>
+        </div>
+    </fieldset>
+    <?php } ?>
+    <div class="col-12" data-vf-key-auth-control>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="<?php echo $vf_os_prefix; ?>ImportSshKey" data-vf-ssh-import-toggle>
+            <label class="form-check-label" for="<?php echo $vf_os_prefix; ?>ImportSshKey">
+                <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.import_ssh_key'); ?>
+            </label>
+        </div>
+        <div class="mt-3" data-vf-ssh-import-panel hidden>
+            <div class="mb-3">
+                <label class="form-label" for="<?php echo $vf_os_prefix; ?>SshKeyName">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ssh_key_name'); ?>
+                </label>
+                <input type="text" class="form-control" id="<?php echo $vf_os_prefix; ?>SshKeyName" name="ssh_key_name" maxlength="255" disabled data-vf-ssh-key-name>
+            </div>
+            <div>
+                <label class="form-label" for="<?php echo $vf_os_prefix; ?>SshPublicKey">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ssh_public_key'); ?>
+                </label>
+                <textarea class="form-control font-monospace" id="<?php echo $vf_os_prefix; ?>SshPublicKey" name="ssh_public_key" rows="4" maxlength="16384" spellcheck="false" disabled data-vf-ssh-public-key></textarea>
+            </div>
+        </div>
+    </div>
+</div>

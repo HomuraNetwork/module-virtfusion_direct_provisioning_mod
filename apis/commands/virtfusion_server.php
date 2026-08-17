@@ -39,6 +39,16 @@ class VirtfusionServer
         return $this->api->submit('servers/' . $serverId . '/templates', 'GET');
     }
 
+    public function getUserSshKeys($userId)
+    {
+        return $this->api->submit('ssh_keys/user/' . (int) $userId, 'GET');
+    }
+
+    public function createSshKey(array $vars)
+    {
+        return $this->api->submit('ssh_keys', 'POST', $vars);
+    }
+
     public function get($serverId, $remoteState = false)
     {
         $path = 'servers/' . $serverId;

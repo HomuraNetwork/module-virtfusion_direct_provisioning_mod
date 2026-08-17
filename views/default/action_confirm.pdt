@@ -1,0 +1,135 @@
+<style>
+.vf-confirm-modal.show { background: rgba(0, 0, 0, 0.45); }
+</style>
+<div class="modal fade vf-confirm-modal" tabindex="-1" role="dialog" aria-labelledby="virtfusionConfirmHeading" aria-hidden="true" data-vf-confirm-modal>
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="virtfusionConfirmHeading"><?php $this->_('VirtfusionDirectProvisioningMod.confirm.heading'); ?></h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-confirm-cancel aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0" data-vf-confirm-message></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-vf-confirm-cancel>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.confirm.cancel'); ?>
+                </button>
+                <button type="button" class="btn btn-primary" data-vf-confirm-submit>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.confirm.continue'); ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+(function () {
+    function modalInstance(element) {
+        if (window.bootstrap && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
+            return window.bootstrap.Modal.getOrCreateInstance(element, {backdrop: true, keyboard: true});
+        }
+        return null;
+    }
+
+    function showModal(element) {
+        var instance = modalInstance(element);
+        if (instance) {
+            instance.show();
+            return;
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(element).modal({backdrop: true, keyboard: true, show: true});
+            return;
+        }
+        element.style.display = 'block';
+        element.classList.add('show');
+        element.removeAttribute('aria-hidden');
+        element.setAttribute('aria-modal', 'true');
+    }
+
+    function hideModal(element) {
+        var instance = modalInstance(element);
+        if (instance) {
+            instance.hide();
+            return;
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(element).modal('hide');
+            return;
+        }
+        element.style.display = 'none';
+        element.classList.remove('show');
+        element.setAttribute('aria-hidden', 'true');
+        element.removeAttribute('aria-modal');
+    }
+
+    if (window.virtfusionActionConfirmBound) {
+        return;
+    }
+    window.virtfusionActionConfirmBound = true;
+    window.virtfusionPendingAction = null;
+
+    document.addEventListener('submit', function (event) {
+        var form = event.target;
+        var submitter = event.submitter || document.activeElement;
+        if (!form || !form.closest || !form.closest('#tabManage, #tabAdminManage')) {
+            return;
+        }
+        if (form.getAttribute('data-vf-confirmed') === 'true') {
+            form.removeAttribute('data-vf-confirmed');
+            return;
+        }
+        if (!submitter || !submitter.hasAttribute('data-vf-confirm')) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        var root = form.closest('#tabManage, #tabAdminManage');
+        var modal = root.querySelector('[data-vf-confirm-modal]');
+        if (!modal) {
+            return;
+        }
+        modal.querySelector('[data-vf-confirm-message]').textContent = submitter.getAttribute('data-vf-confirm');
+        var confirmButton = modal.querySelector('[data-vf-confirm-submit]');
+        confirmButton.classList.toggle('btn-danger', submitter.getAttribute('data-vf-confirm-danger') === 'true');
+        confirmButton.classList.toggle('btn-primary', submitter.getAttribute('data-vf-confirm-danger') !== 'true');
+        window.virtfusionPendingAction = {form: form, submitter: submitter, modal: modal};
+        showModal(modal);
+    }, true);
+
+    document.addEventListener('click', function (event) {
+        var confirmButton = event.target.closest && event.target.closest('[data-vf-confirm-submit]');
+        if (confirmButton) {
+            event.preventDefault();
+            var pending = window.virtfusionPendingAction;
+            window.virtfusionPendingAction = null;
+            if (!pending || !pending.form.isConnected) {
+                return;
+            }
+            hideModal(pending.modal);
+            pending.form.setAttribute('data-vf-confirmed', 'true');
+            if (typeof pending.form.requestSubmit === 'function') {
+                pending.form.requestSubmit(pending.submitter);
+            } else {
+                var action = document.createElement('input');
+                action.type = 'hidden';
+                action.name = pending.submitter.name;
+                action.value = pending.submitter.value;
+                pending.form.appendChild(action);
+                pending.form.submit();
+            }
+            return;
+        }
+
+        var cancelButton = event.target.closest && event.target.closest('[data-vf-confirm-cancel]');
+        if (cancelButton) {
+            event.preventDefault();
+            var modal = cancelButton.closest('[data-vf-confirm-modal]');
+            window.virtfusionPendingAction = null;
+            hideModal(modal);
+        }
+    });
+}());
+</script>

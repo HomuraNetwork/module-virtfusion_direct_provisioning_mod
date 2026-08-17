@@ -1,0 +1,22 @@
+<section class="vf-server-more-features vf-server-secondary-section mb-4" aria-labelledby="virtfusionMoreFeaturesHeading">
+    <div class="mb-2">
+        <strong id="virtfusionMoreFeaturesHeading"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.more_features'); ?></strong>
+    </div>
+    <div class="vf-server-action-list">
+        <div class="vf-server-action-item">
+            <?php if (isset($admin_server_url)) { ?>
+                <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-outline-primary w-100">
+                    <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.open_virtfusion'); ?>
+                </a>
+            <?php } else { ?>
+                <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                    <button type="submit" name="action" value="manage" class="btn btn-outline-primary w-100">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.open_virtfusion'); ?>
+                    </button>
+                <?php $this->Form->end(); ?>
+            <?php } ?>
+        </div>
+    </div>
+</section>

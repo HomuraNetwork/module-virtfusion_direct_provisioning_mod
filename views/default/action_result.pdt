@@ -1,7 +1,12 @@
 <?php if (($action_result['type'] ?? null) === 'password') { ?>
-<div class="alert alert-success border-success mb-3" role="alert">
-    <h5 class="alert-heading mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.password_result.heading'); ?></h5>
-    <p class="mb-3"><?php $this->_('VirtfusionDirectProvisioningMod.password_result.notice'); ?></p>
+<?php $vf_build_password = ($action_result['context'] ?? null) === 'build'; ?>
+<div class="alert alert-success border-success mb-3" role="alert" data-vf-sensitive-result>
+    <h5 class="alert-heading mb-2"><?php $this->_($vf_build_password
+        ? 'VirtfusionDirectProvisioningMod.build_password_result.heading'
+        : 'VirtfusionDirectProvisioningMod.password_result.heading'); ?></h5>
+    <p class="mb-3"><?php $this->_($vf_build_password
+        ? 'VirtfusionDirectProvisioningMod.build_password_result.notice'
+        : 'VirtfusionDirectProvisioningMod.password_result.notice'); ?></p>
     <div class="input-group">
         <input
             type="text"
@@ -15,11 +20,15 @@
             <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
         </button>
     </div>
+    <button type="button" class="btn btn-sm btn-outline-success mt-3" id="virtfusionDismissPassword">
+        <?php $this->_('VirtfusionDirectProvisioningMod.password_result.saved'); ?>
+    </button>
 </div>
 <script type="text/javascript">
 (function () {
     var button = document.getElementById('virtfusionCopyPassword');
     var field = document.getElementById('virtfusionNewPassword');
+    var dismiss = document.getElementById('virtfusionDismissPassword');
     if (!button || !field) {
         return;
     }
@@ -37,6 +46,119 @@
         field.select();
         document.execCommand('copy');
         copied();
+    });
+    if (dismiss) {
+        dismiss.addEventListener('click', function () {
+            var result = dismiss.closest('[data-vf-sensitive-result]');
+            if (result) {
+                result.remove();
+            }
+        });
+    }
+}());
+</script>
+<?php } ?>
+
+<?php if (($action_result['type'] ?? null) === 'build') { ?>
+<?php
+$vf_build_uses_password = ($action_result['auth_mode'] ?? null) === 'password';
+$vf_build_is_reinstall = ($action_result['action'] ?? 'rebuild') === 'rebuild';
+$vf_build_password = (string) ($action_result['password'] ?? '');
+?>
+<style>
+.vf-build-status { overflow: hidden; }
+.vf-build-status-heading { display: flex; align-items: center; gap: 0.75rem; }
+.vf-build-spinner {
+    flex: 0 0 auto;
+    width: 1.5rem;
+    height: 1.5rem;
+    border: 0.2rem solid #cbd5e1;
+    border-top-color: #0d6efd;
+    border-radius: 50%;
+    animation: vf-build-spin 0.8s linear infinite;
+}
+.vf-build-progress { height: 0.45rem; overflow: hidden; background: #d9e2ec; border-radius: 0.25rem; }
+.vf-build-progress-bar { width: 38%; height: 100%; background: #0d6efd; animation: vf-build-scroll 1.15s ease-in-out infinite; }
+.vf-build-dots span { animation: vf-build-dot 1.4s infinite both; }
+.vf-build-dots span:nth-child(2) { animation-delay: 0.2s; }
+.vf-build-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes vf-build-spin { to { transform: rotate(360deg); } }
+@keyframes vf-build-scroll { from { transform: translateX(-110%); } to { transform: translateX(370%); } }
+@keyframes vf-build-dot { 0%, 20% { opacity: 0.2; } 45%, 100% { opacity: 1; } }
+</style>
+<div
+    class="alert alert-info border-info mb-4 vf-build-status"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+    data-vf-build-progress
+    data-vf-complete-title="<?php echo $this->Html->safe(Language::_($vf_build_is_reinstall
+        ? 'VirtfusionDirectProvisioningMod.build_progress.reinstall_complete'
+        : 'VirtfusionDirectProvisioningMod.build_progress.complete', true)); ?>"
+    data-vf-complete-hint="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_progress.complete_hint', true)); ?>"
+>
+    <div class="vf-build-status-heading mb-2">
+        <span class="vf-build-spinner" data-vf-build-active aria-hidden="true"></span>
+        <h5 class="alert-heading mb-0" data-vf-build-title>
+            <?php $this->_($vf_build_is_reinstall
+                ? 'VirtfusionDirectProvisioningMod.build_progress.reinstalling'
+                : 'VirtfusionDirectProvisioningMod.build_progress.installing'); ?>
+        </h5>
+    </div>
+    <p class="mb-3" data-vf-build-message>
+        <?php $this->_($vf_build_uses_password
+            ? ($vf_build_is_reinstall
+                ? 'VirtfusionDirectProvisioningMod.build_progress.password_reinstall_wait'
+                : 'VirtfusionDirectProvisioningMod.build_progress.password_wait')
+            : ($vf_build_is_reinstall
+                ? 'VirtfusionDirectProvisioningMod.build_progress.ssh_reinstall_wait'
+                : 'VirtfusionDirectProvisioningMod.build_progress.ssh_wait')); ?>
+    </p>
+    <?php if ($vf_build_uses_password && $vf_build_password !== '') { ?>
+    <div class="mb-3">
+        <label class="form-label fw-semibold" for="virtfusionBuildPassword">
+            <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.password'); ?>
+        </label>
+        <div class="input-group">
+            <input type="text" class="form-control font-monospace fw-semibold" id="virtfusionBuildPassword" value="<?php echo $this->Html->safe($vf_build_password); ?>" readonly autocomplete="off">
+            <button type="button" class="btn btn-outline-primary" data-vf-copy-field="virtfusionBuildPassword">
+                <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
+            </button>
+        </div>
+    </div>
+    <?php } ?>
+    <div class="vf-build-progress mb-2" data-vf-build-active aria-hidden="true"><div class="vf-build-progress-bar"></div></div>
+    <div class="small text-muted" data-vf-build-active>
+        <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.checking'); ?><span class="vf-build-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+    </div>
+    <button type="button" class="btn btn-success btn-sm mt-3" data-vf-build-refresh hidden>
+        <i class="fas fa-sync-alt" aria-hidden="true"></i>
+        <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.refresh'); ?>
+    </button>
+</div>
+<script type="text/javascript">
+(function () {
+    document.querySelectorAll('[data-vf-copy-field]').forEach(function (button) {
+        if (button.getAttribute('data-vf-copy-bound') === 'true') {
+            return;
+        }
+        button.setAttribute('data-vf-copy-bound', 'true');
+        button.addEventListener('click', function () {
+            var field = document.getElementById(button.getAttribute('data-vf-copy-field'));
+            if (!field) {
+                return;
+            }
+            var copied = function () {
+                button.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.password_result.copied', true)); ?>;
+            };
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(field.value).then(copied);
+                return;
+            }
+            field.select();
+            document.execCommand('copy');
+            copied();
+        });
     });
 }());
 </script>
@@ -350,7 +472,7 @@
             closeForm.submit();
             return;
         }
-        window.fetch(closeForm.action, {
+        window.fetch(closeForm.getAttribute('action') || window.location.href, {
             method: 'POST',
             body: new FormData(closeForm),
             credentials: 'same-origin',

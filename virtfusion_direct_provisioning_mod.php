@@ -3885,6 +3885,11 @@ class VirtfusionDirectProvisioningMod extends Module
         $server_info = new stdClass();
         $server_info->built = !empty($data->data->built) ? 1 : 0;
         $server_info->name = $data->data->name ?? null;
+        $server_info->hostname = $data->data->hostname ?? null;
+        $owner_id = $data->data->owner->id ?? ($data->data->ownerId ?? null);
+        $server_info->owner_id = is_numeric($owner_id)
+            ? (int) $owner_id
+            : null;
 
         $active_tasks = $data->data->tasks->active ?? false;
         $pending_tasks = $data->data->tasks->actions->pending ?? [];
@@ -3897,6 +3902,7 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         $server_info->os_templates = $this->getServerOsTemplates($server_api, $server_id);
+        $server_info->ssh_keys = $this->getUserSshKeys($server_api, $server_info->owner_id);
         $server_info->network_addresses = (object) [
             'ipv4' => [],
             'ipv6_blocks' => []
@@ -4083,6 +4089,102 @@ class VirtfusionDirectProvisioningMod extends Module
         }
 
         return $groups;
+    }
+
+    private function getUserSshKeys($server_api, $owner_id)
+    {
+        if (!$owner_id || !method_exists($server_api, 'getUserSshKeys')) {
+            return [];
+        }
+
+        $request = $server_api->getUserSshKeys($owner_id);
+        if (!$this->apiRequestSucceeded($request, [200])) {
+            return [];
+        }
+
+        $data = json_decode($request['response']);
+        $keys = [];
+        foreach (($data->data ?? []) as $key) {
+            if (!isset($key->id) || !is_numeric($key->id) || empty($key->enabled)) {
+                continue;
+            }
+            $public_key = (string) ($key->publicKey ?? ($key->public ?? ''));
+            $keys[] = (object) [
+                'id' => (int) $key->id,
+                'name' => trim((string) ($key->name ?? '')) ?: ('SSH Key #' . (int) $key->id),
+                'type' => trim((string) ($key->type ?? '')),
+                'fingerprint' => $this->sshPublicKeyFingerprint($public_key)
+            ];
+        }
+
+        return $keys;
+    }
+
+    private function normalizeSshKeyIds($value)
+    {
+        if ($value === null || $value === '') {
+            return [];
+        }
+        $values = is_array($value) ? $value : [$value];
+        $ids = [];
+        foreach ($values as $id) {
+            if (!is_scalar($id) || !ctype_digit((string) $id) || (int) $id <= 0) {
+                return null;
+            }
+            $ids[] = (int) $id;
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    private function serverHasSshKeys($server_info, array $key_ids)
+    {
+        $available = [];
+        foreach (($server_info->ssh_keys ?? []) as $key) {
+            $available[] = (int) ($key->id ?? 0);
+        }
+
+        return count(array_diff($key_ids, $available)) === 0;
+    }
+
+    private function sshPublicKeyBlob($public_key)
+    {
+        $public_key = trim((string) $public_key);
+        if ($public_key === '' || strlen($public_key) > 16384) {
+            return null;
+        }
+        $types = '(?:ssh-(?:rsa|ed25519)|ecdsa-sha2-nistp(?:256|384|521)'
+            . '|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)';
+        if (!preg_match('/^' . $types . '\s+([A-Za-z0-9+\/]+={0,3})(?:\s+[^\r\n]*)?$/', $public_key, $matches)) {
+            return null;
+        }
+
+        $decoded = base64_decode($matches[1], true);
+        return $decoded !== false && strlen($decoded) >= 32 ? $decoded : null;
+    }
+
+    private function sshPublicKeyIsValid($public_key)
+    {
+        return $this->sshPublicKeyBlob($public_key) !== null;
+    }
+
+    private function sshPublicKeyFingerprint($public_key)
+    {
+        $blob = $this->sshPublicKeyBlob($public_key);
+        return $blob === null
+            ? null
+            : 'SHA256:' . rtrim(base64_encode(hash('sha256', $blob, true)), '=');
+    }
+
+    private function hostnameIsValid($host_name)
+    {
+        $host_name = trim((string) $host_name);
+        if ($host_name === '' || strlen($host_name) > 255) {
+            return false;
+        }
+
+        $octet = '([a-z0-9]|[a-z0-9][a-z0-9\-]{0,61}[a-z0-9])';
+        return preg_match('/^' . $octet . '(\.' . $octet . '){2,}$/i', $host_name) === 1;
     }
 
     private function serverHasOsTemplate($server_info, $template_id)
@@ -4364,10 +4466,114 @@ class VirtfusionDirectProvisioningMod extends Module
                     return null;
                 }
 
-                $request = $server_api->build($server_id, [
+                $hostname = trim((string) ($post['hostname'] ?? ''));
+                if (!$this->hostnameIsValid($hostname)) {
+                    $this->Input->setErrors([
+                        'hostname' => [
+                            'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.hostname', true)
+                        ]
+                    ]);
+                    return null;
+                }
+
+                $password_login = isset($post['password_login'])
+                    && $this->boolValue($post['password_login']);
+                $ssh_key_ids = [];
+                if (!$password_login) {
+                    $ssh_key_ids = $this->normalizeSshKeyIds($post['ssh_key_ids'] ?? []);
+                    if ($ssh_key_ids === null || !$this->serverHasSshKeys($server_info, $ssh_key_ids)) {
+                        $this->Input->setErrors([
+                            'ssh_key_ids' => [
+                                'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_keys', true)
+                            ]
+                        ]);
+                        return null;
+                    }
+
+                    $new_public_key = trim((string) ($post['ssh_public_key'] ?? ''));
+                    if ($new_public_key !== '') {
+                        $new_key_name = trim((string) ($post['ssh_key_name'] ?? ''));
+                        if ($new_key_name === '' || strlen($new_key_name) > 255) {
+                            $this->Input->setErrors([
+                                'ssh_key_name' => [
+                                    'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_name', true)
+                                ]
+                            ]);
+                            return null;
+                        }
+                        if (!$this->sshPublicKeyIsValid($new_public_key)) {
+                            $this->Input->setErrors([
+                                'ssh_public_key' => [
+                                    'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_public_key', true)
+                                ]
+                            ]);
+                            return null;
+                        }
+                        $new_fingerprint = $this->sshPublicKeyFingerprint($new_public_key);
+                        $new_key_id = null;
+                        foreach (($server_info->ssh_keys ?? []) as $existing_key) {
+                            if (!empty($existing_key->fingerprint)
+                                && hash_equals((string) $existing_key->fingerprint, (string) $new_fingerprint)) {
+                                $new_key_id = (int) $existing_key->id;
+                                break;
+                            }
+                        }
+
+                        if ($new_key_id === null) {
+                            if (empty($server_info->owner_id)) {
+                                $this->Input->setErrors([
+                                    'ssh_public_key' => [
+                                        'owner' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_owner', true)
+                                    ]
+                                ]);
+                                return null;
+                            }
+
+                            $key_request = $server_api->createSshKey([
+                                'userId' => (int) $server_info->owner_id,
+                                'name' => $new_key_name,
+                                'publicKey' => $new_public_key
+                            ]);
+                            $key_created = $this->apiRequestSucceeded($key_request, [201]);
+                            $this->log(
+                                $module_row->meta->hostname . '| import ssh key',
+                                'HTTP ' . (int) ($key_request['info']['http_code'] ?? 0),
+                                'output',
+                                $key_created
+                            );
+                            $key_data = $key_created ? json_decode($key_request['response']) : null;
+                            $new_key_id = $key_data->data->id ?? null;
+                            if (!$key_created || !is_numeric($new_key_id)) {
+                                $this->Input->setErrors([
+                                    'ssh_public_key' => [
+                                        'import' => $this->apiErrorMessage($key_request)
+                                    ]
+                                ]);
+                                return null;
+                            }
+                        }
+                        $ssh_key_ids[] = (int) $new_key_id;
+                        $ssh_key_ids = array_values(array_unique($ssh_key_ids));
+                    }
+                    if (empty($ssh_key_ids)) {
+                        $this->Input->setErrors([
+                            'ssh_key_ids' => [
+                                'required' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_required', true)
+                            ]
+                        ]);
+                        return null;
+                    }
+                }
+
+                $build_params = [
                     'operatingSystemId' => (int) $template_id,
-                    'email' => true
-                ]);
+                    'hostname' => $hostname,
+                    'email' => $password_login
+                ];
+                if (!empty($ssh_key_ids)) {
+                    $build_params['sshKeys'] = $ssh_key_ids;
+                }
+                $request = $server_api->build($server_id, $build_params);
                 $success = $this->apiRequestSucceeded($request, [200]);
                 $this->log(
                     $module_row->meta->hostname . '| ' . $action . ' server',
@@ -4389,12 +4595,21 @@ class VirtfusionDirectProvisioningMod extends Module
                     $details_saved
                 );
 
-                return Language::_(
+                $build_message = Language::_(
                     $action === 'build'
                         ? 'VirtfusionDirectProvisioningMod.tabManage.install_started'
                         : 'VirtfusionDirectProvisioningMod.tabManage.reinstall_started',
                     true
                 );
+                $build_data = json_decode($request['response'] ?? '');
+                $build_password = (string) ($build_data->data->settings->decryptedPassword ?? '');
+                return [
+                    'type' => 'build',
+                    'action' => $action,
+                    'auth_mode' => $password_login ? 'password' : 'ssh_key',
+                    'password' => $password_login ? $build_password : null,
+                    'message' => $build_message
+                ];
 
             case 'vnc':
                 $request = $server_api->setVnc($server_id, 'enable');
@@ -4547,7 +4762,8 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($refreshed_server_info) {
                 $server_info = $refreshed_server_info;
             }
-            if (in_array($action, ['build', 'rebuild'], true) && $message !== null && $server_info) {
+            if (in_array($action, ['build', 'rebuild'], true)
+                && ($message !== null || $action_result !== null) && $server_info) {
                 $server_info->has_active_tasks = true;
                 $server_info->tasks_active = true;
             }
@@ -4665,7 +4881,8 @@ class VirtfusionDirectProvisioningMod extends Module
             if ($refreshed_server_info) {
                 $server_info = $refreshed_server_info;
             }
-            if (in_array($action, ['build', 'rebuild'], true) && $message !== null && $server_info) {
+            if (in_array($action, ['build', 'rebuild'], true)
+                && ($message !== null || $action_result !== null) && $server_info) {
                 $server_info->has_active_tasks = true;
                 $server_info->tasks_active = true;
             }
@@ -5874,17 +6091,7 @@ class VirtfusionDirectProvisioningMod extends Module
      */
     public function validateHostname($host_name)
     {
-        if (strlen($host_name) > 255) {
-            return false;
-        }
-
-        $octet = '([a-z0-9]|[a-z0-9][a-z0-9\-]{0,61}[a-z0-9])';
-        $nested_octet = '(\.' . $octet . ')';
-        $hostname_regex = '/^' . $octet . $nested_octet . $nested_octet . '+$/i';
-
-        $valid = $this->Input->matches($host_name, $hostname_regex);
-
-        return $valid;
+        return $this->hostnameIsValid($host_name);
     }
 
     /**
