@@ -48,7 +48,20 @@ class VirtfusionDirectProvisioningMod extends Module
     {
         Loader::load(dirname(__FILE__) . DS . 'apis' . DS . 'virtfusion_api.php');
 
-        return new VirtfusionApi($api_token, $hostname, 443, !$this->boolValue($allow_insecure_tls));
+        return new VirtfusionApi(
+            $api_token,
+            $hostname,
+            443,
+            !$this->boolValue($allow_insecure_tls),
+            function ($method, $command, $response) use ($hostname) {
+                $this->log(
+                    $hostname . '| HTTP 422 ' . strtoupper((string) $method) . ' /api/v1/' . ltrim($command, '/'),
+                    (string) $response,
+                    'output',
+                    false
+                );
+            }
+        );
     }
 
     protected function getApiFromRow($row)
@@ -434,6 +447,29 @@ class VirtfusionDirectProvisioningMod extends Module
         return $status_code > 0
             ? 'VirtFusion API returned HTTP ' . $status_code . '.'
             : 'VirtFusion API did not return a response.';
+    }
+
+    private function apiResponseReferencesField($request, $field)
+    {
+        $decoded = json_decode((string) ($request['response'] ?? ''), true);
+        if (!is_array($decoded)) {
+            return false;
+        }
+
+        $contains = function ($value) use (&$contains, $field) {
+            if (!is_array($value)) {
+                return is_scalar($value) && stripos((string) $value, $field) !== false;
+            }
+
+            foreach ($value as $key => $item) {
+                if ((is_string($key) && stripos($key, $field) !== false) || $contains($item)) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        return $contains($decoded);
     }
 
     protected function serviceOperationState($service_id, $field)
@@ -4936,7 +4972,8 @@ class VirtfusionDirectProvisioningMod extends Module
                 if (!$success) {
                     $ipv6_unavailable = (int) ($request['info']['http_code'] ?? 0) === 422
                         && !empty($build_params['ipv6'])
-                        && !empty($server_info->ipv6_manageable);
+                        && !empty($server_info->ipv6_manageable)
+                        && $this->apiResponseReferencesField($request, 'ipv6');
                     $this->Input->setErrors([
                         'api' => [
                             'response' => $ipv6_unavailable

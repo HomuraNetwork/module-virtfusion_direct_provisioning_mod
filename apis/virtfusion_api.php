@@ -9,14 +9,17 @@ class VirtfusionApi
 
     private $verify_ssl;
 
+    private $response_logger;
+
     private $last_request = ['url' => null, 'args' => null];
 
-    public function __construct($api_token, $hostname, $port = 443, $verify_ssl = true)
+    public function __construct($api_token, $hostname, $port = 443, $verify_ssl = true, $response_logger = null)
     {
         $this->api_token = $api_token;
         $this->hostname = $hostname;
         $this->port = $port;
         $this->verify_ssl = (bool) $verify_ssl;
+        $this->response_logger = is_callable($response_logger) ? $response_logger : null;
     }
 
     public function get_query($query = '')
@@ -69,6 +72,10 @@ class VirtfusionApi
         $error = curl_error($ch);
         $errno = curl_errno($ch);
         curl_close($ch);
+
+        if ((int) ($info['http_code'] ?? 0) === 422 && $this->response_logger) {
+            call_user_func($this->response_logger, $type, $command, $response);
+        }
 
         return [
             'info' => $info,

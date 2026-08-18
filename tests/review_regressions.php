@@ -319,6 +319,7 @@ class FakeBuildServerApi
     public $builds = [];
     public $createdSshKeys = [];
     public $buildResponseCode = 200;
+    public $buildErrorResponse = ['errors' => ['ipv6' => ['IPv6 is unavailable.']]];
     public $queueStatus = [
         'serverId' => 42,
         'finished' => false,
@@ -342,7 +343,7 @@ class FakeBuildServerApi
         if ($this->buildResponseCode !== 200) {
             return [
                 'info' => ['http_code' => $this->buildResponseCode],
-                'response' => json_encode(['errors' => ['ipv6' => ['IPv6 is unavailable.']]])
+                'response' => json_encode($this->buildErrorResponse)
             ];
         }
         return [
@@ -1039,6 +1040,27 @@ assertSameValue(
     strpos((string) ($last_build_log[1] ?? ''), 'HTTP 422; server=42; ipv6_requested=true; ipv6_available=true') !== false,
     'A 422 build response must log the server, client request, and service IPv6 capability.'
 );
+$build_api->buildErrorResponse = ['errors' => ['hostname' => ['The hostname is unavailable.']]];
+$build_module->Input->errors = [];
+$other_422_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42, 'virtfusion_ipv6_available' => '1'],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1',
+        'ipv6' => '1'
+    ],
+    $capable_disabled_ipv6_info
+]);
+assertSameValue(null, $other_422_result, 'A non-IPv6 422 response must still fail the rebuild.');
+assertSameValue(
+    'VirtFusion API returned HTTP 422.',
+    $build_module->Input->errors['api']['response'] ?? null,
+    'A non-IPv6 422 response must not be mislabeled as an IPv6 failure.'
+);
 $build_api->buildResponseCode = 200;
 assertSameValue(
     true,
@@ -1186,7 +1208,15 @@ $os_install_template = file_get_contents(__DIR__ . '/../views/default/os_install
 $os_build_options_template = file_get_contents(__DIR__ . '/../views/default/os_build_options.pdt');
 $network_template = file_get_contents(__DIR__ . '/../views/default/network_addresses.pdt');
 $client_service_info_template = file_get_contents(__DIR__ . '/../views/default/client_service_info.pdt');
+$api_source = file_get_contents(__DIR__ . '/../apis/virtfusion_api.php');
 $server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
+assertSameValue(
+    true,
+    strpos($api_source, "(int) (\$info['http_code'] ?? 0) === 422") !== false
+        && strpos($api_source, 'call_user_func($this->response_logger, $type, $command, $response)') !== false
+        && strpos($module_source, "'| HTTP 422 '") !== false,
+    'Every VirtFusion HTTP 422 response must write its complete raw JSON to the administrator module log.'
+);
 assertSameValue(
     true,
     strpos($module_source, "fieldSelect(\n            'meta[ipv6]'") !== false
