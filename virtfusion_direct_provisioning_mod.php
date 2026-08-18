@@ -4934,7 +4934,16 @@ class VirtfusionDirectProvisioningMod extends Module
                 );
 
                 if (!$success) {
-                    $this->Input->setErrors(['api' => ['response' => $this->apiErrorMessage($request)]]);
+                    $ipv6_unavailable = (int) ($request['info']['http_code'] ?? 0) === 422
+                        && !empty($build_params['ipv6'])
+                        && !empty($server_info->ipv6_manageable);
+                    $this->Input->setErrors([
+                        'api' => [
+                            'response' => $ipv6_unavailable
+                                ? Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ipv6_unavailable', true)
+                                : $this->apiErrorMessage($request)
+                        ]
+                    ]);
                     return null;
                 }
 

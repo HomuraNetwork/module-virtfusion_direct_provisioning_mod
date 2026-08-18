@@ -109,6 +109,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_required'] = 'Sele
 $lang['VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_name'] = 'Enter a name for the SSH key.';
 $lang['VirtfusionDirectProvisioningMod.!error.rebuild.ssh_public_key'] = 'Enter a valid OpenSSH public key. Private keys are not accepted.';
 $lang['VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_owner'] = 'The VirtFusion owner for this server could not be identified, so the SSH key was not imported.';
+$lang['VirtfusionDirectProvisioningMod.!error.rebuild.ipv6_unavailable'] = 'Sorry, IPv6 is currently unavailable for this server. Disable IPv6 and try again, or contact support.';
 $lang['VirtfusionDirectProvisioningMod.!error.package.target'] = 'The target VirtFusion package could not be retrieved.';
 $lang['VirtfusionDirectProvisioningMod.!error.package.change'] = 'VirtFusion did not accept the package change.';
 $lang['VirtfusionDirectProvisioningMod.!error.tasks.pending'] = 'VirtFusion has a task that conflicts with this action. Wait for it to finish before trying again.';

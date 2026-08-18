@@ -1028,6 +1028,11 @@ $ipv6_422_result = callPrivate($build_module, 'handleServerAction', [
     $capable_disabled_ipv6_info
 ]);
 assertSameValue(null, $ipv6_422_result, 'A VirtFusion validation failure must not report a successful rebuild.');
+assertSameValue(
+    'VirtfusionDirectProvisioningMod.!error.rebuild.ipv6_unavailable',
+    $build_module->Input->errors['api']['response'] ?? null,
+    'An IPv6-related 422 response must show a clear client-safe error instead of raw API data.'
+);
 $last_build_log = end($build_module->logs);
 assertSameValue(
     true,
