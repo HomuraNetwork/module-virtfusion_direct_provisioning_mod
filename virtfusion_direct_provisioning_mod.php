@@ -4272,16 +4272,54 @@ class VirtfusionDirectProvisioningMod extends Module
 
     private function taskStateIsActive($task_state)
     {
+        if ($task_state === null) {
+            return false;
+        }
+
         if (is_bool($task_state)) {
             return $task_state;
         }
 
-        if (is_array($task_state)) {
-            return count($task_state) > 0;
+        if (is_numeric($task_state)) {
+            return (float) $task_state !== 0.0;
         }
 
         if (is_object($task_state)) {
-            return count(get_object_vars($task_state)) > 0;
+            $task_state = get_object_vars($task_state);
+        }
+
+        if (is_array($task_state)) {
+            foreach (['active', 'running', 'isActive'] as $active_key) {
+                if (array_key_exists($active_key, $task_state)) {
+                    return $this->taskStateIsActive($task_state[$active_key]);
+                }
+            }
+
+            foreach (['complete', 'completed', 'finished', 'failed', 'cancelled', 'canceled'] as $end_key) {
+                if (array_key_exists($end_key, $task_state) && $this->boolValue($task_state[$end_key])) {
+                    return false;
+                }
+            }
+
+            foreach (['status', 'state'] as $state_key) {
+                if (array_key_exists($state_key, $task_state)) {
+                    return $this->taskStateIsActive($task_state[$state_key]);
+                }
+            }
+
+            return count($task_state) > 0;
+        }
+
+        if (is_string($task_state)) {
+            $state = strtolower(trim($task_state));
+            if (in_array($state, ['', '0', 'false', 'no', 'off', 'idle', 'complete', 'completed',
+                'finished', 'failed', 'cancelled', 'canceled'], true)) {
+                return false;
+            }
+            if (in_array($state, ['1', 'true', 'yes', 'on', 'active', 'running', 'building',
+                'updating', 'pending', 'queued', 'processing'], true)) {
+                return true;
+            }
         }
 
         return !empty($task_state);

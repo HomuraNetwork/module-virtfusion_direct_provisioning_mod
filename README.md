@@ -194,7 +194,7 @@ The administrator link opens the configured VirtFusion admin server URL and does
 
 The traffic reset date shown by the module comes from VirtFusion. Changing the Blesta renewal date or granting extra service days does not change that VirtFusion date.
 
-The Manage page uses PDT templates only for its initial structure and result modals. Timed status checks and password-job checks use dedicated, authenticated JSON responses; the browser updates existing text, values, progress bars, address lists, visibility, and disabled states in place. Action requests return filtered state plus only their own optional result modal instead of re-rendering the complete service tab.
+The Manage page uses PDT templates only for its initial structure and action results. Timed status checks and password-job checks use dedicated, authenticated JSON responses; the browser updates existing text, values, progress bars, address lists, visibility, and disabled states in place. Active tasks, password results, and build progress appear as scrollable overlays inside the Manage panel, while VNC remains a dismissible popup. Action requests return filtered state plus only their own optional result instead of re-rendering the complete service tab.
 
 ### Blesta Advanced Options
 

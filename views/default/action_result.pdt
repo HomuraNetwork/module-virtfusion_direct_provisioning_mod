@@ -27,6 +27,11 @@
             if (!modal) {
                 return;
             }
+            if (modal.hasAttribute('data-vf-manage-overlay')) {
+                modal.hidden = false;
+                modal.classList.add('show');
+                return;
+            }
             if (window.bootstrap && window.bootstrap.Modal
                 && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
                 window.bootstrap.Modal.getOrCreateInstance(modal, {backdrop: true, keyboard: true}).show();
@@ -48,6 +53,16 @@
         },
         remove: function (modal) {
             if (!modal) {
+                return;
+            }
+            if (modal.hasAttribute('data-vf-manage-overlay')) {
+                var root = modal.closest('#tabManage, #tabAdminManage');
+                modal.remove();
+                var taskStatus = root && root.querySelector('[data-vf-task-status]');
+                if (taskStatus) {
+                    taskStatus.hidden = root.getAttribute('data-vf-busy') !== 'true'
+                        || !!root.querySelector('[data-vf-action-overlay]');
+                }
                 return;
             }
             var removeElement = function () {
@@ -82,17 +97,16 @@ $vf_password_queue_id = (int) ($action_result['queue_id'] ?? 0);
 $vf_password_pending = $vf_password_queue_id > 0;
 ?>
 <div
-    class="modal fade"
+    class="vf-manage-overlay"
     id="virtfusionPasswordResultModal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
+    role="status"
+    hidden
     data-vf-sensitive-result
-    data-vf-passive-modal
+    data-vf-manage-overlay
+    data-vf-action-overlay
 >
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
         <div
-            class="modal-content <?php echo $vf_password_pending ? 'alert-info border-info' : 'alert-warning border-warning'; ?>"
+            class="vf-manage-overlay-panel <?php echo $vf_password_pending ? 'alert-info border-info' : 'alert-warning border-warning'; ?>"
             role="status"
             aria-live="polite"
             aria-busy="<?php echo $vf_password_pending ? 'true' : 'false'; ?>"
@@ -155,7 +169,6 @@ $vf_password_pending = $vf_password_queue_id > 0;
                 </button>
             </div>
         </div>
-    </div>
 </div>
 <script type="text/javascript">
 (function () {
@@ -287,20 +300,19 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
 @keyframes vf-build-dot { 0%, 20% { opacity: 0.2; } 45%, 100% { opacity: 1; } }
 </style>
 <div
-    class="modal fade vf-build-status"
+    class="vf-manage-overlay vf-build-status"
     id="virtfusionBuildStatusModal"
-    tabindex="-1"
-    role="dialog"
-    aria-hidden="true"
+    role="status"
+    hidden
     data-vf-build-progress
-    data-vf-passive-modal
+    data-vf-manage-overlay
+    data-vf-action-overlay
     data-vf-complete-title="<?php echo $this->Html->safe(Language::_($vf_build_is_reinstall
         ? 'VirtfusionDirectProvisioningMod.build_progress.reinstall_complete'
         : 'VirtfusionDirectProvisioningMod.build_progress.complete', true)); ?>"
     data-vf-complete-hint="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_progress.complete_hint', true)); ?>"
 >
-    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
-        <div class="modal-content alert-info border-info" role="status" aria-live="polite" aria-busy="true" data-vf-build-surface>
+        <div class="vf-manage-overlay-panel alert-info border-info" role="status" aria-live="polite" aria-busy="true" data-vf-build-surface>
             <div class="modal-header">
                 <div class="vf-build-status-heading">
                     <span class="vf-build-spinner" data-vf-build-active aria-hidden="true"></span>
@@ -350,7 +362,6 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                 </button>
             </div>
         </div>
-    </div>
 </div>
 <script type="text/javascript">
 (function () {

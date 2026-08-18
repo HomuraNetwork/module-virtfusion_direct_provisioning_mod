@@ -15,24 +15,38 @@
 @keyframes vf-task-spin { to { transform: rotate(360deg); } }
 @keyframes vf-task-scroll { from { transform: translateX(-110%); } to { transform: translateX(370%); } }
 </style>
-<div class="alert alert-info border-info mb-4 vf-task-status" role="status" aria-live="polite" aria-busy="true" data-vf-task-status <?php echo !empty($server_busy) && ($action_result['type'] ?? null) !== 'build' ? '' : 'hidden'; ?>>
-    <div class="vf-task-status-heading mb-2">
-        <span class="vf-task-spinner" aria-hidden="true"></span>
-        <strong><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.building', true)); ?></strong>
+<div
+    class="vf-manage-overlay vf-task-status"
+    role="status"
+    aria-live="polite"
+    aria-busy="true"
+    data-vf-task-status
+    data-vf-manage-overlay
+    <?php echo !empty($server_busy) && !in_array(($action_result['type'] ?? null), ['build', 'password'], true) ? '' : 'hidden'; ?>
+>
+    <div class="vf-manage-overlay-panel alert-info border-info">
+        <div class="modal-header">
+            <div class="vf-task-status-heading">
+                <span class="vf-task-spinner" aria-hidden="true"></span>
+                <h5 class="modal-title mb-0"><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.building', true)); ?></h5>
+            </div>
+        </div>
+        <div class="modal-body">
+            <div class="vf-task-progress mb-2" aria-hidden="true"><div class="vf-task-progress-bar"></div></div>
+            <div class="small text-muted mb-3">
+                <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.refreshing', true)); ?>
+            </div>
+            <?php if (isset($admin_server_url)) { ?>
+                <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage_admin'); ?>
+                </a>
+            <?php } else { ?>
+                <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                    <button type="submit" name="action" value="manage" class="btn btn-sm btn-outline-primary">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage'); ?>
+                    </button>
+                <?php $this->Form->end(); ?>
+            <?php } ?>
+        </div>
     </div>
-    <div class="vf-task-progress mb-2" aria-hidden="true"><div class="vf-task-progress-bar"></div></div>
-    <div class="small text-muted mb-3">
-        <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.refreshing', true)); ?>
-    </div>
-    <?php if (isset($admin_server_url)) { ?>
-        <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary">
-            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage_admin'); ?>
-        </a>
-    <?php } else { ?>
-        <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
-            <button type="submit" name="action" value="manage" class="btn btn-sm btn-outline-primary">
-                <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.manage'); ?>
-            </button>
-        <?php $this->Form->end(); ?>
-    <?php } ?>
 </div>

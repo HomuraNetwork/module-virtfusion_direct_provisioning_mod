@@ -590,6 +590,17 @@ assertSameValue(
     'Closing VNC must remain available while another VirtFusion task is active.'
 );
 assertSameValue(false, callPrivate($module, 'taskStateIsActive', [false]), 'A false active-task state must remain idle.');
+assertSameValue(false, callPrivate($module, 'taskStateIsActive', ['false']), 'A string false task state must remain idle.');
+assertSameValue(
+    false,
+    callPrivate($module, 'taskStateIsActive', [(object) ['active' => false, 'lastOn' => '2026-08-18 09:26:50']]),
+    'Task history metadata must not make an explicitly inactive task active.'
+);
+assertSameValue(
+    false,
+    callPrivate($module, 'taskStateIsActive', [(object) ['state' => 'completed', 'lastOn' => '2026-08-18 09:26:50']]),
+    'A completed task state must release the Manage overlay.'
+);
 assertSameValue(true, callPrivate($module, 'taskStateIsActive', [(object) ['action' => 'build_server']]), 'An active task object must lock local actions.');
 $task_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
 $task_module->serverApi = new FakeTaskServerApi();
@@ -1073,6 +1084,7 @@ $server_os_management_template = file_get_contents(__DIR__ . '/../views/default/
 $action_confirm_template = file_get_contents(__DIR__ . '/../views/default/action_confirm.pdt');
 $action_result_template = file_get_contents(__DIR__ . '/../views/default/action_result.pdt');
 $manage_ajax_template = file_get_contents(__DIR__ . '/../views/default/manage_ajax.pdt');
+$task_status_template = file_get_contents(__DIR__ . '/../views/default/task_status.pdt');
 $os_install_template = file_get_contents(__DIR__ . '/../views/default/os_install.pdt');
 $os_build_options_template = file_get_contents(__DIR__ . '/../views/default/os_build_options.pdt');
 $network_template = file_get_contents(__DIR__ . '/../views/default/network_addresses.pdt');
@@ -1295,8 +1307,20 @@ assertSameValue(
     strpos($vnc_template, 'data-vf-build-progress') !== false
         && strpos($vnc_template, 'data-vf-build-refresh') !== false
         && strpos($vnc_template, 'vf-build-progress-bar') !== false
+        && substr_count($vnc_template, 'data-vf-manage-overlay') >= 2
+        && substr_count($vnc_template, 'data-vf-action-overlay') >= 2
         && strpos($manage_ajax_template, 'syncBuildProgress') !== false,
-    'OS installation must retain animated progress and turn it into a refreshable completion state.'
+    'Password and OS installation results must use in-panel overlays with animated progress.'
+);
+assertSameValue(
+    true,
+    strpos($task_status_template, 'data-vf-task-status') !== false
+        && strpos($task_status_template, 'data-vf-manage-overlay') !== false
+        && strpos($task_status_template, 'vf-manage-overlay-panel') !== false
+        && strpos($manage_ajax_template, "current.appendChild(modal)") !== false
+        && strpos($manage_ajax_template, "document.body.appendChild(modal)") === false
+        && strpos($manage_ajax_template, "modal.className = 'modal fade vf-working-modal'") === false,
+    'Active tasks and slow action requests must block only the Manage panel instead of the whole page.'
 );
 assertSameValue(
     true,
