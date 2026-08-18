@@ -1,4 +1,5 @@
 <?php
+$vf_current_name = trim((string) ($server_info->name ?? ''));
 $vf_current_hostname = trim((string) ($server_info->hostname ?? ''));
 $vf_ssh_keys = $server_info->ssh_keys ?? [];
 $vf_requires_key_import = empty($vf_ssh_keys);
@@ -14,8 +15,7 @@ $vf_ipv6_manageable = !empty($server_info->ipv6_manageable);
 .vf-auth-choice-title { display: block; font-weight: 600; }
 .vf-auth-choice-help { display: block; margin-top: 0.2rem; color: #6c757d; font-size: 0.8rem; }
 .vf-network-options { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
-.vf-network-hostname { padding-bottom: 1rem; border-bottom: 1px solid #dee2e6; }
-.vf-network-hostname:last-child { padding-bottom: 0; border-bottom: 0; }
+.vf-network-field + .vf-network-field { margin-top: 1rem; }
 .vf-ssh-auth-panel { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
 .vf-ssh-key-list { max-height: 9rem; overflow-y: auto; padding: 0.65rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #fff; }
 .vf-ssh-empty { color: #6c757d; font-size: 0.875rem; }
@@ -31,7 +31,22 @@ $vf_ipv6_manageable = !empty($server_info->ipv6_manageable);
     <fieldset class="col-12">
         <legend class="form-label mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.network_settings'); ?></legend>
         <div class="vf-network-options">
-            <div class="vf-network-hostname">
+            <div class="vf-network-field">
+                <label class="form-label" for="<?php echo $vf_os_prefix; ?>Name">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.server_name'); ?>
+                </label>
+                <input
+                    type="text"
+                    class="form-control"
+                    id="<?php echo $vf_os_prefix; ?>Name"
+                    name="name"
+                    value="<?php echo $this->Html->safe($vf_current_name); ?>"
+                    maxlength="255"
+                    required
+                    data-vf-server-name
+                >
+            </div>
+            <div class="vf-network-field">
                 <label class="form-label" for="<?php echo $vf_os_prefix; ?>Hostname">
                     <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.hostname'); ?>
                 </label>

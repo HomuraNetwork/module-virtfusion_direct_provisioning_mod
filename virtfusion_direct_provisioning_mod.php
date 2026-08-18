@@ -4847,6 +4847,16 @@ class VirtfusionDirectProvisioningMod extends Module
                     return null;
                 }
 
+                $server_name = trim((string) ($post['name'] ?? ($server_info->name ?? '')));
+                if ($server_name === '' || strlen($server_name) > 255) {
+                    $this->Input->setErrors([
+                        'name' => [
+                            'invalid' => Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.name', true)
+                        ]
+                    ]);
+                    return null;
+                }
+
                 $hostname = trim((string) ($post['hostname'] ?? ''));
                 if ($hostname !== '' && !$this->hostnameIsValid($hostname)) {
                     $this->Input->setErrors([
@@ -4946,7 +4956,10 @@ class VirtfusionDirectProvisioningMod extends Module
                     }
                 }
 
-                $build_params = ['operatingSystemId' => (int) $template_id];
+                $build_params = [
+                    'operatingSystemId' => (int) $template_id,
+                    'name' => $server_name
+                ];
                 if ($hostname !== '') {
                     $build_params['hostname'] = $hostname;
                 }

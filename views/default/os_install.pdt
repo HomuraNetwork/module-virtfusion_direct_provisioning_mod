@@ -177,6 +177,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var template = installer.querySelector('[data-vf-os-template]');
     var catalogElement = installer.querySelector('[data-vf-os-catalog]');
     var openButton = document.querySelector('[data-vf-os-open="<?php echo $vf_os_prefix; ?>"]');
+    var serverName = installer.querySelector('[data-vf-server-name]');
     var hostname = installer.querySelector('[data-vf-hostname]');
     var form = installer.querySelector('form');
     var authModeInputs = installer.querySelectorAll('[data-vf-auth-mode]');
@@ -190,6 +191,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var ipv6Toggle = installer.querySelector('[data-vf-ipv6-toggle]');
     var selectionStatus = installer.querySelector('[data-vf-os-selection-status]');
     var selectionText = installer.querySelector('[data-vf-os-selection-text]');
+    var initialServerName = serverName ? serverName.value : '';
     var initialHostname = hostname ? hostname.value : '';
     var initialImport = importToggle ? importToggle.checked : false;
     var initialIpv6 = ipv6Toggle ? ipv6Toggle.checked : false;
@@ -233,6 +235,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         category.value = '';
         resetTemplates(true);
         template.disabled = true;
+        if (serverName) {
+            serverName.value = initialServerName;
+        }
         if (hostname) {
             hostname.value = initialHostname;
         }
@@ -266,6 +271,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             return checkbox.checked;
         });
         if (category.value !== '' || template.value !== '' || sshKeySelected
+            || (serverName && serverName.value !== initialServerName)
             || (hostname && hostname.value !== initialHostname)
             || (importToggle && importToggle.checked !== initialImport)
             || (ipv6Toggle && ipv6Toggle.checked !== initialIpv6)
@@ -400,6 +406,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     });
     if (hostname) {
         hostname.addEventListener('input', markDirty);
+    }
+    if (serverName) {
+        serverName.addEventListener('input', markDirty);
     }
     if (ipv6Toggle) {
         ipv6Toggle.addEventListener('change', markDirty);

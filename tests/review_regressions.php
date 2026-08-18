@@ -834,6 +834,7 @@ $build_result = callPrivate($build_module, 'handleServerAction', [
     [
         'action' => 'build',
         'operating_system_id' => 49,
+        'name' => 'Rebuilt server',
         'hostname' => 'new.example.com',
         'ipv6' => '0',
         'ssh_key_ids' => ['19']
@@ -851,6 +852,7 @@ assertSameValue(null, $build_result['password'], 'SSH key installs must not expo
 assertSameValue(
     [
         'operatingSystemId' => 49,
+        'name' => 'Rebuilt server',
         'hostname' => 'new.example.com',
         'email' => false,
         'ipv6' => true,
@@ -923,6 +925,7 @@ assertSameValue('new-build-password', $password_build_result['password'], 'Passw
 assertSameValue(
     [
         'operatingSystemId' => 49,
+        'name' => 'Live server',
         'hostname' => 'password.example.com',
         'email' => true,
         'ipv6' => true
@@ -945,10 +948,32 @@ $optional_hostname_result = callPrivate($build_module, 'handleServerAction', [
 ]);
 assertSameValue('build', $optional_hostname_result['type'], 'Reinstall must allow an omitted hostname.');
 assertSameValue(
-    ['operatingSystemId' => 49, 'email' => true, 'ipv6' => true],
+    ['operatingSystemId' => 49, 'name' => 'Live server', 'email' => true, 'ipv6' => true],
     $build_api->builds[4]['vars'],
     'An empty optional hostname must be omitted from the VirtFusion build request.'
 );
+$build_module->Input->errors = [];
+$nameless_info = clone $live_info;
+$nameless_info->name = '';
+$missing_name_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1'
+    ],
+    $nameless_info
+]);
+assertSameValue(null, $missing_name_result, 'Reinstall must reject a missing required server name.');
+assertSameValue(
+    true,
+    isset($build_module->Input->errors['name']['invalid']),
+    'A missing server name must produce a field-specific validation error.'
+);
+assertSameValue(5, count($build_api->builds), 'A missing server name must not call the build API.');
 $build_module->Input->errors = [];
 $missing_auth_result = callPrivate($build_module, 'handleServerAction', [
     (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
@@ -1605,6 +1630,7 @@ assertSameValue(
         && strpos($module_source, "case 'build':") !== false
         && strpos($module_source, "case 'rebuild':") !== false
         && strpos($module_source, "'operatingSystemId' => (int) \$template_id") !== false
+        && strpos($module_source, "'name' => \$server_name") !== false
         && strpos($module_source, "if (\$hostname !== '')") !== false
         && strpos($module_source, "\$build_params['hostname'] = \$hostname") !== false
         && strpos($module_source, "\$build_params['sshKeys'] = \$ssh_key_ids") !== false
@@ -1614,7 +1640,10 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($os_build_options_template, 'name="hostname"') !== false
+    strpos($os_build_options_template, 'name="name"') !== false
+        && strpos($os_build_options_template, 'data-vf-server-name') !== false
+        && strpos($os_build_options_template, "maxlength=\"255\"\n                    required\n                    data-vf-server-name") !== false
+        && strpos($os_build_options_template, 'name="hostname"') !== false
         && strpos($os_build_options_template, 'name="ssh_key_ids[]"') !== false
         && strpos($os_build_options_template, 'name="ssh_public_key"') !== false
         && strpos($os_build_options_template, 'name="password_login"') !== false
@@ -1634,7 +1663,7 @@ assertSameValue(
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
         && preg_match('/name="hostname"[^>]*required/s', $os_build_options_template) === 0
         && strpos($os_install_template, 'sshKeyRequired') !== false,
-    'The OS popup must let clients enable service-capable IPv6 without disabling active IPv6 and retain explicit authentication without preselecting a saved key.'
+    'The OS popup must require a server name, allow an optional hostname, and retain explicit authentication and service-controlled IPv6 behavior.'
 );
 assertSameValue(
     true,
