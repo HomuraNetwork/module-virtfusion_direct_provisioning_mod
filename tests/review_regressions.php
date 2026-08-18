@@ -1352,7 +1352,10 @@ assertSameValue(
         && strpos($task_status_template, 'vf-manage-overlay-panel') !== false
         && strpos($manage_ajax_template, "current.appendChild(modal)") !== false
         && strpos($manage_ajax_template, "document.body.appendChild(modal)") === false
-        && strpos($manage_ajax_template, "modal.className = 'modal fade vf-working-modal'") === false,
+        && strpos($manage_ajax_template, "modal.className = 'modal fade vf-working-modal'") === false
+        && strpos($manage_ajax_template, 'isolation: isolate') === false
+        && strpos($manage_ajax_template, 'z-index: 1040') === false
+        && strpos($manage_ajax_template, '#tabManage .vf-manage-overlay') !== false,
     'Active tasks and slow action requests must block only the Manage panel instead of the whole page.'
 );
 assertSameValue(

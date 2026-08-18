@@ -1,6 +1,7 @@
 <style>
-#tabManage, #tabAdminManage { position: relative; isolation: isolate; min-height: 12rem; }
-.vf-manage-overlay { position: absolute; inset: 0; z-index: 1040; display: flex; align-items: flex-start; justify-content: center; padding: clamp(1rem, 8vh, 4rem) 1rem 1rem; background: rgba(248, 249, 250, 0.9); backdrop-filter: blur(1px); }
+#tabManage, #tabAdminManage { position: relative; min-height: 12rem; }
+#tabManage .vf-manage-overlay,
+#tabAdminManage .vf-manage-overlay { position: absolute; inset: 0; z-index: 20; display: flex; align-items: flex-start; justify-content: center; padding: clamp(1rem, 8vh, 4rem) 1rem 1rem; background: rgba(248, 249, 250, 0.9); backdrop-filter: blur(1px); }
 .vf-manage-overlay[hidden] { display: none !important; }
 .vf-manage-overlay-panel { position: sticky; top: 1rem; width: min(100%, 38rem); max-height: calc(100vh - 2rem); max-height: calc(100dvh - 2rem); overflow-y: auto; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #fff; box-shadow: 0 0.75rem 2rem rgba(33, 37, 41, 0.16); }
 .vf-manage-overlay-panel.alert-info { border-color: #9ec5fe; }
