@@ -982,7 +982,7 @@ $disabled_ipv6_build = callPrivate($build_module, 'handleServerAction', [
     $capable_disabled_ipv6_info
 ]);
 assertSameValue('build', $disabled_ipv6_build['type'], 'A client may rebuild an IPv6-capable service without enabling IPv6.');
-assertSameValue(false, $build_api->builds[5]['vars']['ipv6'], 'An unchecked IPv6 option must remain disabled during build.');
+assertSameValue(false, isset($build_api->builds[5]['vars']['ipv6']), 'An unchecked IPv6 option must be omitted from the build request.');
 $enabled_ipv6_build = callPrivate($build_module, 'handleServerAction', [
     (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
     $build_api,
@@ -1012,7 +1012,7 @@ $forged_ipv6_build = callPrivate($build_module, 'handleServerAction', [
     $disabled_ipv6_info
 ]);
 assertSameValue('build', $forged_ipv6_build['type'], 'A forged client IPv6 field must not prevent an otherwise valid rebuild.');
-assertSameValue(false, $build_api->builds[7]['vars']['ipv6'], 'A forged client IPv6 field must not bypass the saved service capability.');
+assertSameValue(false, isset($build_api->builds[7]['vars']['ipv6']), 'A forged client IPv6 field must not bypass the saved service capability.');
 $build_api->buildResponseCode = 422;
 $build_module->Input->errors = [];
 $ipv6_422_result = callPrivate($build_module, 'handleServerAction', [

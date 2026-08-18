@@ -2550,9 +2550,12 @@ class VirtfusionDirectProvisioningMod extends Module
                         $build_params = [
                             'operatingSystemId' => (int) $virtfusion_os_id,
                             'name' => $server_name,
-                            'hostname' => $domain,
-                            'ipv6' => $enable_ipv6
+                            'hostname' => $domain
                         ];
+
+                        if ($enable_ipv6) {
+                            $build_params['ipv6'] = true;
+                        }
 
                         if (!empty($create_config_options['sshKeys'])) {
                             $build_params['sshKeys'] = $this->csvInts($create_config_options['sshKeys']);
@@ -4949,8 +4952,10 @@ class VirtfusionDirectProvisioningMod extends Module
                 }
                 $build_params['email'] = $password_login;
                 $ipv6_requested = isset($post['ipv6']) && $this->boolValue($post['ipv6']);
-                $build_params['ipv6'] = !empty($server_info->ipv6_enabled)
-                    || (!empty($server_info->ipv6_manageable) && $ipv6_requested);
+                if (!empty($server_info->ipv6_enabled)
+                    || (!empty($server_info->ipv6_manageable) && $ipv6_requested)) {
+                    $build_params['ipv6'] = true;
+                }
                 if (!empty($ssh_key_ids)) {
                     $build_params['sshKeys'] = $ssh_key_ids;
                 }
