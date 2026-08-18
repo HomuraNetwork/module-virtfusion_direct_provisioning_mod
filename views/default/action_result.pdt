@@ -793,7 +793,9 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
     }
 
     function hideModal() {
-        if (window.bootstrap && window.bootstrap.Modal) {
+        if (window.bootstrap
+            && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
             window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
             return;
         }

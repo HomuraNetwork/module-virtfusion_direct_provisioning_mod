@@ -1465,8 +1465,8 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($vnc_template, "Modal.getOrCreateInstance") !== false,
-    'The VNC popup must support the Bootstrap 5 administrator theme.'
+    substr_count($vnc_template, "typeof window.bootstrap.Modal.getOrCreateInstance === 'function'") >= 2,
+    'Opening and closing the VNC popup must guard Bootstrap 5 APIs before using them.'
 );
 assertSameValue(
     false,
