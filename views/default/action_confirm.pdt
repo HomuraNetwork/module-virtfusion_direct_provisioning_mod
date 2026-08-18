@@ -73,6 +73,9 @@
     document.addEventListener('submit', function (event) {
         var form = event.target;
         var submitter = event.submitter || document.activeElement;
+        if (event.defaultPrevented) {
+            return;
+        }
         if (!form || !form.closest || !form.closest('#tabManage, #tabAdminManage')) {
             return;
         }
@@ -97,7 +100,7 @@
         confirmButton.classList.toggle('btn-primary', submitter.getAttribute('data-vf-confirm-danger') !== 'true');
         window.virtfusionPendingAction = {form: form, submitter: submitter, modal: modal};
         showModal(modal);
-    }, true);
+    });
 
     document.addEventListener('click', function (event) {
         var confirmButton = event.target.closest && event.target.closest('[data-vf-confirm-submit]');

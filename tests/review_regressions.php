@@ -1402,6 +1402,7 @@ assertSameValue(
     strpos($server_actions_template, 'data-vf-confirm=') !== false
         && strpos($server_actions_template, 'onclick="return confirm') === false
         && strpos($action_confirm_template, "document.addEventListener('submit'") !== false
+        && strpos($action_confirm_template, 'event.defaultPrevented') !== false
         && strpos($action_confirm_template, 'data-vf-confirm-submit') !== false,
     'Power and password actions must use the shared second-step confirmation modal.'
 );
@@ -1477,6 +1478,10 @@ assertSameValue(
         && strpos($os_install_template, 'data-vf-os-category') !== false
         && strpos($os_install_template, 'data-vf-os-template') !== false
         && strpos($os_install_template, 'confirm.reinstall') !== false
+        && strpos($os_install_template, 'data-vf-confirm-danger="true"') !== false
+        && strpos($os_install_template, 'data-vf-os-selection-status') !== false
+        && strpos($os_install_template, 'select_os_first') !== false
+        && strpos($os_install_template, '<div class="alert alert-danger">') === false
         && strpos($os_install_template, 'data-vf-os-open') !== false
         && strpos($os_install_template, 'hidden.bs.modal') !== false
         && strpos($os_install_template, 'onclick="return confirm') === false,
@@ -1508,6 +1513,8 @@ assertSameValue(
         && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
         && strpos($os_build_options_template, 'data-vf-ipv6-toggle') !== false
         && strpos($os_build_options_template, '.vf-ipv6-option .form-check-input { position: static;') !== false
+        && strpos($os_build_options_template, 'class="vf-ipv6-control"') !== false
+        && strpos($os_build_options_template, 'class="vf-ipv6-copy"') !== false
         && strpos($os_build_options_template, 'checked disabled') !== false
         && strpos($os_build_options_template, 'publicKey') === false
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0

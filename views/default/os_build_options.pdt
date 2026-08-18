@@ -15,8 +15,10 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
 .vf-ssh-auth-panel { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
 .vf-ssh-key-list { max-height: 9rem; overflow-y: auto; padding: 0.65rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #fff; }
 .vf-ssh-empty { color: #6c757d; font-size: 0.875rem; }
-.vf-ipv6-option { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.85rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
-.vf-ipv6-option .form-check-input { position: static; float: none; flex: 0 0 auto; margin: 0.2rem 0 0; }
+.vf-ipv6-option { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); column-gap: 0.875rem; align-items: start; padding: 0.9rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
+.vf-ipv6-control { display: flex; align-items: flex-start; justify-content: center; min-width: 0; padding-top: 0.2rem; }
+.vf-ipv6-option .form-check-input { position: static; float: none; flex: 0 0 auto; margin: 0; }
+.vf-ipv6-copy { min-width: 0; }
 @media (max-width: 575.98px) {
     .vf-auth-options { grid-template-columns: 1fr; }
 }
@@ -44,16 +46,18 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
             <?php if ($vf_ipv6_enabled) { ?>
                 <input type="hidden" name="ipv6" value="1">
             <?php } ?>
-            <input
-                class="form-check-input"
-                type="checkbox"
-                id="<?php echo $vf_os_prefix; ?>Ipv6"
-                name="ipv6"
-                value="1"
-                data-vf-ipv6-toggle
-                <?php echo $vf_ipv6_enabled ? 'checked disabled' : ''; ?>
-            >
-            <span>
+            <span class="vf-ipv6-control">
+                <input
+                    class="form-check-input"
+                    type="checkbox"
+                    id="<?php echo $vf_os_prefix; ?>Ipv6"
+                    name="ipv6"
+                    value="1"
+                    data-vf-ipv6-toggle
+                    <?php echo $vf_ipv6_enabled ? 'checked disabled' : ''; ?>
+                >
+            </span>
+            <span class="vf-ipv6-copy">
                 <span class="d-block fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ipv6_title'); ?></span>
                 <span class="d-block small text-muted"><?php $this->_($vf_ipv6_enabled
                     ? 'VirtfusionDirectProvisioningMod.tabManage.ipv6_locked_help'
