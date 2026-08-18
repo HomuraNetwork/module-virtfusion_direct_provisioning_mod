@@ -281,6 +281,7 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
 <style>
 .vf-build-status { overflow: hidden; }
 .vf-build-status-heading { display: flex; align-items: center; gap: 0.75rem; }
+.vf-build-complete-icon { color: #198754; font-size: 1.5rem; line-height: 1; }
 .vf-build-spinner {
     flex: 0 0 auto;
     width: 1.5rem;
@@ -316,13 +317,14 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
             <div class="modal-header">
                 <div class="vf-build-status-heading">
                     <span class="vf-build-spinner" data-vf-build-active aria-hidden="true"></span>
+                    <span class="vf-build-complete-icon" data-vf-build-complete hidden aria-hidden="true"><i class="fas fa-check-circle"></i></span>
                     <h5 class="modal-title mb-0" data-vf-build-title>
                         <?php $this->_($vf_build_is_reinstall
                             ? 'VirtfusionDirectProvisioningMod.build_progress.reinstalling'
                             : 'VirtfusionDirectProvisioningMod.build_progress.installing'); ?>
                     </h5>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-build-close aria-label="Close">&times;</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-build-close data-vf-build-complete hidden aria-label="Close">&times;</button>
             </div>
             <div class="modal-body">
                 <p class="mb-3" data-vf-build-message>
@@ -357,7 +359,7 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     <i class="fas fa-sync-alt" aria-hidden="true"></i>
                     <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.refresh'); ?>
                 </button>
-                <button type="button" class="btn btn-secondary" data-vf-build-close>
+                <button type="button" class="btn btn-secondary" data-vf-build-close data-vf-build-complete hidden>
                     <?php $this->_('VirtfusionDirectProvisioningMod.action_result.close'); ?>
                 </button>
             </div>

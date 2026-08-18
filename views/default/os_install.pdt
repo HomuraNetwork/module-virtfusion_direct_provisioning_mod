@@ -2,6 +2,7 @@
 $vf_is_reinstall = !empty($server_info->built);
 $vf_os_action = $vf_is_reinstall ? 'rebuild' : 'build';
 $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClientOs';
+$vf_current_name = trim((string) ($server_info->name ?? ''));
 $vf_os_catalog = [];
 foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     $vf_group_templates = [];
@@ -83,6 +84,21 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                                     <option value=""><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.select_os_first'); ?></option>
                                 </select>
                             </div>
+                            <div class="col-12">
+                                <label class="form-label" for="<?php echo $vf_os_prefix; ?>Name">
+                                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.server_name'); ?>
+                                </label>
+                                <input
+                                    type="text"
+                                    class="form-control"
+                                    id="<?php echo $vf_os_prefix; ?>Name"
+                                    name="name"
+                                    value="<?php echo $this->Html->safe($vf_current_name); ?>"
+                                    maxlength="255"
+                                    required
+                                    data-vf-server-name
+                                >
+                            </div>
                         </div>
                         <div class="vf-os-selection-status mt-3" data-vf-os-selection-status role="alert" hidden>
                             <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
@@ -145,6 +161,21 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                         <select class="form-control form-select" id="<?php echo $vf_os_prefix; ?>Template" name="operating_system_id" data-vf-os-template required disabled>
                             <option value=""><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.select_os_first'); ?></option>
                         </select>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="<?php echo $vf_os_prefix; ?>Name">
+                            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.server_name'); ?>
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="<?php echo $vf_os_prefix; ?>Name"
+                            name="name"
+                            value="<?php echo $this->Html->safe($vf_current_name); ?>"
+                            maxlength="255"
+                            required
+                            data-vf-server-name
+                        >
                     </div>
                 </div>
                 <div class="vf-os-selection-status mt-3" data-vf-os-selection-status role="alert" hidden>

@@ -1471,6 +1471,7 @@ assertSameValue(
     true,
     strpos($vnc_template, 'data-vf-build-progress') !== false
         && strpos($vnc_template, 'data-vf-build-refresh') !== false
+        && strpos($vnc_template, 'data-vf-build-complete') !== false
         && strpos($vnc_template, 'vf-build-progress-bar') !== false
         && substr_count($vnc_template, 'data-vf-manage-overlay') >= 2
         && substr_count($vnc_template, 'data-vf-action-overlay') >= 2
@@ -1558,6 +1559,10 @@ assertSameValue(
         && strpos($manage_ajax_template, "data.responseType === 'action'") !== false
         && strpos($manage_ajax_template, 'updateActionResponse(current, data)') !== false
         && strpos($manage_ajax_template, 'updateState(current, data.state)') !== false
+        && strpos($manage_ajax_template, 'dirtyInstallerBlocksRefresh') !== false
+        && strpos($manage_ajax_template, "installer.classList.contains('show')") !== false
+        && strpos($manage_ajax_template, "submittedInstaller.removeAttribute('data-vf-dirty')") !== false
+        && strpos($manage_ajax_template, "progress.querySelectorAll('[data-vf-build-complete]')") !== false
         && strpos($manage_ajax_template, 'element.textContent =') !== false
         && strpos($manage_ajax_template, 'list.replaceChildren()') !== false
         && strpos($manage_ajax_template, 'releaseSubmittedModal') !== false
@@ -1640,9 +1645,11 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($os_build_options_template, 'name="name"') !== false
-        && strpos($os_build_options_template, 'data-vf-server-name') !== false
-        && strpos($os_build_options_template, "maxlength=\"255\"\n                    required\n                    data-vf-server-name") !== false
+    substr_count($os_install_template, 'name="name"') === 2
+        && substr_count($os_install_template, 'data-vf-server-name') >= 3
+        && strpos($os_install_template, "maxlength=\"255\"\n                                    required\n                                    data-vf-server-name") !== false
+        && strpos($os_build_options_template, 'name="name"') === false
+        && strpos($os_build_options_template, 'data-vf-server-name') === false
         && strpos($os_build_options_template, 'name="hostname"') !== false
         && strpos($os_build_options_template, 'name="ssh_key_ids[]"') !== false
         && strpos($os_build_options_template, 'name="ssh_public_key"') !== false
@@ -1663,7 +1670,7 @@ assertSameValue(
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
         && preg_match('/name="hostname"[^>]*required/s', $os_build_options_template) === 0
         && strpos($os_install_template, 'sshKeyRequired') !== false,
-    'The OS popup must require a server name, allow an optional hostname, and retain explicit authentication and service-controlled IPv6 behavior.'
+    'The OS selector must contain the required server name while network settings retain the optional hostname and service-controlled IPv6 behavior.'
 );
 assertSameValue(
     true,
