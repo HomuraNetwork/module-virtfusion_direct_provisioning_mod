@@ -122,6 +122,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.service_fields.migration'] = 'The 
 $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion action failed unexpectedly. Review the module log for the non-sensitive exception details.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_gb.valid'] = 'Enter a positive whole number for the Traffic Block size in GB.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta.allow_ipv6.valid'] = 'Select whether services may manage IPv6.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'The Traffic Block size must be a positive whole number of GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.server_id'] = 'The parent service does not contain a valid VirtFusion server ID.';
@@ -357,6 +358,8 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block
 $lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
+$lang['VirtfusionDirectProvisioningMod.package_fields.allow_ipv6'] = 'Allow IPv6 Management';
+$lang['VirtfusionDirectProvisioningMod.package_fields.allow_ipv6.help_text'] = 'Allow services using this package to enable IPv6 during installation or reinstallation. Existing packages default to enabled.';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Block Size (GB)';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'The default Traffic Block capacity provisioned by this package.';
 

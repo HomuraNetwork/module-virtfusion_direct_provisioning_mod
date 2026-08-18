@@ -117,13 +117,12 @@ These names are used only when `autoBuild=true`:
 | --- | --- |
 | `operatingSystemId` | Required VirtFusion operating-system template ID. |
 | `sshKeys` | Comma-separated VirtFusion SSH-key IDs. |
-| `ipv6` | Enable or disable IPv6 during build. |
 | `email` | Enable or disable the VirtFusion build email. |
 | `swap` | Swap value passed to VirtFusion. |
 
-When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `ipv6`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
+When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. IPv6 is controlled by the package-level **Allow IPv6 Management** setting rather than a Configurable Option; legacy `ipv6` options are ignored and hidden.
 
-Manual install and reinstall forms also expose IPv6. Once VirtFusion reports IPv6 as enabled, subsequent reinstalls keep it enabled and do not offer a disable control. A built service with available but disabled IPv6 can choose between continuing in VirtFusion or reinstalling with IPv6 enabled from the Network section.
+Manual install and reinstall forms expose IPv6 only when the package permits it. Packages created before this setting was added default to enabled. Once VirtFusion reports IPv6 as enabled, subsequent reinstalls keep it enabled and do not offer a disable control. A built service with available but disabled IPv6 can choose between continuing in VirtFusion or reinstalling with IPv6 enabled from the Network section.
 
 VNC is not a Configurable Option. It is enabled only when the client or administrator opens the console from the service Manage page. The noVNC popup supports reconnect, full screen, fit-to-window, view-only mode, remote display resizing, Ctrl+Alt+Del, and clipboard exchange. Closing it through the provided button also disables VNC.
 

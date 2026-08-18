@@ -1161,14 +1161,25 @@ class VirtfusionDirectProvisioningMod extends Module
         return null;
     }
 
-    private function serviceHasIpv6Capability($service, $server_info = null)
+    private function packageAllowsIpv6($package)
     {
-        if ($server_info && !empty($server_info->ipv6_available)) {
+        $configured = $this->packageMetaValue($package, 'allow_ipv6');
+        if ($configured === null || $configured === '') {
             return true;
         }
 
-        $configured = $this->getServiceConfigOptionValue($service, 'ipv6');
-        return $configured !== null && $this->boolValue($configured);
+        return $this->boolValue($configured);
+    }
+
+    private function applyIpv6PackageCapability($package, $server_info)
+    {
+        if (!$server_info) {
+            return null;
+        }
+
+        $server_info->ipv6_manageable = $this->packageAllowsIpv6($package);
+        $server_info->ipv6_available = $server_info->ipv6_manageable;
+        return $server_info;
     }
 
     private function configOptionValuesEqual($left, $right)
@@ -2069,6 +2080,13 @@ class VirtfusionDirectProvisioningMod extends Module
                     'negate' => true,
                     'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta[package_id].valid', true)
                 ]
+            ],
+            'meta[allow_ipv6]' => [
+                'valid' => [
+                    'if_set' => true,
+                    'rule' => ['in_array', ['0', '1']],
+                    'message' => Language::_('VirtfusionDirectProvisioningMod.!error.meta.allow_ipv6.valid', true)
+                ]
             ]
         ];
 
@@ -2146,6 +2164,24 @@ class VirtfusionDirectProvisioningMod extends Module
         );
         $fields->setField($package_id);
 
+        $allow_ipv6_value = $vars->meta['allow_ipv6'] ?? null;
+        $allow_ipv6 = $fields->label(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.allow_ipv6', true),
+            'virtfusion_direct_provisioning_mod_allow_ipv6'
+        );
+        $allow_ipv6->attach($fields->fieldHidden('meta[allow_ipv6]', '0'));
+        $allow_ipv6->attach($fields->fieldCheckbox(
+            'meta[allow_ipv6]',
+            '1',
+            $allow_ipv6_value === null || $allow_ipv6_value === '' || $this->boolValue($allow_ipv6_value),
+            ['id' => 'virtfusion_direct_provisioning_mod_allow_ipv6']
+        ));
+        $allow_ipv6->attach($fields->tooltip(
+            Language::_('VirtfusionDirectProvisioningMod.package_fields.allow_ipv6.help_text', true),
+            'virtfusion_direct_provisioning_mod_allow_ipv6'
+        ));
+        $fields->setField($allow_ipv6);
+
         $traffic_block_gb = $fields->label(
             Language::_('VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb', true),
             'virtfusion_direct_provisioning_mod_traffic_block_gb'
@@ -2170,7 +2206,8 @@ class VirtfusionDirectProvisioningMod extends Module
                     var serverIds = [
                         "virtfusion_direct_provisioning_mod_hypervisor_group_id",
                         "virtfusion_direct_provisioning_mod_default_ipv4",
-                        "virtfusion_direct_provisioning_mod_package_id"
+                        "virtfusion_direct_provisioning_mod_package_id",
+                        "virtfusion_direct_provisioning_mod_allow_ipv6"
                     ];
                     var blockIds = [
                         "virtfusion_direct_provisioning_mod_traffic_block_gb"
@@ -2461,15 +2498,11 @@ class VirtfusionDirectProvisioningMod extends Module
                             'operatingSystemId' => (int) $virtfusion_os_id,
                             'name' => $server_name,
                             'hostname' => $domain,
-                            'ipv6' => true
+                            'ipv6' => $this->packageAllowsIpv6($package)
                         ];
 
                         if (!empty($create_config_options['sshKeys'])) {
                             $build_params['sshKeys'] = $this->csvInts($create_config_options['sshKeys']);
-                        }
-
-                        if (isset($create_config_options['ipv6'])) {
-                            $build_params['ipv6'] = $this->boolValue($create_config_options['ipv6']);
                         }
 
                         if (isset($create_config_options['email'])) {
@@ -2520,9 +2553,15 @@ class VirtfusionDirectProvisioningMod extends Module
                             }
                         }
 
+                        $auto_build_log = 'HTTP ' . (int) ($build_request['info']['http_code'] ?? 0);
+                        if ((int) ($build_request['info']['http_code'] ?? 0) === 422) {
+                            $auto_build_log .= '; server=' . (int) $server_id
+                                . '; ipv6_requested=' . (!empty($build_params['ipv6']) ? 'true' : 'false')
+                                . '; ipv6_allowed=' . ($this->packageAllowsIpv6($package) ? 'true' : 'false');
+                        }
                         $this->log(
                             $row->meta->hostname . '| build server',
-                            'HTTP ' . (int) ($build_request['info']['http_code'] ?? 0),
+                            $auto_build_log,
                             'output',
                             $this->apiRequestSucceeded($build_request, [200])
                         );
@@ -4457,9 +4496,12 @@ class VirtfusionDirectProvisioningMod extends Module
                 'ipv4' => array_values((array) ($network->ipv4 ?? [])),
                 'ipv6' => array_values((array) (!empty($server_info->ipv6_enabled)
                     ? ($network->ipv6_blocks ?? [])
-                    : ($network->ipv6_available_blocks ?? []))),
+                    : (!empty($server_info->ipv6_manageable)
+                        ? ($network->ipv6_available_blocks ?? [])
+                        : []))),
                 'ipv6Available' => !empty($server_info->ipv6_available),
                 'ipv6Enabled' => !empty($server_info->ipv6_enabled),
+                'ipv6Manageable' => !empty($server_info->ipv6_manageable),
                 'in' => (string) ($server_info->network_in ?? $empty),
                 'out' => (string) ($server_info->network_out ?? $empty)
             ]
@@ -4841,16 +4883,23 @@ class VirtfusionDirectProvisioningMod extends Module
                     $build_params['hostname'] = $hostname;
                 }
                 $build_params['email'] = $password_login;
+                $ipv6_requested = isset($post['ipv6']) && $this->boolValue($post['ipv6']);
                 $build_params['ipv6'] = !empty($server_info->ipv6_enabled)
-                    || (isset($post['ipv6']) && $this->boolValue($post['ipv6']));
+                    || (!empty($server_info->ipv6_manageable) && $ipv6_requested);
                 if (!empty($ssh_key_ids)) {
                     $build_params['sshKeys'] = $ssh_key_ids;
                 }
                 $request = $server_api->build($server_id, $build_params);
                 $success = $this->apiRequestSucceeded($request, [200]);
+                $build_log = 'HTTP ' . (int) ($request['info']['http_code'] ?? 0);
+                if ((int) ($request['info']['http_code'] ?? 0) === 422) {
+                    $build_log .= '; server=' . (int) $server_id
+                        . '; ipv6_requested=' . ($ipv6_requested ? 'true' : 'false')
+                        . '; ipv6_allowed=' . (!empty($server_info->ipv6_manageable) ? 'true' : 'false');
+                }
                 $this->log(
                     $module_row->meta->hostname . '| ' . $action . ' server',
-                    'HTTP ' . (int) ($request['info']['http_code'] ?? 0),
+                    $build_log,
                     'output',
                     $success
                 );
@@ -4979,7 +5028,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 $include_management_data
             );
             if ($server_info) {
-                $server_info->ipv6_available = $this->serviceHasIpv6Capability($service, $server_info);
+                $server_info = $this->applyIpv6PackageCapability($package, $server_info);
                 $this->view->set('server_info', $server_info);
             }
 
@@ -5058,10 +5107,7 @@ class VirtfusionDirectProvisioningMod extends Module
         if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'build', 'rebuild'], true)) {
             $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($refreshed_server_info) {
-                $refreshed_server_info->ipv6_available = $this->serviceHasIpv6Capability(
-                    $service,
-                    $refreshed_server_info
-                );
+                $refreshed_server_info = $this->applyIpv6PackageCapability($package, $refreshed_server_info);
                 $server_info = $refreshed_server_info;
             }
             if (in_array($action, ['build', 'rebuild'], true)
@@ -5143,7 +5189,7 @@ class VirtfusionDirectProvisioningMod extends Module
                 $include_management_data
             );
             if ($server_info) {
-                $server_info->ipv6_available = $this->serviceHasIpv6Capability($service, $server_info);
+                $server_info = $this->applyIpv6PackageCapability($package, $server_info);
                 $this->view->set('server_info', $server_info);
             }
 
@@ -5222,10 +5268,7 @@ class VirtfusionDirectProvisioningMod extends Module
         if (in_array($action ?? null, ['boot', 'restart', 'shutdown', 'poweroff', 'resetpass', 'build', 'rebuild'], true)) {
             $refreshed_server_info = $this->getRemoteServerInfo($row, $service_fields->virtfusion_server_id);
             if ($refreshed_server_info) {
-                $refreshed_server_info->ipv6_available = $this->serviceHasIpv6Capability(
-                    $service,
-                    $refreshed_server_info
-                );
+                $refreshed_server_info = $this->applyIpv6PackageCapability($package, $refreshed_server_info);
                 $server_info = $refreshed_server_info;
             }
             if (in_array($action, ['build', 'rebuild'], true)
@@ -6155,7 +6198,6 @@ class VirtfusionDirectProvisioningMod extends Module
         $build_option_names = [
             'operatingSystemId',
             'sshKeys',
-            'ipv6',
             'email',
             'swap'
         ];
@@ -6178,7 +6220,8 @@ class VirtfusionDirectProvisioningMod extends Module
         ]);
         foreach ($this->PackageOptions->getByPackageId($package_id) as $option) {
             $name = $option->name ?? null;
-            if ($name === 'vnc' || ($editing && in_array($name, $create_only_names, true))) {
+            if (in_array($name, ['vnc', 'ipv6'], true)
+                || ($editing && in_array($name, $create_only_names, true))) {
                 $always_hidden_ids[] = (int) $option->id;
             } elseif (in_array($name, $build_option_names, true)) {
                 $build_option_ids[] = (int) $option->id;

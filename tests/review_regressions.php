@@ -318,6 +318,7 @@ class FakeBuildServerApi
 {
     public $builds = [];
     public $createdSshKeys = [];
+    public $buildResponseCode = 200;
     public $queueStatus = [
         'serverId' => 42,
         'finished' => false,
@@ -338,6 +339,12 @@ class FakeBuildServerApi
     public function build($server_id, array $vars)
     {
         $this->builds[] = ['server_id' => $server_id, 'vars' => $vars];
+        if ($this->buildResponseCode !== 200) {
+            return [
+                'info' => ['http_code' => $this->buildResponseCode],
+                'response' => json_encode(['errors' => ['ipv6' => ['IPv6 is unavailable.']]])
+            ];
+        }
         return [
             'info' => ['http_code' => 200],
             'response' => json_encode([
@@ -382,6 +389,12 @@ class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
     public $Services;
     public $Input;
     public $Date;
+    public $logs = [];
+
+    public function log(...$arguments)
+    {
+        $this->logs[] = $arguments;
+    }
 
     protected function getServerApiFromRow($row)
     {
@@ -672,14 +685,12 @@ assertSameValue(
     $disabled_ipv6_info->network_addresses->ipv6_available_blocks,
     'The assigned IPv6 block must remain available to the enable workflow.'
 );
-assertSameValue(
-    true,
-    callPrivate($module, 'serviceHasIpv6Capability', [
-        (object) ['options' => [(object) ['option_name' => 'ipv6', 'value' => 'true']]],
-        (object) ['ipv6_available' => false]
-    ]),
-    'The service IPv6 option must expose IPv6 capability before an address is active.'
-);
+$legacy_ipv6_package = (object) ['meta' => (object) []];
+$disabled_ipv6_package = (object) ['meta' => (object) ['allow_ipv6' => '0']];
+assertSameValue(true, callPrivate($module, 'packageAllowsIpv6', [$legacy_ipv6_package]), 'Existing packages must default to IPv6 enabled.');
+assertSameValue(false, callPrivate($module, 'packageAllowsIpv6', [$disabled_ipv6_package]), 'A package must be able to disable service IPv6 management.');
+$live_info = callPrivate($live_module, 'applyIpv6PackageCapability', [$legacy_ipv6_package, $live_info]);
+$disabled_ipv6_info = callPrivate($disabled_ipv6_module, 'applyIpv6PackageCapability', [$legacy_ipv6_package, $disabled_ipv6_info]);
 assertSameValue('1.85 GB', $live_info->traffic_in_display, 'Inbound traffic must be formatted independently.');
 assertSameValue('1.27 MB', $live_info->traffic_out_display, 'Outbound traffic must be formatted independently.');
 assertSameValue('1.85 GB', $live_info->traffic_used_display, 'Total traffic must use the API total.');
@@ -980,6 +991,48 @@ $enabled_ipv6_build = callPrivate($build_module, 'handleServerAction', [
 ]);
 assertSameValue('build', $enabled_ipv6_build['type'], 'A user must be able to enable IPv6 during build.');
 assertSameValue(true, $build_api->builds[6]['vars']['ipv6'], 'A checked IPv6 option must enable IPv6 during build.');
+$package_disabled_info = clone $disabled_ipv6_info;
+$package_disabled_info = callPrivate($module, 'applyIpv6PackageCapability', [$disabled_ipv6_package, $package_disabled_info]);
+assertSameValue(false, $package_disabled_info->ipv6_manageable, 'A disabled package must hide service IPv6 controls.');
+assertSameValue(false, $package_disabled_info->ipv6_available, 'A disabled package must not advertise IPv6 setup as available.');
+$package_disabled_build = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1',
+        'ipv6' => '1'
+    ],
+    $package_disabled_info
+]);
+assertSameValue('build', $package_disabled_build['type'], 'Disabling IPv6 must not prevent an otherwise valid rebuild.');
+assertSameValue(false, $build_api->builds[7]['vars']['ipv6'], 'A forged IPv6 field must not bypass the package setting.');
+$build_api->buildResponseCode = 422;
+$build_module->Input->errors = [];
+$ipv6_422_result = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1',
+        'ipv6' => '1'
+    ],
+    $disabled_ipv6_info
+]);
+assertSameValue(null, $ipv6_422_result, 'A VirtFusion validation failure must not report a successful rebuild.');
+$last_build_log = end($build_module->logs);
+assertSameValue(
+    true,
+    strpos((string) ($last_build_log[1] ?? ''), 'HTTP 422; server=42; ipv6_requested=true; ipv6_allowed=true') !== false,
+    'A 422 build response must log the server and package-controlled IPv6 decision.'
+);
+$build_api->buildResponseCode = 200;
 assertSameValue(
     true,
     $build_api->builds[0]['vars']['ipv6'],
@@ -1081,6 +1134,10 @@ assertSameValue(
     isset($traffic_rules['meta[traffic_block_option_id]']),
     'Traffic Block packages must use the standard traffic option names instead of a numeric option override.'
 );
+$server_package_rules = callPrivate($module, 'getPackageRules', [[
+    'meta' => ['virtfusion-service_type' => 'server', 'allow_ipv6' => '1']
+]]);
+assertSameValue(true, isset($server_package_rules['meta[allow_ipv6]']), 'Server packages must validate the IPv6 management setting.');
 
 $public_label = callPrivate($module, 'publicServiceLabel');
 assertSameValue(39, strlen($public_label), 'Public service labels must use a prefixed UUID.');
@@ -1123,6 +1180,15 @@ $os_build_options_template = file_get_contents(__DIR__ . '/../views/default/os_b
 $network_template = file_get_contents(__DIR__ . '/../views/default/network_addresses.pdt');
 $client_service_info_template = file_get_contents(__DIR__ . '/../views/default/client_service_info.pdt');
 $server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
+assertSameValue(
+    true,
+    strpos($module_source, "fieldCheckbox(\n            'meta[allow_ipv6]'") !== false
+        && strpos($module_source, "fieldHidden('meta[allow_ipv6]', '0')") !== false
+        && strpos($module_source, "\$configured === null || \$configured === ''") !== false
+        && strpos($module_source, "isset(\$create_config_options['ipv6'])") === false
+        && strpos($module_source, "in_array(\$name, ['vnc', 'ipv6'], true)") !== false,
+    'IPv6 service management must use a default-enabled package checkbox and hide legacy Configurable Options.'
+);
 assertSameValue(
     true,
     strpos($client_manage_template, '$server_unbuilt') !== false
@@ -1515,6 +1581,7 @@ assertSameValue(
         && strpos($os_build_options_template, 'data-vf-ssh-empty') !== false
         && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
         && strpos($os_build_options_template, 'data-vf-ipv6-toggle') !== false
+        && strpos($os_build_options_template, '$vf_ipv6_manageable') !== false
         && strpos($os_build_options_template, '.vf-ipv6-option .form-check-input { position: static;') !== false
         && strpos($os_build_options_template, 'class="vf-ipv6-control"') !== false
         && strpos($os_build_options_template, 'class="vf-ipv6-copy"') !== false
@@ -1545,6 +1612,8 @@ assertSameValue(
         && strpos($network_template, "'ipv6_blocks'") !== false
         && strpos($network_template, 'ipv6_available_blocks') !== false
         && strpos($network_template, 'data-vf-ipv6-choice-open') !== false
+        && strpos($network_template, '$vf_ipv6_manageable') !== false
+        && strpos($manage_ajax_template, 'state.network.ipv6Manageable') !== false
         && strpos($network_template, 'virtfusionOsInstallers') !== false
         && strpos($network_template, 'port_speed_inbound') !== false
         && strpos($network_template, 'port_speed_outbound') !== false

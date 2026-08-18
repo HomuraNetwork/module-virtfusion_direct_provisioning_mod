@@ -156,7 +156,8 @@
         var ipv6Action = current.querySelector('[data-vf-ipv6-choice-open]');
         var ipv6Note = current.querySelector('[data-vf-ipv6-available-note]');
         var ipv6Empty = current.querySelector('[data-vf-network-empty="ipv6"]');
-        var showIpv6Action = !!(state.network && state.network.ipv6Available && !state.network.ipv6Enabled);
+        var showIpv6Action = !!(state.network && state.network.ipv6Manageable
+            && state.network.ipv6Available && !state.network.ipv6Enabled);
         if (ipv6Action) {
             ipv6Action.hidden = !showIpv6Action;
             ipv6Action.disabled = !!state.tasksLocked

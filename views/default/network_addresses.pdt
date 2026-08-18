@@ -6,9 +6,11 @@ $vf_network = $server_info->network_addresses ?? (object) [
 ];
 $vf_ipv6_available = !empty($server_info->ipv6_available);
 $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
+$vf_ipv6_manageable = !empty($server_info->ipv6_manageable);
+$vf_show_ipv6 = $vf_ipv6_manageable || $vf_ipv6_enabled;
 $vf_ipv6_display = $vf_ipv6_enabled
     ? ($vf_network->ipv6_blocks ?? [])
-    : ($vf_network->ipv6_available_blocks ?? []);
+    : ($vf_ipv6_manageable ? ($vf_network->ipv6_available_blocks ?? []) : []);
 $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClientOs';
 ?>
 <div class="card mb-3">
@@ -17,7 +19,7 @@ $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClie
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <div class="col-md-6">
+            <div class="<?php echo $vf_show_ipv6 ? 'col-md-6' : 'col-12'; ?>">
                 <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv4'); ?></div>
                     <span class="text-muted" data-vf-network-empty="ipv4" <?php echo empty($vf_network->ipv4) ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
                     <ul class="list-unstyled mb-0" data-vf-network-list="ipv4" <?php echo empty($vf_network->ipv4) ? 'hidden' : ''; ?>>
@@ -26,6 +28,7 @@ $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClie
                         <?php } ?>
                     </ul>
             </div>
+            <?php if ($vf_show_ipv6) { ?>
             <div class="col-md-6">
                 <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6_blocks'); ?></div>
                     <ul class="list-unstyled mb-2" data-vf-network-list="ipv6" <?php echo empty($vf_ipv6_display) ? 'hidden' : ''; ?>>
@@ -40,13 +43,14 @@ $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClie
                         class="btn btn-sm btn-outline-primary"
                         data-vf-ipv6-choice-open="<?php echo $vf_os_prefix; ?>"
                         data-vf-template-available="<?php echo empty($server_info->os_templates) ? 'false' : 'true'; ?>"
-                        <?php echo $vf_ipv6_available && !$vf_ipv6_enabled ? '' : 'hidden'; ?>
+                        <?php echo $vf_ipv6_manageable && $vf_ipv6_available && !$vf_ipv6_enabled ? '' : 'hidden'; ?>
                         <?php echo !empty($tasks_locked) || empty($server_info->os_templates) ? 'disabled' : ''; ?>
                     >
                         <i class="fas fa-network-wired" aria-hidden="true"></i>
                         <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.enable_ipv6'); ?>
                     </button>
             </div>
+            <?php } ?>
         </div>
         <div class="row g-3 mt-1 pt-3 border-top">
             <div class="col-md-6 d-flex justify-content-between gap-3">
@@ -60,7 +64,7 @@ $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClie
         </div>
     </div>
 </div>
-<?php if ($vf_ipv6_available && !$vf_ipv6_enabled) { ?>
+<?php if ($vf_ipv6_manageable && $vf_ipv6_available && !$vf_ipv6_enabled) { ?>
 <div
     class="modal fade"
     id="<?php echo $vf_os_prefix; ?>Ipv6ChoiceModal"
