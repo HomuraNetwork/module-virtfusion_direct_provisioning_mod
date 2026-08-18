@@ -15,8 +15,7 @@
         <strong id="virtfusionServerActionsHeading"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.actions'); ?></strong>
     </div>
     <div class="vf-server-action-list" data-vf-action-row="power">
-        <?php if ($running === false) { ?>
-        <div class="vf-server-action-item">
+        <div class="vf-server-action-item" data-vf-power-visible="stopped" <?php echo $running === false ? '' : 'hidden'; ?>>
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
                 <button type="submit" name="action" value="boot" class="btn btn-outline-secondary w-100" <?php echo $power_locked ? 'disabled' : ''; ?>>
                     <i class="fas fa-play" aria-hidden="true"></i>
@@ -24,9 +23,8 @@
                 </button>
             <?php $this->Form->end(); ?>
         </div>
-        <?php } elseif ($running === true) { ?>
         <?php foreach (['restart', 'shutdown', 'poweroff'] as $vf_power_action) { ?>
-        <div class="vf-server-action-item">
+        <div class="vf-server-action-item" data-vf-power-visible="running" <?php echo $running === true ? '' : 'hidden'; ?>>
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
                 <button
                     type="submit"
@@ -43,12 +41,11 @@
             <?php $this->Form->end(); ?>
         </div>
         <?php } ?>
-        <?php } ?>
     </div>
     <div class="vf-server-action-list" data-vf-action-row="maintenance">
         <div class="vf-server-action-item">
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="vnc" class="btn btn-outline-primary w-100" <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                <button type="submit" name="action" value="vnc" class="btn btn-outline-primary w-100" data-vf-task-lockable <?php echo $tasks_locked ? 'disabled' : ''; ?>>
                     <i class="fas fa-desktop" aria-hidden="true"></i>
                     <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.vnc_console'); ?>
                 </button>
@@ -61,6 +58,7 @@
                     name="action"
                     value="resetpass"
                     class="btn btn-outline-secondary w-100"
+                    data-vf-task-lockable
                     data-vf-confirm="<?php echo $this->Html->safe($confirm_password); ?>"
                     <?php echo $tasks_locked ? 'disabled' : ''; ?>
                 >

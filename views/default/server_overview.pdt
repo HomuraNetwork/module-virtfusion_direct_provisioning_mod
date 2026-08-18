@@ -55,15 +55,15 @@ $vf_resources = [
 <div class="vf-server-overview mb-4">
     <div class="vf-server-overview-header d-flex flex-wrap justify-content-between align-items-center gap-3">
         <div>
-            <div class="h5 mb-1"><?php echo $this->Html->safe($server_info->name ?? $vf_empty); ?></div>
+            <div class="h5 mb-1" data-vf-state-name><?php echo $this->Html->safe($server_info->name ?? $vf_empty); ?></div>
             <div class="small text-muted"><?php echo $this->Html->safe($package->name ?? $vf_empty); ?></div>
         </div>
         <div class="vf-server-overview-state">
-            <span class="badge <?php echo $running === true ? 'bg-success badge-success' : 'bg-secondary badge-secondary'; ?>">
+            <span class="badge <?php echo $running === true ? 'bg-success badge-success' : 'bg-secondary badge-secondary'; ?>" data-vf-state-status>
                 <?php echo $this->Html->safe($server_info->status ?? $vf_empty); ?>
             </span>
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="refresh_ips" class="btn btn-sm btn-outline-secondary" title="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" <?php echo $server_busy ? 'disabled' : ''; ?>><i class="fas fa-sync-alt" aria-hidden="true"></i></button>
+                <button type="submit" name="action" value="refresh_ips" class="btn btn-sm btn-outline-secondary" data-vf-state-refresh title="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" <?php echo $server_busy ? 'disabled' : ''; ?>><i class="fas fa-sync-alt" aria-hidden="true"></i></button>
             <?php $this->Form->end(); ?>
         </div>
     </div>
@@ -84,18 +84,16 @@ $vf_resources = [
                         <span class="vf-server-stat-icon" aria-hidden="true"><i class="fas <?php echo $vf_resource['icon']; ?>"></i></span>
                         <span class="small text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.' . $vf_resource_key); ?></span>
                     </div>
-                    <div class="vf-server-stat-value"><?php echo $this->Html->safe($vf_resource['value']); ?></div>
+                    <div class="vf-server-stat-value" data-vf-resource-value="<?php echo $vf_resource_key; ?>"><?php echo $this->Html->safe($vf_resource['value']); ?></div>
                     <?php $vf_usage = $server_info->resource_usage->{$vf_resource_key} ?? null; ?>
                     <div class="vf-server-meter-slot vf-server-meter-<?php echo $vf_resource_key; ?>" data-resource-meter="<?php echo $vf_resource_key; ?>">
-                        <?php if (is_numeric($vf_usage)) { ?>
-                            <div class="vf-server-meter-label text-muted">
+                            <div class="vf-server-meter-label text-muted" data-vf-resource-usage-row <?php echo is_numeric($vf_usage) ? '' : 'hidden'; ?>>
                                 <span><?php $this->_('VirtfusionDirectProvisioningMod.service_info.usage'); ?></span>
-                                <strong><?php echo $this->Html->safe($vf_usage); ?>%</strong>
+                                <strong data-vf-resource-usage><?php echo is_numeric($vf_usage) ? $this->Html->safe($vf_usage) . '%' : ''; ?></strong>
                             </div>
-                            <div class="progress" role="progressbar" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.service_info.' . $vf_resource_key); ?>" aria-valuenow="<?php echo (float) $vf_usage; ?>" aria-valuemin="0" aria-valuemax="100">
-                                <div class="progress-bar" style="width: <?php echo (float) $vf_usage; ?>%"></div>
+                            <div class="progress" data-vf-resource-progress role="progressbar" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.service_info.' . $vf_resource_key); ?>" aria-valuenow="<?php echo is_numeric($vf_usage) ? (float) $vf_usage : 0; ?>" aria-valuemin="0" aria-valuemax="100" <?php echo is_numeric($vf_usage) ? '' : 'hidden'; ?>>
+                                <div class="progress-bar" data-vf-resource-progress-bar style="width: <?php echo is_numeric($vf_usage) ? (float) $vf_usage : 0; ?>%"></div>
                             </div>
-                        <?php } ?>
                     </div>
                     <?php if ($vf_disk_warning) { ?>
                         <div class="vf-server-disk-warning">
@@ -122,17 +120,15 @@ $vf_resources = [
         <div class="d-flex justify-content-between align-items-center mb-2">
             <strong><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_bandwidth'); ?></strong>
             <span class="small text-muted">
-                <?php echo $this->Html->safe($vf_traffic_used); ?> /
-                <?php echo isset($server_info->traffic_total)
+                <span data-vf-traffic="used"><?php echo $this->Html->safe($vf_traffic_used); ?></span> /
+                <span data-vf-traffic="limit"><?php echo isset($server_info->traffic_total)
                     ? $this->Html->safe($server_info->traffic_total) . ' GB'
-                    : $vf_empty; ?>
+                    : $vf_empty; ?></span>
             </span>
         </div>
-        <?php if (isset($server_info->traffic_percent)) { ?>
-            <div class="progress mb-3" style="height: 0.5rem;">
-                <div class="progress-bar" role="progressbar" style="width: <?php echo (float) $server_info->traffic_percent; ?>%" aria-valuenow="<?php echo (float) $server_info->traffic_percent; ?>" aria-valuemin="0" aria-valuemax="100"></div>
+            <div class="progress mb-3" data-vf-traffic-progress style="height: 0.5rem;" <?php echo isset($server_info->traffic_percent) ? '' : 'hidden'; ?>>
+                <div class="progress-bar" data-vf-traffic-progress-bar role="progressbar" style="width: <?php echo isset($server_info->traffic_percent) ? (float) $server_info->traffic_percent : 0; ?>%" aria-valuenow="<?php echo isset($server_info->traffic_percent) ? (float) $server_info->traffic_percent : 0; ?>" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
-        <?php } ?>
         <div class="vf-traffic-totals">
             <?php foreach ([
                 'traffic_in' => $server_info->traffic_in_display ?? $vf_empty,
@@ -141,24 +137,24 @@ $vf_resources = [
             ] as $vf_traffic_key => $vf_traffic_value) { ?>
             <div class="vf-traffic-total">
                 <span class="small text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.' . $vf_traffic_key); ?></span>
-                <strong><?php echo $this->Html->safe($vf_traffic_value); ?></strong>
+                <strong data-vf-traffic="<?php echo str_replace('traffic_', '', $vf_traffic_key); ?>"><?php echo $this->Html->safe($vf_traffic_value); ?></strong>
             </div>
             <?php } ?>
         </div>
         <div class="vf-server-detail-grid">
             <div class="vf-server-detail-row">
                 <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_server'); ?></span>
-                <strong><?php echo isset($server_info->traffic_server)
+                <strong data-vf-traffic="server"><?php echo isset($server_info->traffic_server)
                     ? $this->Html->safe($server_info->traffic_server) . ' GB'
                     : $vf_empty; ?></strong>
             </div>
             <div class="vf-server-detail-row">
                 <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_blocks'); ?></span>
-                <strong><?php echo $this->Html->safe($server_info->traffic_blocks ?? 0); ?> GB</strong>
+                <strong data-vf-traffic="blocks"><?php echo $this->Html->safe($server_info->traffic_blocks ?? 0); ?> GB</strong>
             </div>
             <div class="vf-server-detail-row">
                 <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.traffic_resets'); ?></span>
-                <strong><?php echo !empty($server_info->traffic_reset)
+                <strong data-vf-traffic="reset"><?php echo !empty($server_info->traffic_reset)
                     ? $this->Html->safe($this->Date->cast($server_info->traffic_reset, 'M j, Y'))
                     : $vf_empty; ?></strong>
             </div>

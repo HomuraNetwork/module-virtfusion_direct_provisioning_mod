@@ -1,5 +1,15 @@
 <?php
-$vf_network = $server_info->network_addresses ?? (object) ['ipv4' => [], 'ipv6_blocks' => []];
+$vf_network = $server_info->network_addresses ?? (object) [
+    'ipv4' => [],
+    'ipv6_blocks' => [],
+    'ipv6_available_blocks' => []
+];
+$vf_ipv6_available = !empty($server_info->ipv6_available);
+$vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
+$vf_ipv6_display = $vf_ipv6_enabled
+    ? ($vf_network->ipv6_blocks ?? [])
+    : ($vf_network->ipv6_available_blocks ?? []);
+$vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClientOs';
 ?>
 <div class="card mb-3">
     <div class="card-header">
@@ -7,33 +17,169 @@ $vf_network = $server_info->network_addresses ?? (object) ['ipv4' => [], 'ipv6_b
     </div>
     <div class="card-body">
         <div class="row g-3">
-            <?php foreach ([
-                'ipv4' => $vf_network->ipv4 ?? [],
-                'ipv6_blocks' => $vf_network->ipv6_blocks ?? []
-            ] as $vf_address_type => $vf_addresses) { ?>
-                <div class="col-md-6">
-                    <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.' . $vf_address_type); ?></div>
-                    <?php if (empty($vf_addresses)) { ?>
-                        <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
-                    <?php } else { ?>
-                        <ul class="list-unstyled mb-0">
-                            <?php foreach ($vf_addresses as $vf_address) { ?>
-                                <li class="mb-2"><code class="text-break"><?php echo $this->Html->safe($vf_address); ?></code></li>
-                            <?php } ?>
-                        </ul>
-                    <?php } ?>
-                </div>
-            <?php } ?>
+            <div class="col-md-6">
+                <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv4'); ?></div>
+                    <span class="text-muted" data-vf-network-empty="ipv4" <?php echo empty($vf_network->ipv4) ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                    <ul class="list-unstyled mb-0" data-vf-network-list="ipv4" <?php echo empty($vf_network->ipv4) ? 'hidden' : ''; ?>>
+                        <?php foreach ($vf_network->ipv4 as $vf_address) { ?>
+                            <li class="mb-2"><code class="text-break"><?php echo $this->Html->safe($vf_address); ?></code></li>
+                        <?php } ?>
+                    </ul>
+            </div>
+            <div class="col-md-6">
+                <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6_blocks'); ?></div>
+                    <ul class="list-unstyled mb-2" data-vf-network-list="ipv6" <?php echo empty($vf_ipv6_display) ? 'hidden' : ''; ?>>
+                        <?php foreach ($vf_ipv6_display as $vf_address) { ?>
+                            <li class="mb-2"><code class="text-break"><?php echo $this->Html->safe($vf_address); ?></code></li>
+                        <?php } ?>
+                    </ul>
+                    <span class="text-muted" data-vf-network-empty="ipv6" <?php echo empty($vf_ipv6_display) && !$vf_ipv6_available ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                    <div class="small text-muted mb-2" data-vf-ipv6-available-note <?php echo $vf_ipv6_available && !$vf_ipv6_enabled ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6_available'); ?></div>
+                    <button
+                        type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        data-vf-ipv6-choice-open="<?php echo $vf_os_prefix; ?>"
+                        data-vf-template-available="<?php echo empty($server_info->os_templates) ? 'false' : 'true'; ?>"
+                        <?php echo $vf_ipv6_available && !$vf_ipv6_enabled ? '' : 'hidden'; ?>
+                        <?php echo !empty($tasks_locked) || empty($server_info->os_templates) ? 'disabled' : ''; ?>
+                    >
+                        <i class="fas fa-network-wired" aria-hidden="true"></i>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.enable_ipv6'); ?>
+                    </button>
+            </div>
         </div>
         <div class="row g-3 mt-1 pt-3 border-top">
             <div class="col-md-6 d-flex justify-content-between gap-3">
                 <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.port_speed_inbound'); ?></span>
-                <strong><?php echo $this->Html->safe($server_info->network_in ?? ($empty_value ?? '—')); ?></strong>
+                <strong data-vf-network-speed="in"><?php echo $this->Html->safe($server_info->network_in ?? ($empty_value ?? '—')); ?></strong>
             </div>
             <div class="col-md-6 d-flex justify-content-between gap-3">
                 <span class="text-muted"><?php $this->_('VirtfusionDirectProvisioningMod.service_info.port_speed_outbound'); ?></span>
-                <strong><?php echo $this->Html->safe($server_info->network_out ?? ($empty_value ?? '—')); ?></strong>
+                <strong data-vf-network-speed="out"><?php echo $this->Html->safe($server_info->network_out ?? ($empty_value ?? '—')); ?></strong>
             </div>
         </div>
     </div>
 </div>
+<?php if ($vf_ipv6_available && !$vf_ipv6_enabled) { ?>
+<div
+    class="modal fade"
+    id="<?php echo $vf_os_prefix; ?>Ipv6ChoiceModal"
+    tabindex="-1"
+    role="dialog"
+    aria-labelledby="<?php echo $vf_os_prefix; ?>Ipv6ChoiceHeading"
+    aria-hidden="true"
+    data-vf-ipv6-choice-modal="<?php echo $vf_os_prefix; ?>"
+>
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="<?php echo $vf_os_prefix; ?>Ipv6ChoiceHeading">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6_choice_heading'); ?>
+                </h5>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-ipv6-choice-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv6_choice_help'); ?></p>
+            </div>
+            <div class="modal-footer">
+                <?php if (isset($admin_server_url)) { ?>
+                    <a href="<?php echo $this->Html->safe($admin_server_url); ?>" target="_blank" rel="noopener" class="btn btn-outline-primary">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.open_virtfusion'); ?>
+                    </a>
+                <?php } else { ?>
+                    <?php $this->Form->create($_SERVER['REQUEST_URI'], ['target' => '_blank']); ?>
+                        <button type="submit" name="action" value="manage" class="btn btn-outline-primary">
+                            <i class="fas fa-external-link-alt" aria-hidden="true"></i>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.open_virtfusion'); ?>
+                        </button>
+                    <?php $this->Form->end(); ?>
+                <?php } ?>
+                <button type="button" class="btn btn-danger" data-vf-ipv6-reinstall>
+                    <i class="fas fa-compact-disc" aria-hidden="true"></i>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.reinstall_enable'); ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+(function () {
+    var button = document.querySelector('[data-vf-ipv6-choice-open="<?php echo $vf_os_prefix; ?>"]');
+    var modal = document.querySelector('[data-vf-ipv6-choice-modal="<?php echo $vf_os_prefix; ?>"]');
+    if (!button || !modal) {
+        return;
+    }
+
+    function modalInstance() {
+        if (window.bootstrap && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
+            return window.bootstrap.Modal.getOrCreateInstance(modal, {backdrop: true, keyboard: true});
+        }
+        return null;
+    }
+
+    function showChoice() {
+        var instance = modalInstance();
+        if (instance) {
+            instance.show();
+            return;
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(modal).modal({backdrop: true, keyboard: true, show: true});
+            return;
+        }
+        modal.style.display = 'block';
+        modal.classList.add('show');
+        modal.removeAttribute('aria-hidden');
+        modal.setAttribute('aria-modal', 'true');
+    }
+
+    function hideChoice(complete) {
+        var instance = modalInstance();
+        if (instance) {
+            if (complete) {
+                modal.addEventListener('hidden.bs.modal', complete, {once: true});
+            }
+            instance.hide();
+            return;
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            if (complete) {
+                window.jQuery(modal).one('hidden.bs.modal', complete);
+            }
+            window.jQuery(modal).modal('hide');
+            return;
+        }
+        modal.style.display = 'none';
+        modal.classList.remove('show');
+        modal.setAttribute('aria-hidden', 'true');
+        modal.removeAttribute('aria-modal');
+        if (complete) {
+            complete();
+        }
+    }
+
+    button.addEventListener('click', showChoice);
+    modal.querySelectorAll('[data-vf-ipv6-choice-close]').forEach(function (closeButton) {
+        closeButton.addEventListener('click', function () {
+            hideChoice();
+        });
+    });
+    modal.querySelector('[data-vf-ipv6-reinstall]').addEventListener('click', function () {
+        hideChoice(function () {
+            var installer = window.virtfusionOsInstallers
+                && window.virtfusionOsInstallers[<?php echo json_encode($vf_os_prefix); ?>];
+            if (installer && typeof installer.open === 'function') {
+                installer.open(true);
+            }
+        });
+    });
+    modal.addEventListener('click', function (event) {
+        if (event.target === modal && !window.bootstrap && !(window.jQuery && window.jQuery.fn.modal)) {
+            hideChoice();
+        }
+    });
+}());
+</script>
+<?php } ?>

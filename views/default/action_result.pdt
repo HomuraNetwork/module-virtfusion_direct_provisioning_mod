@@ -16,73 +16,151 @@
     .vf-password-control .btn { width: 100%; }
 }
 </style>
+<script type="text/javascript">
+(function () {
+    if (window.virtfusionResultModal) {
+        return;
+    }
+
+    window.virtfusionResultModal = {
+        show: function (modal) {
+            if (!modal) {
+                return;
+            }
+            if (window.bootstrap && window.bootstrap.Modal
+                && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
+                window.bootstrap.Modal.getOrCreateInstance(modal, {backdrop: true, keyboard: true}).show();
+                return;
+            }
+            if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+                window.jQuery(modal).modal({backdrop: true, keyboard: true, show: true});
+                return;
+            }
+            var backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show';
+            backdrop.setAttribute('data-vf-result-backdrop', 'true');
+            document.body.appendChild(backdrop);
+            document.body.classList.add('modal-open');
+            modal.style.display = 'block';
+            modal.classList.add('show');
+            modal.removeAttribute('aria-hidden');
+            modal.setAttribute('aria-modal', 'true');
+        },
+        remove: function (modal) {
+            if (!modal) {
+                return;
+            }
+            var removeElement = function () {
+                modal.remove();
+            };
+            if (window.bootstrap && window.bootstrap.Modal
+                && typeof window.bootstrap.Modal.getInstance === 'function') {
+                var instance = window.bootstrap.Modal.getInstance(modal);
+                if (instance) {
+                    modal.addEventListener('hidden.bs.modal', removeElement, {once: true});
+                    instance.hide();
+                    return;
+                }
+            }
+            if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+                window.jQuery(modal).one('hidden.bs.modal', removeElement).modal('hide');
+                return;
+            }
+            modal.remove();
+            document.querySelectorAll('[data-vf-result-backdrop]').forEach(function (backdrop) {
+                backdrop.remove();
+            });
+            document.body.classList.remove('modal-open');
+            document.body.style.removeProperty('padding-right');
+        }
+    };
+}());
+</script>
 <?php if (($action_result['type'] ?? null) === 'password') { ?>
 <?php
 $vf_password_queue_id = (int) ($action_result['queue_id'] ?? 0);
 $vf_password_pending = $vf_password_queue_id > 0;
 ?>
 <div
-    class="alert <?php echo $vf_password_pending ? 'alert-info border-info' : 'alert-warning border-warning'; ?> mb-3"
-    role="status"
-    aria-live="polite"
-    aria-busy="<?php echo $vf_password_pending ? 'true' : 'false'; ?>"
+    class="modal fade"
+    id="virtfusionPasswordResultModal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
     data-vf-sensitive-result
-    data-vf-password-result
-    data-vf-pending-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.pending_heading', true)); ?>"
-    data-vf-pending-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.pending_notice', true)); ?>"
-    data-vf-complete-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.heading', true)); ?>"
-    data-vf-complete-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.notice', true)); ?>"
-    data-vf-failed-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.failed_heading', true)); ?>"
-    data-vf-failed-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.failed_notice', true)); ?>"
-    data-vf-unknown-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.unknown_heading', true)); ?>"
-    data-vf-unknown-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.unknown_notice', true)); ?>"
+    data-vf-passive-modal
 >
-    <div class="vf-password-status-heading mb-2">
-        <span class="vf-password-spinner" data-vf-password-active <?php echo $vf_password_pending ? '' : 'hidden'; ?> aria-hidden="true"></span>
-        <h5 class="alert-heading mb-0" data-vf-password-heading><?php $this->_($vf_password_pending
-            ? 'VirtfusionDirectProvisioningMod.password_result.pending_heading'
-            : 'VirtfusionDirectProvisioningMod.password_result.unknown_heading'); ?></h5>
-    </div>
-    <p class="mb-3" data-vf-password-notice><?php $this->_($vf_password_pending
-        ? 'VirtfusionDirectProvisioningMod.password_result.pending_notice'
-        : 'VirtfusionDirectProvisioningMod.password_result.unknown_notice'); ?></p>
-    <label class="form-label fw-semibold" for="virtfusionNewPassword">
-        <?php $this->_('VirtfusionDirectProvisioningMod.password_result.password'); ?>
-    </label>
-    <div class="vf-password-control">
-        <input
-            type="text"
-            class="form-control font-monospace fw-semibold"
-            id="virtfusionNewPassword"
-            value="<?php echo $this->Html->safe($action_result['password']); ?>"
-            readonly
-            autocomplete="off"
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div
+            class="modal-content <?php echo $vf_password_pending ? 'alert-info border-info' : 'alert-warning border-warning'; ?>"
+            role="status"
+            aria-live="polite"
+            aria-busy="<?php echo $vf_password_pending ? 'true' : 'false'; ?>"
+            data-vf-password-result
+            data-vf-pending-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.pending_heading', true)); ?>"
+            data-vf-pending-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.pending_notice', true)); ?>"
+            data-vf-complete-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.heading', true)); ?>"
+            data-vf-complete-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.notice', true)); ?>"
+            data-vf-failed-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.failed_heading', true)); ?>"
+            data-vf-failed-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.failed_notice', true)); ?>"
+            data-vf-unknown-heading="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.unknown_heading', true)); ?>"
+            data-vf-unknown-notice="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.password_result.unknown_notice', true)); ?>"
         >
-        <button type="button" class="btn btn-outline-secondary" id="virtfusionCopyPassword">
-            <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
-        </button>
+            <div class="modal-header">
+                <div class="vf-password-status-heading">
+                    <span class="vf-password-spinner" data-vf-password-active <?php echo $vf_password_pending ? '' : 'hidden'; ?> aria-hidden="true"></span>
+                    <h5 class="modal-title mb-0" data-vf-password-heading><?php $this->_($vf_password_pending
+                        ? 'VirtfusionDirectProvisioningMod.password_result.pending_heading'
+                        : 'VirtfusionDirectProvisioningMod.password_result.unknown_heading'); ?></h5>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-result-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3" data-vf-password-notice><?php $this->_($vf_password_pending
+                    ? 'VirtfusionDirectProvisioningMod.password_result.pending_notice'
+                    : 'VirtfusionDirectProvisioningMod.password_result.unknown_notice'); ?></p>
+                <label class="form-label fw-semibold" for="virtfusionNewPassword">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.password_result.password'); ?>
+                </label>
+                <div class="vf-password-control">
+                    <input
+                        type="text"
+                        class="form-control font-monospace fw-semibold"
+                        id="virtfusionNewPassword"
+                        value="<?php echo $this->Html->safe($action_result['password']); ?>"
+                        readonly
+                        autocomplete="off"
+                    >
+                    <button type="button" class="btn btn-outline-secondary" id="virtfusionCopyPassword">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
+                    </button>
+                </div>
+                <?php if ($vf_password_pending) { ?>
+                <div class="vf-password-progress mt-3" data-vf-password-active aria-hidden="true"><div class="vf-password-progress-bar" data-vf-password-progress-bar></div></div>
+                <div class="small text-muted mt-2" data-vf-password-active>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.password_result.checking'); ?><span class="vf-password-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+                </div>
+                <div hidden data-vf-password-status-form>
+                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                        <?php $this->Form->fieldHidden('action', 'resetpass_status'); ?>
+                        <?php $this->Form->fieldHidden('queue_id', $vf_password_queue_id); ?>
+                        <?php $this->Form->fieldHidden('vf_response', 'password_status'); ?>
+                    <?php $this->Form->end(); ?>
+                </div>
+                <?php } ?>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="virtfusionDismissPassword" data-vf-result-close>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.password_result.saved'); ?>
+                </button>
+            </div>
+        </div>
     </div>
-    <?php if ($vf_password_pending) { ?>
-    <div class="vf-password-progress mt-3" data-vf-password-active aria-hidden="true"><div class="vf-password-progress-bar" data-vf-password-progress-bar></div></div>
-    <div class="small text-muted mt-2" data-vf-password-active>
-        <?php $this->_('VirtfusionDirectProvisioningMod.password_result.checking'); ?><span class="vf-password-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
-    </div>
-    <div hidden data-vf-password-status-form>
-        <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-            <?php $this->Form->fieldHidden('action', 'resetpass_status'); ?>
-            <?php $this->Form->fieldHidden('queue_id', $vf_password_queue_id); ?>
-        <?php $this->Form->end(); ?>
-    </div>
-    <?php } ?>
-    <button type="button" class="btn btn-sm btn-outline-secondary mt-3" id="virtfusionDismissPassword">
-        <?php $this->_('VirtfusionDirectProvisioningMod.password_result.saved'); ?>
-    </button>
 </div>
 <script type="text/javascript">
 (function () {
     var button = document.getElementById('virtfusionCopyPassword');
     var field = document.getElementById('virtfusionNewPassword');
-    var dismiss = document.getElementById('virtfusionDismissPassword');
     if (!button || !field) {
         return;
     }
@@ -101,13 +179,14 @@ $vf_password_pending = $vf_password_queue_id > 0;
         document.execCommand('copy');
         copied();
     });
-    if (dismiss) {
-        dismiss.addEventListener('click', function () {
-            var result = dismiss.closest('[data-vf-sensitive-result]');
-            if (result) {
-                result.remove();
-            }
+    var modal = document.getElementById('virtfusionPasswordResultModal');
+    if (modal) {
+        modal.querySelectorAll('[data-vf-result-close]').forEach(function (closeButton) {
+            closeButton.addEventListener('click', function () {
+                window.virtfusionResultModal.remove(modal);
+            });
         });
+        window.virtfusionResultModal.show(modal);
     }
 
     var result = document.querySelector('[data-vf-password-result]');
@@ -144,14 +223,11 @@ $vf_password_pending = $vf_password_queue_id > 0;
             }
             return response.json();
         }).then(function (data) {
-            var holder = document.createElement('div');
-            holder.innerHTML = data.content || '';
-            var marker = holder.querySelector('[data-vf-password-status-response]');
-            if (!marker) {
+            if (!data || typeof data.status !== 'string') {
                 throw new Error('Password status response was missing.');
             }
-            var status = marker.getAttribute('data-status') || 'unknown';
-            var progress = Number(marker.getAttribute('data-progress'));
+            var status = data.status || 'unknown';
+            var progress = Number(data.progress);
             var progressBar = result.querySelector('[data-vf-password-progress-bar]');
             if (progressBar && Number.isFinite(progress) && progress > 0) {
                 progressBar.style.animation = 'none';
@@ -183,15 +259,6 @@ $vf_password_pending = $vf_password_queue_id > 0;
 </script>
 <?php } ?>
 
-<?php if (($action_result['type'] ?? null) === 'password_status') { ?>
-<div
-    hidden
-    data-vf-password-status-response
-    data-status="<?php echo $this->Html->safe($action_result['status'] ?? 'unknown'); ?>"
-    data-progress="<?php echo $action_result['progress'] === null ? '' : $this->Html->safe((string) $action_result['progress']); ?>"
-></div>
-<?php } ?>
-
 <?php if (($action_result['type'] ?? null) === 'build') { ?>
 <?php
 $vf_build_uses_password = ($action_result['auth_mode'] ?? null) === 'password';
@@ -220,57 +287,82 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
 @keyframes vf-build-dot { 0%, 20% { opacity: 0.2; } 45%, 100% { opacity: 1; } }
 </style>
 <div
-    class="alert alert-info border-info mb-4 vf-build-status"
-    role="status"
-    aria-live="polite"
-    aria-busy="true"
+    class="modal fade vf-build-status"
+    id="virtfusionBuildStatusModal"
+    tabindex="-1"
+    role="dialog"
+    aria-hidden="true"
     data-vf-build-progress
+    data-vf-passive-modal
     data-vf-complete-title="<?php echo $this->Html->safe(Language::_($vf_build_is_reinstall
         ? 'VirtfusionDirectProvisioningMod.build_progress.reinstall_complete'
         : 'VirtfusionDirectProvisioningMod.build_progress.complete', true)); ?>"
     data-vf-complete-hint="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_progress.complete_hint', true)); ?>"
 >
-    <div class="vf-build-status-heading mb-2">
-        <span class="vf-build-spinner" data-vf-build-active aria-hidden="true"></span>
-        <h5 class="alert-heading mb-0" data-vf-build-title>
-            <?php $this->_($vf_build_is_reinstall
-                ? 'VirtfusionDirectProvisioningMod.build_progress.reinstalling'
-                : 'VirtfusionDirectProvisioningMod.build_progress.installing'); ?>
-        </h5>
-    </div>
-    <p class="mb-3" data-vf-build-message>
-        <?php $this->_($vf_build_uses_password
-            ? ($vf_build_is_reinstall
-                ? 'VirtfusionDirectProvisioningMod.build_progress.password_reinstall_wait'
-                : 'VirtfusionDirectProvisioningMod.build_progress.password_wait')
-            : ($vf_build_is_reinstall
-                ? 'VirtfusionDirectProvisioningMod.build_progress.ssh_reinstall_wait'
-                : 'VirtfusionDirectProvisioningMod.build_progress.ssh_wait')); ?>
-    </p>
-    <?php if ($vf_build_uses_password && $vf_build_password !== '') { ?>
-    <div class="mb-3">
-        <label class="form-label fw-semibold" for="virtfusionBuildPassword">
-            <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.password'); ?>
-        </label>
-        <div class="vf-password-control">
-            <input type="text" class="form-control font-monospace fw-semibold" id="virtfusionBuildPassword" value="<?php echo $this->Html->safe($vf_build_password); ?>" readonly autocomplete="off">
-            <button type="button" class="btn btn-outline-primary" data-vf-copy-field="virtfusionBuildPassword">
-                <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
-            </button>
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable" role="document">
+        <div class="modal-content alert-info border-info" role="status" aria-live="polite" aria-busy="true" data-vf-build-surface>
+            <div class="modal-header">
+                <div class="vf-build-status-heading">
+                    <span class="vf-build-spinner" data-vf-build-active aria-hidden="true"></span>
+                    <h5 class="modal-title mb-0" data-vf-build-title>
+                        <?php $this->_($vf_build_is_reinstall
+                            ? 'VirtfusionDirectProvisioningMod.build_progress.reinstalling'
+                            : 'VirtfusionDirectProvisioningMod.build_progress.installing'); ?>
+                    </h5>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-build-close aria-label="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-3" data-vf-build-message>
+                    <?php $this->_($vf_build_uses_password
+                        ? ($vf_build_is_reinstall
+                            ? 'VirtfusionDirectProvisioningMod.build_progress.password_reinstall_wait'
+                            : 'VirtfusionDirectProvisioningMod.build_progress.password_wait')
+                        : ($vf_build_is_reinstall
+                            ? 'VirtfusionDirectProvisioningMod.build_progress.ssh_reinstall_wait'
+                            : 'VirtfusionDirectProvisioningMod.build_progress.ssh_wait')); ?>
+                </p>
+                <?php if ($vf_build_uses_password && $vf_build_password !== '') { ?>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="virtfusionBuildPassword">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.password'); ?>
+                    </label>
+                    <div class="vf-password-control">
+                        <input type="text" class="form-control font-monospace fw-semibold" id="virtfusionBuildPassword" value="<?php echo $this->Html->safe($vf_build_password); ?>" readonly autocomplete="off">
+                        <button type="button" class="btn btn-outline-primary" data-vf-copy-field="virtfusionBuildPassword">
+                            <?php $this->_('VirtfusionDirectProvisioningMod.password_result.copy'); ?>
+                        </button>
+                    </div>
+                </div>
+                <?php } ?>
+                <div class="vf-build-progress mb-2" data-vf-build-active aria-hidden="true"><div class="vf-build-progress-bar"></div></div>
+                <div class="small text-muted" data-vf-build-active>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.checking'); ?><span class="vf-build-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-success" data-vf-build-refresh hidden>
+                    <i class="fas fa-sync-alt" aria-hidden="true"></i>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.refresh'); ?>
+                </button>
+                <button type="button" class="btn btn-secondary" data-vf-build-close>
+                    <?php $this->_('VirtfusionDirectProvisioningMod.action_result.close'); ?>
+                </button>
+            </div>
         </div>
     </div>
-    <?php } ?>
-    <div class="vf-build-progress mb-2" data-vf-build-active aria-hidden="true"><div class="vf-build-progress-bar"></div></div>
-    <div class="small text-muted" data-vf-build-active>
-        <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.checking'); ?><span class="vf-build-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>
-    </div>
-    <button type="button" class="btn btn-success btn-sm mt-3" data-vf-build-refresh hidden>
-        <i class="fas fa-sync-alt" aria-hidden="true"></i>
-        <?php $this->_('VirtfusionDirectProvisioningMod.build_progress.refresh'); ?>
-    </button>
 </div>
 <script type="text/javascript">
 (function () {
+    var modal = document.getElementById('virtfusionBuildStatusModal');
+    if (modal) {
+        modal.querySelectorAll('[data-vf-build-close]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                window.virtfusionResultModal.remove(modal);
+            });
+        });
+        window.virtfusionResultModal.show(modal);
+    }
     document.querySelectorAll('[data-vf-copy-field]').forEach(function (button) {
         if (button.getAttribute('data-vf-copy-bound') === 'true') {
             return;
@@ -605,9 +697,11 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
             closeForm.submit();
             return;
         }
+        var disableData = new FormData(closeForm);
+        disableData.set('vf_response', 'action');
         window.fetch(closeForm.getAttribute('action') || window.location.href, {
             method: 'POST',
-            body: new FormData(closeForm),
+            body: disableData,
             credentials: 'same-origin',
             headers: {'X-Requested-With': 'XMLHttpRequest'}
         }).catch(function () {});

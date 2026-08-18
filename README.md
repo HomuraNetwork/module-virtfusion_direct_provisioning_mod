@@ -123,6 +123,8 @@ These names are used only when `autoBuild=true`:
 
 When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `ipv6`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later.
 
+Manual install and reinstall forms also expose IPv6. Once VirtFusion reports IPv6 as enabled, subsequent reinstalls keep it enabled and do not offer a disable control. A built service with available but disabled IPv6 can choose between continuing in VirtFusion or reinstalling with IPv6 enabled from the Network section.
+
 VNC is not a Configurable Option. It is enabled only when the client or administrator opens the console from the service Manage page. The noVNC popup supports reconnect, full screen, fit-to-window, view-only mode, remote display resizing, Ctrl+Alt+Del, and clipboard exchange. Closing it through the provided button also disables VNC.
 
 ## Service upgrades and downgrades
@@ -191,6 +193,8 @@ IP addresses, refresh, and eligible additional-IP removal are contained in the M
 The administrator link opens the configured VirtFusion admin server URL and does not create a client login session. The client link may use VirtFusion's client login bridge.
 
 The traffic reset date shown by the module comes from VirtFusion. Changing the Blesta renewal date or granting extra service days does not change that VirtFusion date.
+
+The Manage page uses PDT templates only for its initial structure and result modals. Timed status checks and password-job checks use dedicated, authenticated JSON responses; the browser updates existing text, values, progress bars, address lists, visibility, and disabled states in place. Action requests return filtered state plus only their own optional result modal instead of re-rendering the complete service tab.
 
 ### Blesta Advanced Options
 

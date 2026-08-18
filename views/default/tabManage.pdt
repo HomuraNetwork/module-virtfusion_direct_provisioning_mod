@@ -13,6 +13,7 @@ $empty_value = '—';
 <div
     id="tabManage"
     data-vf-busy="<?php echo $server_busy ? 'true' : 'false'; ?>"
+    data-vf-built="<?php echo $server_available && !$server_unbuilt ? 'true' : 'false'; ?>"
     data-vf-refresh-seconds="<?php echo $server_busy ? 5 : 60; ?>"
     data-vf-refresh-url="<?php echo $this->Html->safe($_SERVER['REQUEST_URI']); ?>"
 >
@@ -25,20 +26,18 @@ $empty_value = '—';
     </div>
 
     <div data-vf-refresh-section="task">
-        <?php if ($server_busy && ($action_result['type'] ?? null) !== 'build') { include __DIR__ . '/task_status.pdt'; } ?>
+        <?php include __DIR__ . '/task_status.pdt'; ?>
     </div>
 
     <div data-vf-refresh-section="notices">
-        <?php if (!$server_unbuilt && !empty($server_info->has_pending_tasks)) { ?>
-            <div class="alert alert-warning mb-4">
+            <div class="alert alert-warning mb-4" data-vf-pending-tasks <?php echo !$server_unbuilt && !empty($server_info->has_pending_tasks) ? '' : 'hidden'; ?>>
                 <div><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.pending_restart', true)); ?></div>
-                <ul class="mb-0 mt-2">
-                    <?php foreach ($server_info->pending_tasks as $pending_task) { ?>
+                <ul class="mb-0 mt-2" data-vf-pending-task-list>
+                    <?php foreach (($server_info->pending_tasks ?? []) as $pending_task) { ?>
                         <li><?php echo $this->Html->safe($pending_task); ?></li>
                     <?php } ?>
                 </ul>
             </div>
-        <?php } ?>
         <?php if (!$server_unbuilt && ($service_fields->virtfusion_build_state ?? '') === 'failed_or_unknown') { ?>
             <div class="alert alert-warning mb-4">
                 <?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.build_reconciliation_required', true)); ?>

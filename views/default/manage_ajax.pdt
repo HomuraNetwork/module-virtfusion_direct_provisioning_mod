@@ -1,3 +1,11 @@
+<style>
+.vf-working-status { display: flex; align-items: center; gap: 0.85rem; }
+.vf-working-spinner { flex: 0 0 auto; width: 1.5rem; height: 1.5rem; border: 0.2rem solid #cbd5e1; border-top-color: #0d6efd; border-radius: 50%; animation: vf-working-spin 0.8s linear infinite; }
+.vf-working-progress { height: 0.4rem; overflow: hidden; background: #d9e2ec; border-radius: 0.25rem; }
+.vf-working-progress-bar { width: 38%; height: 100%; background: #0d6efd; animation: vf-working-scroll 1.15s ease-in-out infinite; }
+@keyframes vf-working-spin { to { transform: rotate(360deg); } }
+@keyframes vf-working-scroll { from { transform: translateX(-110%); } to { transform: translateX(370%); } }
+</style>
 <script type="text/javascript">
 (function () {
     if (!window.fetch || !window.FormData) {
@@ -26,6 +34,159 @@
             }
             return response.json();
         });
+    }
+
+    function stateRequestUrl(current) {
+        var url = new URL(current.getAttribute('data-vf-refresh-url') || window.location.href, window.location.href);
+        url.searchParams.set('vf_response', 'state');
+        return url.toString();
+    }
+
+    function setText(current, selector, value) {
+        var element = current.querySelector(selector);
+        if (element) {
+            element.textContent = value == null ? '' : String(value);
+        }
+    }
+
+    function updateMeter(current, name, meter) {
+        setText(current, '[data-vf-resource-value="' + name + '"]', meter.value);
+        var slot = current.querySelector('[data-resource-meter="' + name + '"]');
+        if (!slot) {
+            return;
+        }
+        var usage = Number(meter.usage);
+        var available = meter.usage !== null && meter.usage !== '' && Number.isFinite(usage);
+        var row = slot.querySelector('[data-vf-resource-usage-row]');
+        var progress = slot.querySelector('[data-vf-resource-progress]');
+        var bar = slot.querySelector('[data-vf-resource-progress-bar]');
+        if (row) {
+            row.hidden = !available;
+        }
+        if (progress) {
+            progress.hidden = !available;
+            progress.setAttribute('aria-valuenow', available ? String(usage) : '0');
+        }
+        if (bar) {
+            bar.style.width = (available ? Math.min(100, Math.max(0, usage)) : 0) + '%';
+        }
+        var label = slot.querySelector('[data-vf-resource-usage]');
+        if (label) {
+            label.textContent = available ? usage + '%' : '';
+        }
+    }
+
+    function updateAddressList(current, family, addresses) {
+        var list = current.querySelector('[data-vf-network-list="' + family + '"]');
+        var empty = current.querySelector('[data-vf-network-empty="' + family + '"]');
+        if (!list) {
+            return;
+        }
+        list.replaceChildren();
+        (Array.isArray(addresses) ? addresses : []).forEach(function (address) {
+            var item = document.createElement('li');
+            var code = document.createElement('code');
+            item.className = 'mb-2';
+            code.className = 'text-break';
+            code.textContent = String(address);
+            item.appendChild(code);
+            list.appendChild(item);
+        });
+        list.hidden = list.children.length === 0;
+        if (empty) {
+            empty.hidden = list.children.length > 0;
+        }
+    }
+
+    function updateState(current, state) {
+        current.setAttribute('data-vf-busy', state.busy ? 'true' : 'false');
+        current.setAttribute('data-vf-built', state.built ? 'true' : 'false');
+        current.setAttribute('data-vf-refresh-seconds', String(state.refreshSeconds || 60));
+        setText(current, '[data-vf-state-name]', state.name);
+        setText(current, '[data-vf-state-status]', state.status);
+
+        var badge = current.querySelector('[data-vf-state-status]');
+        if (badge) {
+            badge.classList.toggle('bg-success', state.running === true);
+            badge.classList.toggle('badge-success', state.running === true);
+            badge.classList.toggle('bg-secondary', state.running !== true);
+            badge.classList.toggle('badge-secondary', state.running !== true);
+        }
+        var refreshButton = current.querySelector('[data-vf-state-refresh]');
+        if (refreshButton) {
+            refreshButton.disabled = !!state.busy;
+        }
+
+        Object.keys(state.resources || {}).forEach(function (name) {
+            updateMeter(current, name, state.resources[name]);
+        });
+        Object.keys(state.traffic || {}).forEach(function (name) {
+            setText(current, '[data-vf-traffic="' + name + '"]', state.traffic[name]);
+        });
+        var trafficPercent = Number(state.traffic && state.traffic.percent);
+        var trafficAvailable = state.traffic && state.traffic.percent !== null
+            && state.traffic.percent !== '' && Number.isFinite(trafficPercent);
+        var trafficProgress = current.querySelector('[data-vf-traffic-progress]');
+        var trafficBar = current.querySelector('[data-vf-traffic-progress-bar]');
+        if (trafficProgress) {
+            trafficProgress.hidden = !trafficAvailable;
+        }
+        if (trafficBar) {
+            trafficBar.style.width = (trafficAvailable ? Math.min(100, Math.max(0, trafficPercent)) : 0) + '%';
+            trafficBar.setAttribute('aria-valuenow', trafficAvailable ? String(trafficPercent) : '0');
+        }
+
+        updateAddressList(current, 'ipv4', state.network && state.network.ipv4);
+        updateAddressList(current, 'ipv6', state.network && state.network.ipv6);
+        setText(current, '[data-vf-network-speed="in"]', state.network && state.network.in);
+        setText(current, '[data-vf-network-speed="out"]', state.network && state.network.out);
+        var ipv6Action = current.querySelector('[data-vf-ipv6-choice-open]');
+        var ipv6Note = current.querySelector('[data-vf-ipv6-available-note]');
+        var ipv6Empty = current.querySelector('[data-vf-network-empty="ipv6"]');
+        var showIpv6Action = !!(state.network && state.network.ipv6Available && !state.network.ipv6Enabled);
+        if (ipv6Action) {
+            ipv6Action.hidden = !showIpv6Action;
+            ipv6Action.disabled = !!state.tasksLocked
+                || ipv6Action.getAttribute('data-vf-template-available') !== 'true';
+        }
+        if (ipv6Note) {
+            ipv6Note.hidden = !showIpv6Action;
+        }
+        if (ipv6Empty && state.network && state.network.ipv6Available) {
+            ipv6Empty.hidden = true;
+        }
+
+        var taskStatus = current.querySelector('[data-vf-task-status]');
+        if (taskStatus && !current.querySelector('[data-vf-build-progress]')) {
+            taskStatus.hidden = !state.busy;
+        }
+        var pending = Array.isArray(state.pendingTasks) ? state.pendingTasks : [];
+        var pendingNotice = current.querySelector('[data-vf-pending-tasks]');
+        var pendingList = current.querySelector('[data-vf-pending-task-list]');
+        if (pendingList) {
+            pendingList.replaceChildren();
+            pending.forEach(function (description) {
+                var item = document.createElement('li');
+                item.textContent = String(description);
+                pendingList.appendChild(item);
+            });
+        }
+        if (pendingNotice) {
+            pendingNotice.hidden = !state.built || pending.length === 0;
+        }
+
+        current.querySelectorAll('[data-vf-power-visible]').forEach(function (item) {
+            item.hidden = state.running === null
+                || item.getAttribute('data-vf-power-visible') !== (state.running ? 'running' : 'stopped');
+            var button = item.querySelector('button[name="action"]');
+            if (button) {
+                button.disabled = !!state.busy || state.running === null;
+            }
+        });
+        current.querySelectorAll('[data-vf-task-lockable]').forEach(function (button) {
+            button.disabled = !!state.tasksLocked;
+        });
+        syncBuildProgress(current);
     }
 
     function responseRoot(current, data) {
@@ -63,8 +224,10 @@
 
         progress.setAttribute('data-vf-complete', 'true');
         progress.setAttribute('aria-busy', 'false');
-        progress.classList.remove('alert-info', 'border-info');
-        progress.classList.add('alert-success', 'border-success');
+        var surface = progress.querySelector('[data-vf-build-surface]') || progress;
+        surface.setAttribute('aria-busy', 'false');
+        surface.classList.remove('alert-info', 'border-info');
+        surface.classList.add('alert-success', 'border-success');
         progress.querySelectorAll('[data-vf-build-active]').forEach(function (element) {
             element.hidden = true;
         });
@@ -100,9 +263,50 @@
         host.appendChild(message);
     }
 
+    function updateActionResponse(current, data) {
+        var wasBuilt = current.getAttribute('data-vf-built') === 'true';
+        var host = current.querySelector('[data-vf-response-host]');
+        if (host) {
+            host.replaceChildren();
+            if (data.ok === false) {
+                var alert = document.createElement('div');
+                alert.className = 'alert alert-danger mb-4';
+                alert.setAttribute('role', 'alert');
+                var errors = Array.isArray(data.errors) ? data.errors : [];
+                if (errors.length <= 1) {
+                    alert.textContent = errors[0] || 'The VirtFusion action was unsuccessful.';
+                } else {
+                    var list = document.createElement('ul');
+                    list.className = 'mb-0';
+                    errors.forEach(function (error) {
+                        var item = document.createElement('li');
+                        item.textContent = String(error);
+                        list.appendChild(item);
+                    });
+                    alert.appendChild(list);
+                }
+                host.appendChild(alert);
+            } else if (data.feedback) {
+                var template = document.createElement('template');
+                template.innerHTML = String(data.feedback);
+                host.appendChild(template.content.cloneNode(true));
+                runScripts(host);
+            }
+        }
+        if (data.state && data.state.available !== false) {
+            updateState(current, data.state);
+            if (wasBuilt !== !!data.state.built) {
+                return refreshHtml(current, true).catch(function () {
+                    return current;
+                });
+            }
+        }
+        return Promise.resolve(current);
+    }
+
     function updateManage(current, data, isPolling) {
         var incoming = responseRoot(current, data);
-        ['data-vf-busy', 'data-vf-refresh-seconds', 'data-vf-refresh-url'].forEach(function (attribute) {
+        ['data-vf-busy', 'data-vf-built', 'data-vf-refresh-seconds', 'data-vf-refresh-url'].forEach(function (attribute) {
             if (incoming.hasAttribute(attribute)) {
                 current.setAttribute(attribute, incoming.getAttribute(attribute));
             }
@@ -126,18 +330,40 @@
     function isUserBusy(current) {
         var focused = document.activeElement;
         return document.hidden
-            || current.querySelector('.modal.show')
+            || current.querySelector('.modal.show:not([data-vf-passive-modal])')
             || current.querySelector('[data-vf-os-installer][data-vf-dirty="true"]')
             || (focused && current.contains(focused) && /^(INPUT|SELECT|TEXTAREA)$/.test(focused.tagName));
     }
 
-    function refresh(current, isPolling) {
+    function refreshHtml(current, isPolling) {
         return requestJson(current.getAttribute('data-vf-refresh-url') || window.location.href, {
             method: 'GET',
             credentials: 'same-origin',
             headers: {'X-Requested-With': 'XMLHttpRequest'}
         }).then(function (data) {
             return updateManage(current, data, isPolling);
+        });
+    }
+
+    function refreshState(current) {
+        var wasBuilt = current.getAttribute('data-vf-built') === 'true';
+        return requestJson(stateRequestUrl(current), {
+            method: 'GET',
+            credentials: 'same-origin',
+            cache: 'no-store',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }).then(function (data) {
+            if (!data || !data.state || data.state.available === false) {
+                throw new Error('VirtFusion state is unavailable.');
+            }
+            updateState(current, data.state);
+            if (wasBuilt !== !!data.state.built) {
+                return refreshHtml(current, true);
+            }
+            return current;
         });
     }
 
@@ -159,23 +385,12 @@
                 schedule(liveCurrent);
                 return;
             }
-            refresh(liveCurrent, true).then(function () {
-                schedule(liveCurrent);
+            refreshState(liveCurrent).then(function (updatedCurrent) {
+                schedule(updatedCurrent || liveCurrent);
             }).catch(function () {
                 schedule(liveCurrent);
             });
         }, delay);
-    }
-
-    function submitNormally(form, submitter) {
-        if (submitter && submitter.name) {
-            var actionField = document.createElement('input');
-            actionField.type = 'hidden';
-            actionField.name = submitter.name;
-            actionField.value = submitter.value;
-            form.appendChild(actionField);
-        }
-        form.submit();
     }
 
     function releaseSubmittedModal(form, current) {
@@ -191,6 +406,69 @@
             modal.removeAttribute('aria-modal');
         }
         backdrops.forEach(function (backdrop) {
+            backdrop.remove();
+        });
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('padding-right');
+    }
+
+    var workingLabels = {
+        resetpass: <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.action_working.reset_password', true)); ?>,
+        build: <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.action_working.install', true)); ?>,
+        rebuild: <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.action_working.reinstall', true)); ?>
+    };
+
+    function showWorkingModal(action) {
+        if (!workingLabels[action]) {
+            return null;
+        }
+        var modal = document.createElement('div');
+        modal.className = 'modal fade vf-working-modal';
+        modal.tabIndex = -1;
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.innerHTML = '<div class="modal-dialog modal-dialog-centered" role="document">'
+            + '<div class="modal-content"><div class="modal-body p-4">'
+            + '<div class="vf-working-status mb-3"><span class="vf-working-spinner" aria-hidden="true"></span>'
+            + '<div><h5 class="mb-1" data-vf-working-title></h5><div class="small text-muted" data-vf-working-message></div></div></div>'
+            + '<div class="vf-working-progress" aria-hidden="true"><div class="vf-working-progress-bar"></div></div>'
+            + '</div></div></div>';
+        modal.querySelector('[data-vf-working-title]').textContent = workingLabels[action];
+        modal.querySelector('[data-vf-working-message]').textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.action_working.wait', true)); ?>;
+        document.body.appendChild(modal);
+
+        if (window.bootstrap && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
+            window.bootstrap.Modal.getOrCreateInstance(modal, {backdrop: 'static', keyboard: false}).show();
+        } else if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(modal).modal({backdrop: 'static', keyboard: false, show: true});
+        } else {
+            var backdrop = document.createElement('div');
+            backdrop.className = 'modal-backdrop fade show vf-working-backdrop';
+            document.body.appendChild(backdrop);
+            document.body.classList.add('modal-open');
+            modal.style.display = 'block';
+            modal.classList.add('show');
+        }
+        return modal;
+    }
+
+    function removeWorkingModal(modal) {
+        if (!modal) {
+            return;
+        }
+        if (window.bootstrap && window.bootstrap.Modal
+            && typeof window.bootstrap.Modal.getInstance === 'function') {
+            var instance = window.bootstrap.Modal.getInstance(modal);
+            if (instance) {
+                instance.dispose();
+            }
+        }
+        if (window.jQuery && typeof window.jQuery.fn.modal === 'function') {
+            window.jQuery(modal).off('.bs.modal');
+        }
+        modal.remove();
+        document.querySelectorAll('.modal-backdrop').forEach(function (backdrop) {
             backdrop.remove();
         });
         document.body.classList.remove('modal-open');
@@ -216,8 +494,15 @@
             if (submitter && submitter.name && !formData.has(submitter.name)) {
                 formData.append(submitter.name, submitter.value);
             }
+            formData.set('vf_response', 'action');
             if (submitter) {
                 submitter.disabled = true;
+            }
+            var action = submitter && submitter.value ? String(submitter.value) : '';
+            var workingModal = null;
+            if (workingLabels[action]) {
+                releaseSubmittedModal(form, current);
+                workingModal = showWorkingModal(action);
             }
 
             requestJson(form.getAttribute('action') || window.location.href, {
@@ -226,11 +511,25 @@
                 credentials: 'same-origin',
                 headers: {'X-Requested-With': 'XMLHttpRequest'}
             }).then(function (data) {
+                removeWorkingModal(workingModal);
                 releaseSubmittedModal(form, current);
-                updateManage(current, data, false);
-                schedule(current);
+                if (data && data.responseType === 'action') {
+                    return updateActionResponse(current, data);
+                }
+                return Promise.resolve(updateManage(current, data, false));
+            }).then(function (updatedCurrent) {
+                schedule(updatedCurrent || current);
             }).catch(function () {
-                submitNormally(form, submitter);
+                removeWorkingModal(workingModal);
+                releaseSubmittedModal(form, current);
+                updateActionResponse(current, {
+                    ok: false,
+                    errors: [<?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.action_working.unconfirmed', true)); ?>]
+                });
+                if (submitter) {
+                    submitter.disabled = false;
+                }
+                schedule(current);
             });
         });
 
@@ -246,10 +545,14 @@
             event.preventDefault();
             refreshButton.disabled = true;
             window.clearTimeout(window.virtfusionManageRefreshTimer);
-            refresh(current, true).then(function () {
+            refreshState(current).then(function () {
                 var progress = current.querySelector('[data-vf-build-progress]');
                 if (progress) {
-                    progress.remove();
+                    if (window.virtfusionResultModal) {
+                        window.virtfusionResultModal.remove(progress);
+                    } else {
+                        progress.remove();
+                    }
                 }
                 schedule(current);
             }).catch(function () {

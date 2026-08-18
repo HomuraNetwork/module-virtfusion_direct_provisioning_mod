@@ -34,6 +34,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         type="button"
         class="btn btn-outline-danger w-100"
         data-vf-os-open="<?php echo $vf_os_prefix; ?>"
+        data-vf-task-lockable
         <?php echo $tasks_locked ? 'disabled' : ''; ?>
     >
         <i class="fas fa-compact-disc" aria-hidden="true"></i>
@@ -112,7 +113,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                     <label class="form-label" for="<?php echo $vf_os_prefix; ?>Category">
                         <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.os_family'); ?>
                     </label>
-                    <select class="form-control form-select" id="<?php echo $vf_os_prefix; ?>Category" data-vf-os-category required <?php echo $tasks_locked ? 'disabled' : ''; ?>>
+                    <select class="form-control form-select" id="<?php echo $vf_os_prefix; ?>Category" data-vf-os-category data-vf-task-lockable required <?php echo $tasks_locked ? 'disabled' : ''; ?>>
                         <option value=""><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.select_os_family'); ?></option>
                         <?php foreach ($vf_os_catalog as $vf_group_index => $vf_group) { ?>
                             <option value="<?php echo (int) $vf_group_index; ?>"><?php echo $this->Html->safe($vf_group['name']); ?></option>
@@ -163,8 +164,10 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var importPanel = installer.querySelector('[data-vf-ssh-import-panel]');
     var keyName = installer.querySelector('[data-vf-ssh-key-name]');
     var publicKey = installer.querySelector('[data-vf-ssh-public-key]');
+    var ipv6Toggle = installer.querySelector('[data-vf-ipv6-toggle]');
     var initialHostname = hostname ? hostname.value : '';
     var initialImport = importToggle ? importToggle.checked : false;
+    var initialIpv6 = ipv6Toggle ? ipv6Toggle.checked : false;
     var emptyLabel = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.tabManage.select_os_template', true)); ?>;
     var sshKeyRequired = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.!error.rebuild.ssh_key_required', true)); ?>;
     var catalog = [];
@@ -199,6 +202,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         if (importToggle) {
             importToggle.checked = initialImport;
         }
+        if (ipv6Toggle && !ipv6Toggle.disabled) {
+            ipv6Toggle.checked = initialIpv6;
+        }
         [keyName, publicKey].forEach(function (field) {
             if (field) {
                 field.value = '';
@@ -218,6 +224,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         if (category.value !== '' || template.value !== '' || sshKeySelected
             || (hostname && hostname.value !== initialHostname)
             || (importToggle && importToggle.checked !== initialImport)
+            || (ipv6Toggle && ipv6Toggle.checked !== initialIpv6)
             || usingPasswordLogin()) {
             installer.setAttribute('data-vf-dirty', 'true');
         } else {
@@ -271,7 +278,11 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         }
     }
 
-    function showInstaller() {
+    function showInstaller(enableIpv6) {
+        if (enableIpv6 && ipv6Toggle && !ipv6Toggle.disabled) {
+            ipv6Toggle.checked = true;
+            markDirty();
+        }
         if (window.bootstrap && window.bootstrap.Modal
             && typeof window.bootstrap.Modal.getOrCreateInstance === 'function') {
             window.bootstrap.Modal.getOrCreateInstance(installer, {backdrop: true, keyboard: true}).show();
@@ -322,6 +333,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     if (hostname) {
         hostname.addEventListener('input', markDirty);
     }
+    if (ipv6Toggle) {
+        ipv6Toggle.addEventListener('change', markDirty);
+    }
     sshKeyCheckboxes.forEach(function (checkbox) {
         checkbox.addEventListener('change', function () {
             clearAuthenticationError();
@@ -371,7 +385,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     syncAuthenticationMode();
 
     if (openButton) {
-        openButton.addEventListener('click', showInstaller);
+        openButton.addEventListener('click', function () {
+            showInstaller(openButton.getAttribute('data-vf-enable-ipv6') === 'true');
+        });
         installer.querySelectorAll('[data-vf-os-close]').forEach(function (button) {
             button.addEventListener('click', hideInstaller);
         });
@@ -386,6 +402,10 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             window.jQuery(installer).on('hidden.bs.modal', resetInstaller);
         }
     }
+    window.virtfusionOsInstallers = window.virtfusionOsInstallers || {};
+    window.virtfusionOsInstallers[<?php echo json_encode($vf_os_prefix); ?>] = {
+        open: showInstaller
+    };
 }());
 </script>
 <?php } ?>

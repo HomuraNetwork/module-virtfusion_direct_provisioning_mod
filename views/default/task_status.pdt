@@ -15,7 +15,7 @@
 @keyframes vf-task-spin { to { transform: rotate(360deg); } }
 @keyframes vf-task-scroll { from { transform: translateX(-110%); } to { transform: translateX(370%); } }
 </style>
-<div class="alert alert-info border-info mb-4 vf-task-status" role="status" aria-live="polite" aria-busy="true" data-vf-task-status>
+<div class="alert alert-info border-info mb-4 vf-task-status" role="status" aria-live="polite" aria-busy="true" data-vf-task-status <?php echo !empty($server_busy) && ($action_result['type'] ?? null) !== 'build' ? '' : 'hidden'; ?>>
     <div class="vf-task-status-heading mb-2">
         <span class="vf-task-spinner" aria-hidden="true"></span>
         <strong><?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.tasks.building', true)); ?></strong>

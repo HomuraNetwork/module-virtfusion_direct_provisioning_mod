@@ -134,6 +134,8 @@ class FakeTaskServerApi
 
 class FakeLiveServerApi
 {
+    public $ipv6Enabled = true;
+
     public function get($server_id, $detailed = false)
     {
         return [
@@ -173,6 +175,7 @@ class FakeLiveServerApi
                             'ipv6' => [[
                                 'subnet' => '2001:db8:42::',
                                 'cidr' => 64,
+                                'enabled' => $this->ipv6Enabled,
                                 'gateway' => '2001:db8:42::1'
                             ]],
                             'inAverage' => 1000,
@@ -350,6 +353,7 @@ class TestableVirtfusionModule extends VirtfusionDirectProvisioningMod
     public $PackageOptions;
     public $Services;
     public $Input;
+    public $Date;
 
     protected function getServerApiFromRow($row)
     {
@@ -409,6 +413,14 @@ foreach (['PRIMARY_IPV4_FIELD', 'SECONDARY_IPV4_FIELD', 'BUILD_STATE_FIELD'] as 
         $constant_name . ' must fit Blesta service_fields.key.'
     );
 }
+assertSameValue(
+    ['First error', 'Second error'],
+    callPrivate($module, 'manageErrorMessages', [[
+        'field' => ['first' => 'First error', 'duplicate' => 'First error'],
+        'api' => (object) ['response' => 'Second error']
+    ]]),
+    'Manage JSON errors must be flattened, deduplicated, and free of internal field structure.'
+);
 
 $legacy_network_fields = (object) [
     'virtfusion_ip' => '192.0.2.10',
@@ -572,6 +584,11 @@ assertSameValue(
     callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1, 'has_active_tasks' => true], 'resetpass_status']),
     'An active VirtFusion task must not block read-only password queue polling.'
 );
+assertSameValue(
+    true,
+    callPrivate($module, 'serverAllowsAction', [(object) ['built' => 1, 'has_active_tasks' => true], 'vnc_disable']),
+    'Closing VNC must remain available while another VirtFusion task is active.'
+);
 assertSameValue(false, callPrivate($module, 'taskStateIsActive', [false]), 'A false active-task state must remain idle.');
 assertSameValue(true, callPrivate($module, 'taskStateIsActive', [(object) ['action' => 'build_server']]), 'An active task object must lock local actions.');
 $task_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
@@ -586,6 +603,12 @@ assertSameValue(
 assertSameValue(49, $task_info->os_templates[0]->templates[0]->id, 'Unbuilt servers must load templates for manual installation.');
 $live_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
 $live_module->serverApi = new FakeLiveServerApi();
+$live_module->Date = new class {
+    public function cast($value, $format)
+    {
+        return date($format, strtotime($value));
+    }
+};
 $live_info = callPrivate($live_module, 'getRemoteServerInfo', [(object) [], 42]);
 assertSameValue(4, $live_info->cpu, 'The resource panel must use the CPU allocation currently reported by VirtFusion.');
 assertSameValue(6144, $live_info->memory, 'The resource panel must use the memory currently reported by VirtFusion.');
@@ -595,6 +618,29 @@ assertSameValue(23.9, $live_info->resource_usage->memory, 'Memory utilization mu
 assertSameValue(27.2, $live_info->resource_usage->disk, 'Disk utilization must use the guest root filesystem.');
 assertSameValue(['192.0.2.42'], $live_info->network_addresses->ipv4, 'Manage must expose a flat remote IPv4 list.');
 assertSameValue(['2001:db8:42::/64'], $live_info->network_addresses->ipv6_blocks, 'Manage must expose remote IPv6 blocks.');
+assertSameValue(true, $live_info->ipv6_available, 'An assigned IPv6 block must be recognized as available.');
+assertSameValue(true, $live_info->ipv6_enabled, 'An enabled IPv6 block must be recognized as active.');
+$disabled_ipv6_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$disabled_ipv6_api = new FakeLiveServerApi();
+$disabled_ipv6_api->ipv6Enabled = false;
+$disabled_ipv6_module->serverApi = $disabled_ipv6_api;
+$disabled_ipv6_info = callPrivate($disabled_ipv6_module, 'getRemoteServerInfo', [(object) [], 42]);
+assertSameValue(true, $disabled_ipv6_info->ipv6_available, 'A disabled IPv6 allocation must remain available to enable.');
+assertSameValue(false, $disabled_ipv6_info->ipv6_enabled, 'A disabled IPv6 allocation must not be displayed as active.');
+assertSameValue([], $disabled_ipv6_info->network_addresses->ipv6_blocks, 'Disabled IPv6 blocks must not appear active.');
+assertSameValue(
+    ['2001:db8:42::/64'],
+    $disabled_ipv6_info->network_addresses->ipv6_available_blocks,
+    'The assigned IPv6 block must remain available to the enable workflow.'
+);
+assertSameValue(
+    true,
+    callPrivate($module, 'serviceHasIpv6Capability', [
+        (object) ['options' => [(object) ['option_name' => 'ipv6', 'value' => 'true']]],
+        (object) ['ipv6_available' => false]
+    ]),
+    'The service IPv6 option must expose IPv6 capability before an address is active.'
+);
 assertSameValue('1.85 GB', $live_info->traffic_in_display, 'Inbound traffic must be formatted independently.');
 assertSameValue('1.27 MB', $live_info->traffic_out_display, 'Outbound traffic must be formatted independently.');
 assertSameValue('1.85 GB', $live_info->traffic_used_display, 'Total traffic must use the API total.');
@@ -610,6 +656,14 @@ assertSameValue(
 );
 assertSameValue(true, strpos($live_info->ssh_keys[0]->fingerprint, 'SHA256:') === 0, 'Owner SSH keys must expose a SHA256 fingerprint.');
 assertSameValue(false, property_exists($live_info->ssh_keys[0], 'publicKey'), 'SSH public key material must not be exposed to the view.');
+$light_live_info = callPrivate($live_module, 'getRemoteServerInfo', [(object) [], 42, false]);
+assertSameValue([], $light_live_info->os_templates, 'State polling must not fetch or return the OS catalog.');
+assertSameValue([], $light_live_info->ssh_keys, 'State polling must not fetch or return SSH keys.');
+$manage_state = callPrivate($live_module, 'manageStatePayload', [$light_live_info]);
+assertSameValue('4 vCPU', $manage_state['resources']['cpu']['value'], 'State JSON must provide presentation-ready resource values.');
+assertSameValue(['192.0.2.42'], $manage_state['network']['ipv4'], 'State JSON must expose only normalized address strings.');
+assertSameValue(false, array_key_exists('owner_id', $manage_state), 'State JSON must not expose internal VirtFusion ownership data.');
+assertSameValue(false, array_key_exists('remoteState', $manage_state), 'State JSON must not expose the raw VirtFusion response.');
 assertSameValue(
     'Ubuntu Server 24.04 LTS - Minimal',
     $live_info->os_templates[0]->templates[0]->label,
@@ -719,6 +773,7 @@ $build_result = callPrivate($build_module, 'handleServerAction', [
         'action' => 'build',
         'operating_system_id' => 49,
         'hostname' => 'new.example.com',
+        'ipv6' => '0',
         'ssh_key_ids' => ['19']
     ],
     $live_info
@@ -736,6 +791,7 @@ assertSameValue(
         'operatingSystemId' => 49,
         'hostname' => 'new.example.com',
         'email' => false,
+        'ipv6' => true,
         'sshKeys' => [19]
     ],
     $build_api->builds[0]['vars'],
@@ -806,7 +862,8 @@ assertSameValue(
     [
         'operatingSystemId' => 49,
         'hostname' => 'password.example.com',
-        'email' => true
+        'email' => true,
+        'ipv6' => true
     ],
     $build_api->builds[3]['vars'],
     'Password login must request an emailed credential without submitting SSH keys.'
@@ -826,7 +883,7 @@ $optional_hostname_result = callPrivate($build_module, 'handleServerAction', [
 ]);
 assertSameValue('build', $optional_hostname_result['type'], 'Reinstall must allow an omitted hostname.');
 assertSameValue(
-    ['operatingSystemId' => 49, 'email' => true],
+    ['operatingSystemId' => 49, 'email' => true, 'ipv6' => true],
     $build_api->builds[4]['vars'],
     'An empty optional hostname must be omitted from the VirtFusion build request.'
 );
@@ -850,6 +907,40 @@ assertSameValue(
     'The missing SSH key error must identify every valid authentication choice.'
 );
 assertSameValue(5, count($build_api->builds), 'A missing authentication choice must not call the build API.');
+$disabled_ipv6_build = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1'
+    ],
+    $disabled_ipv6_info
+]);
+assertSameValue('build', $disabled_ipv6_build['type'], 'A server with available IPv6 must remain rebuildable without enabling it.');
+assertSameValue(false, $build_api->builds[5]['vars']['ipv6'], 'An unchecked IPv6 option must remain disabled during build.');
+$enabled_ipv6_build = callPrivate($build_module, 'handleServerAction', [
+    (object) ['meta' => (object) ['hostname' => 'vf.example.com']],
+    $build_api,
+    (object) ['id' => 77, 'client_id' => 5],
+    (object) ['virtfusion_server_id' => 42],
+    [
+        'action' => 'rebuild',
+        'operating_system_id' => 49,
+        'password_login' => '1',
+        'ipv6' => '1'
+    ],
+    $disabled_ipv6_info
+]);
+assertSameValue('build', $enabled_ipv6_build['type'], 'A user must be able to enable IPv6 during build.');
+assertSameValue(true, $build_api->builds[6]['vars']['ipv6'], 'A checked IPv6 option must enable IPv6 during build.');
+assertSameValue(
+    true,
+    $build_api->builds[0]['vars']['ipv6'],
+    'A server with active IPv6 must keep it enabled even when the submitted build form omits IPv6.'
+);
 assertSameValue('built', $build_module->Services->fields['virtfusion_build_state']['value'], 'Manual installation must persist build state.');
 assertSameValue(true, $build_module->Services->fields['virtfusion_password']['encrypted'], 'The new build password must stay encrypted.');
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
@@ -1007,9 +1098,7 @@ assertSameValue(
 );
 assertSameValue(
     true,
-    strpos($client_manage_template, 'if ($server_busy &&') !== false
-        && strpos($admin_manage_template, 'if ($server_busy &&') !== false
-        && strpos($client_manage_template, 'task_status.pdt') !== false
+    strpos($client_manage_template, 'task_status.pdt') !== false
         && strpos($admin_manage_template, 'task_status.pdt') !== false,
     'Both Manage views must show active build status while retaining the control-panel handoff.'
 );
@@ -1260,7 +1349,7 @@ assertSameValue(
     true,
     strpos($client_manage_template, 'manage_ajax.pdt') !== false
         && strpos($admin_manage_template, 'manage_ajax.pdt') !== false
-        && strpos($manage_ajax_template, "headers: {'X-Requested-With': 'XMLHttpRequest'}") !== false
+        && strpos($manage_ajax_template, "'X-Requested-With': 'XMLHttpRequest'") !== false
         && strpos($manage_ajax_template, "method: 'GET'") !== false
         && strpos($manage_ajax_template, 'data-vf-refresh-seconds') !== false
         && strpos($manage_ajax_template, 'data-vf-dirty') !== false
@@ -1271,19 +1360,37 @@ assertSameValue(
         && strpos($manage_ajax_template, "patchSection(current, incoming, 'feedback')") !== false
         && strpos($manage_ajax_template, 'event.defaultPrevented') !== false
         && strpos($manage_ajax_template, 'Date.now() % 5000') !== false
+        && strpos($manage_ajax_template, "url.searchParams.set('vf_response', 'state')") !== false
+        && strpos($manage_ajax_template, "formData.set('vf_response', 'action')") !== false
+        && strpos($manage_ajax_template, "data.responseType === 'action'") !== false
+        && strpos($manage_ajax_template, 'updateActionResponse(current, data)') !== false
+        && strpos($manage_ajax_template, 'updateState(current, data.state)') !== false
+        && strpos($manage_ajax_template, 'element.textContent =') !== false
+        && strpos($manage_ajax_template, 'list.replaceChildren()') !== false
         && strpos($manage_ajax_template, 'releaseSubmittedModal') !== false
         && strpos($manage_ajax_template, "document.querySelectorAll('.modal-backdrop')") !== false
         && strpos($client_manage_template, 'data-vf-refresh-seconds=') !== false
         && strpos($admin_manage_template, 'data-vf-refresh-seconds=') !== false
         && strpos($client_manage_template, 'data-vf-refresh-section=') !== false
         && strpos($admin_manage_template, 'data-vf-refresh-section=') !== false,
-    'Manage actions and timed refreshes must patch independent sections through AJAX in both views.'
+    'Manage actions must use AJAX while timed refreshes update existing DOM values from filtered state JSON.'
+);
+assertSameValue(
+    true,
+    strpos($module_source, "['state', 'action', 'password_status']") !== false
+        && strpos($module_source, "'responseType' => 'action'") !== false
+        && strpos($module_source, 'renderManageActionResult') !== false
+        && strpos($module_source, 'JSON_INVALID_UTF8_SUBSTITUTE') !== false,
+    'Manage module methods must emit filtered JSON directly for state, actions, and queue status.'
 );
 assertSameValue(
     true,
     strpos($server_api_source, "'queue/' . (int) \$queueId") !== false
         && strpos($module_source, "case 'resetpass_status':") !== false
-        && strpos($action_result_template, 'data-vf-password-status-response') !== false
+        && strpos($action_result_template, "fieldHidden('vf_response', 'password_status')") !== false
+        && strpos($action_result_template, "disableData.set('vf_response', 'action')") !== false
+        && strpos($action_result_template, "typeof data.status !== 'string'") !== false
+        && strpos($action_result_template, 'holder.innerHTML = data.content') === false
         && strpos($action_result_template, 'window.setTimeout(checkStatus, 5000)') !== false
         && strpos($action_result_template, 'vf-password-control') !== false
         && strpos($action_result_template, "queue->errors") === false,
@@ -1326,8 +1433,9 @@ assertSameValue(
         && strpos($module_source, "if (\$hostname !== '')") !== false
         && strpos($module_source, "\$build_params['hostname'] = \$hostname") !== false
         && strpos($module_source, "\$build_params['sshKeys'] = \$ssh_key_ids") !== false
-        && strpos($module_source, "\$build_params['email'] = \$password_login") !== false,
-    'OS reinstall must submit its template, optional hostname, selected owner keys, and explicit password-login preference.'
+        && strpos($module_source, "\$build_params['email'] = \$password_login") !== false
+        && strpos($module_source, "\$build_params['ipv6']") !== false,
+    'OS reinstall must submit its template, optional hostname, selected owner keys, IPv6, and password-login preference.'
 );
 assertSameValue(
     true,
@@ -1338,11 +1446,13 @@ assertSameValue(
         && strpos($os_build_options_template, 'data-vf-auth-mode="ssh" checked') !== false
         && strpos($os_build_options_template, 'data-vf-ssh-empty') !== false
         && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
+        && strpos($os_build_options_template, 'data-vf-ipv6-toggle') !== false
+        && strpos($os_build_options_template, 'checked disabled') !== false
         && strpos($os_build_options_template, 'publicKey') === false
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
         && preg_match('/name="hostname"[^>]*required/s', $os_build_options_template) === 0
         && strpos($os_install_template, 'sshKeyRequired') !== false,
-    'The OS popup must use explicit auth blocks, show an empty key state, keep hostname optional, and never preselect a saved key.'
+    'The OS popup must expose monotonic IPv6 and explicit authentication without preselecting a saved key.'
 );
 assertSameValue(
     true,
@@ -1350,6 +1460,9 @@ assertSameValue(
         && strpos($admin_manage_template, 'network_addresses.pdt') !== false
         && strpos($network_template, "'ipv4'") !== false
         && strpos($network_template, "'ipv6_blocks'") !== false
+        && strpos($network_template, 'ipv6_available_blocks') !== false
+        && strpos($network_template, 'data-vf-ipv6-choice-open') !== false
+        && strpos($network_template, 'virtfusionOsInstallers') !== false
         && strpos($network_template, 'port_speed_inbound') !== false
         && strpos($network_template, 'port_speed_outbound') !== false
         && strpos($network_template, "['main', 'base', 'extra', 'ipv6']") === false,
