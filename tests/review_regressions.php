@@ -1507,6 +1507,7 @@ assertSameValue(
         && strpos($os_build_options_template, 'data-vf-ssh-empty') !== false
         && strpos($os_build_options_template, 'data-vf-ssh-import-toggle') !== false
         && strpos($os_build_options_template, 'data-vf-ipv6-toggle') !== false
+        && strpos($os_build_options_template, '.vf-ipv6-option .form-check-input { position: static;') !== false
         && strpos($os_build_options_template, 'checked disabled') !== false
         && strpos($os_build_options_template, 'publicKey') === false
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
