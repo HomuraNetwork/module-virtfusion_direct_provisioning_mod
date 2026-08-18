@@ -286,6 +286,34 @@ class FakeAllocationOnlyServerApi extends FakeLiveServerApi
     }
 }
 
+class FakeDom0TelemetryServerApi extends FakeLiveServerApi
+{
+    public function get($server_id, $detailed = false)
+    {
+        $request = parent::get($server_id, $detailed);
+        $data = json_decode($request['response']);
+        $data->data->remoteState->memory = (object) [
+            'actual' => '524288',
+            'unused' => '208012',
+            'available' => '426856',
+            'usable' => '319064',
+            'disk_caches' => '100576',
+            '_source' => 'dom0'
+        ];
+        $data->data->remoteState->agent = (object) [];
+        $data->data->remoteState->disk = (object) [
+            'vda' => (object) [
+                'name' => 'vda',
+                'allocation' => '1159135232',
+                'capacity' => '10737418240',
+                'physical' => '1159544832'
+            ]
+        ];
+        $request['response'] = json_encode($data);
+        return $request;
+    }
+}
+
 class FakeBuildServerApi
 {
     public $builds = [];
@@ -696,6 +724,11 @@ $allocation_only_info = callPrivate($allocation_only_module, 'getRemoteServerInf
 assertSameValue(null, $allocation_only_info->resource_usage->cpu, 'Missing CPU telemetry must not create a percentage.');
 assertSameValue(null, $allocation_only_info->resource_usage->memory, 'Missing memory telemetry must not create a percentage.');
 assertSameValue(null, $allocation_only_info->resource_usage->disk, 'Missing disk telemetry must not create a percentage.');
+$dom0_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
+$dom0_module->serverApi = new FakeDom0TelemetryServerApi();
+$dom0_info = callPrivate($dom0_module, 'getRemoteServerInfo', [(object) [], 42]);
+assertSameValue(25.3, $dom0_info->resource_usage->memory, 'Dom0 available and usable memory must provide utilization.');
+assertSameValue(10.8, $dom0_info->resource_usage->disk, 'Block allocation and capacity must provide disk utilization.');
 $build_module = (new ReflectionClass(TestableVirtfusionModule::class))->newInstanceWithoutConstructor();
 $build_api = new FakeBuildServerApi();
 $build_module->Services = new class {

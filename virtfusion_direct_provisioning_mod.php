@@ -4014,6 +4014,18 @@ class VirtfusionDirectProvisioningMod extends Module
             && is_numeric($remote_memory->memfree)) {
             $memory_available = (float) $remote_memory->memfree;
         }
+        if ($memory_total <= 0 && is_object($remote_memory)) {
+            $memory_total = isset($remote_memory->available) && is_numeric($remote_memory->available)
+                ? (float) $remote_memory->available
+                : (isset($remote_memory->actual) && is_numeric($remote_memory->actual)
+                    ? (float) $remote_memory->actual
+                    : 0);
+            if (isset($remote_memory->usable) && is_numeric($remote_memory->usable)) {
+                $memory_available = (float) $remote_memory->usable;
+            } elseif (isset($remote_memory->unused) && is_numeric($remote_memory->unused)) {
+                $memory_available = (float) $remote_memory->unused;
+            }
+        }
         if ($memory_total > 0 && $memory_available !== null) {
             $memory_used = min($memory_total, max(0, $memory_total - $memory_available));
             $server_info->resource_usage->memory = round(($memory_used / $memory_total) * 100, 1);
@@ -4035,6 +4047,28 @@ class VirtfusionDirectProvisioningMod extends Module
             $disk_used = min($disk_total, max(0, (float) $filesystem->{'used-bytes'}));
             $server_info->resource_usage->disk = round(($disk_used / $disk_total) * 100, 1);
             break;
+        }
+        if ($server_info->resource_usage->disk === null && isset($remote_state->disk)
+            && (is_object($remote_state->disk) || is_array($remote_state->disk))) {
+            $disk_capacity = 0;
+            $disk_allocation = 0;
+            foreach ((array) $remote_state->disk as $disk) {
+                if (!is_object($disk)
+                    || !isset($disk->capacity, $disk->allocation)
+                    || !is_numeric($disk->capacity)
+                    || !is_numeric($disk->allocation)
+                    || (float) $disk->capacity <= 0) {
+                    continue;
+                }
+                $disk_capacity += (float) $disk->capacity;
+                $disk_allocation += min((float) $disk->capacity, max(0, (float) $disk->allocation));
+            }
+            if ($disk_capacity > 0) {
+                $server_info->resource_usage->disk = round(
+                    ($disk_allocation / $disk_capacity) * 100,
+                    1
+                );
+            }
         }
         $server_info->network_in = $this->formatNetworkSpeed(
             $data->data->network->interfaces[0]->inAverage ?? null
