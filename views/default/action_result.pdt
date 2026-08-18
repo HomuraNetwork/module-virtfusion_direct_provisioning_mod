@@ -416,6 +416,8 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
 .virtfusion-vnc-controls > * {
     margin: 0.125rem 0.25rem;
 }
+.virtfusion-vnc-quality { display: inline-flex; align-items: center; gap: 0.35rem; }
+.virtfusion-vnc-quality .form-select { width: auto; min-width: 7.5rem; }
 .virtfusion-vnc-toggle {
     display: inline-flex;
     align-items: center;
@@ -482,8 +484,8 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionReconnectVnc">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.reconnect'); ?>
                     </button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionSendCtrlAltDel" disabled>
-                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.ctrl_alt_del'); ?>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionToggleKeyboard" aria-expanded="false" aria-controls="virtfusionVncKeyboard">
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.keyboard'); ?>
                     </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionFullscreenVnc">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.fullscreen'); ?>
@@ -491,6 +493,17 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionToggleClipboard" aria-expanded="false" aria-controls="virtfusionVncClipboard">
                         <?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?>
                     </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionVncScreenshot" disabled>
+                        <?php $this->_('VirtfusionDirectProvisioningMod.vnc.screenshot'); ?>
+                    </button>
+                    <label class="virtfusion-vnc-quality small mb-0" for="virtfusionVncQuality">
+                        <span><?php $this->_('VirtfusionDirectProvisioningMod.vnc.quality'); ?></span>
+                        <select class="form-control form-select form-select-sm" id="virtfusionVncQuality">
+                            <option value="fast"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.quality_fast'); ?></option>
+                            <option value="balanced" selected><?php $this->_('VirtfusionDirectProvisioningMod.vnc.quality_balanced'); ?></option>
+                            <option value="best"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.quality_best'); ?></option>
+                        </select>
+                    </label>
                     <div class="virtfusion-vnc-divider d-none d-md-block"></div>
                     <div class="form-check virtfusion-vnc-toggle">
                         <input class="form-check-input" type="checkbox" role="switch" id="virtfusionScaleVnc" checked>
@@ -506,12 +519,28 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     </div>
                 </div>
                 <div id="virtfusionVncScreen"></div>
+                <div class="virtfusion-vnc-panel border-top p-3" id="virtfusionVncKeyboard" hidden>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <strong class="me-2"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.keyboard'); ?></strong>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-vnc-key="escape" disabled>Esc</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-vnc-key="tab" disabled>Tab</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-vnc-key="enter" disabled>Enter</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-vnc-key="ctrl_c" disabled>Ctrl+C</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-vf-vnc-key="ctrl_alt_f2" disabled>Ctrl+Alt+F2</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" data-vf-vnc-key="ctrl_alt_delete" disabled>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.vnc.ctrl_alt_del'); ?>
+                        </button>
+                    </div>
+                </div>
                 <div class="virtfusion-vnc-panel border-top p-3" id="virtfusionVncClipboard" hidden>
                     <label for="virtfusionVncClipboardText" class="form-label fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.vnc.clipboard'); ?></label>
-                    <textarea class="form-control mb-2" id="virtfusionVncClipboardText" rows="3" spellcheck="false" placeholder="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_placeholder', true)); ?>"></textarea>
+                    <textarea class="form-control mb-2" id="virtfusionVncClipboardText" rows="3" maxlength="4096" spellcheck="false" placeholder="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.vnc.clipboard_placeholder', true)); ?>"></textarea>
                     <div class="d-flex flex-wrap align-items-center gap-2">
-                        <button type="button" class="btn btn-sm btn-primary" id="virtfusionSendClipboard" disabled>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="virtfusionSendClipboard" disabled>
                             <?php $this->_('VirtfusionDirectProvisioningMod.vnc.send_clipboard'); ?>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-primary" id="virtfusionSendKeys" disabled>
+                            <?php $this->_('VirtfusionDirectProvisioningMod.vnc.send_keys'); ?>
                         </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="virtfusionCopyClipboard">
                             <?php $this->_('VirtfusionDirectProvisioningMod.vnc.copy_clipboard'); ?>
@@ -543,9 +572,11 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
     var modalElement = document.getElementById('virtfusionVncModal');
     var screen = document.getElementById('virtfusionVncScreen');
     var statusElement = document.getElementById('virtfusionVncStatus');
-    var ctrlAltDel = document.getElementById('virtfusionSendCtrlAltDel');
     var reconnectButton = document.getElementById('virtfusionReconnectVnc');
     var fullscreenButton = document.getElementById('virtfusionFullscreenVnc');
+    var keyboardToggle = document.getElementById('virtfusionToggleKeyboard');
+    var keyboardPanel = document.getElementById('virtfusionVncKeyboard');
+    var keyButtons = modalElement ? modalElement.querySelectorAll('[data-vf-vnc-key]') : [];
     var scaleToggle = document.getElementById('virtfusionScaleVnc');
     var viewOnlyToggle = document.getElementById('virtfusionViewOnlyVnc');
     var resizeToggle = document.getElementById('virtfusionResizeVnc');
@@ -554,7 +585,10 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
     var clipboardText = document.getElementById('virtfusionVncClipboardText');
     var clipboardStatus = document.getElementById('virtfusionVncClipboardStatus');
     var sendClipboard = document.getElementById('virtfusionSendClipboard');
+    var sendKeys = document.getElementById('virtfusionSendKeys');
     var copyClipboard = document.getElementById('virtfusionCopyClipboard');
+    var qualitySelect = document.getElementById('virtfusionVncQuality');
+    var screenshotButton = document.getElementById('virtfusionVncScreenshot');
     var closeButton = document.getElementById('virtfusionCloseVnc');
     var closeForm = document.getElementById('virtfusionCloseVncForm');
     if (!modalElement || !screen || !statusElement) {
@@ -565,15 +599,29 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
     var rfb = null;
     var connectionState = 'disconnected';
     var disableRequested = false;
+    var reconnectTimer = null;
+    var typingTimer = null;
+    var typingText = false;
+    var qualityPresets = {
+        fast: {quality: 3, compression: 9},
+        balanced: {quality: 6, compression: 2},
+        best: {quality: 9, compression: 0}
+    };
 
     function updateControls() {
         var connected = connectionState === 'connected';
         var viewOnly = viewOnlyToggle && viewOnlyToggle.checked;
-        if (ctrlAltDel) {
-            ctrlAltDel.disabled = !connected || viewOnly;
-        }
         if (sendClipboard) {
-            sendClipboard.disabled = !connected || viewOnly;
+            sendClipboard.disabled = !connected || viewOnly || typingText;
+        }
+        if (sendKeys) {
+            sendKeys.disabled = !connected || viewOnly || typingText;
+        }
+        Array.prototype.forEach.call(keyButtons, function (button) {
+            button.disabled = !connected || viewOnly || typingText;
+        });
+        if (screenshotButton) {
+            screenshotButton.disabled = !connected || !rfb || typeof rfb.toBlob !== 'function';
         }
         if (reconnectButton) {
             reconnectButton.disabled = connectionState === 'connecting';
@@ -587,7 +635,17 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
         connection.clipViewport = !scale;
         connection.resizeSession = Boolean(resizeToggle && resizeToggle.checked);
         connection.focusOnClick = true;
+        var preset = qualityPresets[qualitySelect ? qualitySelect.value : 'balanced'] || qualityPresets.balanced;
+        connection.qualityLevel = preset.quality;
+        connection.compressionLevel = preset.compression;
         screen.style.overflow = scale ? 'hidden' : 'auto';
+    }
+
+    function clearReconnectTimer() {
+        if (reconnectTimer !== null) {
+            window.clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
     }
 
     function setDisconnectedStatus(clean) {
@@ -602,6 +660,8 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
         if (!RFB) {
             return;
         }
+
+        clearReconnectTimer();
 
         if (rfb) {
             var previousConnection = rfb;
@@ -640,6 +700,13 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     return;
                 }
                 rfb = null;
+                if (!event.detail.clean && !disableRequested) {
+                    connectionState = 'reconnecting';
+                    statusElement.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.reconnecting', true)); ?>;
+                    updateControls();
+                    reconnectTimer = window.setTimeout(connect, 3000);
+                    return;
+                }
                 setDisconnectedStatus(event.detail.clean);
             });
             connection.addEventListener('clipboard', function (event) {
@@ -702,6 +769,11 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
             return;
         }
         disableRequested = true;
+        clearReconnectTimer();
+        if (typingTimer !== null) {
+            window.clearTimeout(typingTimer);
+            typingTimer = null;
+        }
         if (rfb) {
             rfb.disconnect();
             rfb = null;
@@ -737,13 +809,46 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
     if (reconnectButton) {
         reconnectButton.addEventListener('click', connect);
     }
-    if (ctrlAltDel) {
-        ctrlAltDel.addEventListener('click', function () {
-            if (rfb && connectionState === 'connected' && !(viewOnlyToggle && viewOnlyToggle.checked)) {
-                rfb.sendCtrlAltDel();
-            }
+    if (keyboardToggle && keyboardPanel) {
+        keyboardToggle.addEventListener('click', function () {
+            keyboardPanel.hidden = !keyboardPanel.hidden;
+            keyboardToggle.setAttribute('aria-expanded', keyboardPanel.hidden ? 'false' : 'true');
         });
     }
+    Array.prototype.forEach.call(keyButtons, function (button) {
+        button.addEventListener('click', function () {
+            if (!rfb || connectionState !== 'connected' || (viewOnlyToggle && viewOnlyToggle.checked)) {
+                return;
+            }
+            var action = button.getAttribute('data-vf-vnc-key');
+            if (action === 'ctrl_alt_delete') {
+                rfb.sendCtrlAltDel();
+                return;
+            }
+            var keys = {
+                escape: [0xff1b, 'Escape'],
+                tab: [0xff09, 'Tab'],
+                enter: [0xff0d, 'Enter']
+            };
+            if (keys[action]) {
+                rfb.sendKey(keys[action][0], keys[action][1]);
+                return;
+            }
+            if (action !== 'ctrl_c' && action !== 'ctrl_alt_f2') {
+                return;
+            }
+            var finalKey = action === 'ctrl_alt_f2' ? [0xffbf, 'F2'] : [0x63, 'KeyC'];
+            rfb.sendKey(0xffe3, 'ControlLeft', true);
+            if (action === 'ctrl_alt_f2') {
+                rfb.sendKey(0xffe9, 'AltLeft', true);
+            }
+            rfb.sendKey(finalKey[0], finalKey[1]);
+            if (action === 'ctrl_alt_f2') {
+                rfb.sendKey(0xffe9, 'AltLeft', false);
+            }
+            rfb.sendKey(0xffe3, 'ControlLeft', false);
+        });
+    });
     if (scaleToggle) {
         scaleToggle.addEventListener('change', function () {
             if (rfb) {
@@ -785,6 +890,45 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
             }
         });
     }
+    if (sendKeys && clipboardText) {
+        sendKeys.addEventListener('click', function () {
+            if (!rfb || connectionState !== 'connected' || (viewOnlyToggle && viewOnlyToggle.checked)) {
+                return;
+            }
+            var characters = Array.from(clipboardText.value.replace(/\r\n?/g, '\n')).slice(0, 4096);
+            if (characters.length === 0) {
+                if (clipboardStatus) {
+                    clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.send_keys_empty', true)); ?>;
+                }
+                return;
+            }
+            typingText = true;
+            updateControls();
+            if (clipboardStatus) {
+                clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.send_keys_typing', true)); ?>;
+            }
+            var index = 0;
+            var typeNext = function () {
+                if (!rfb || connectionState !== 'connected' || index >= characters.length) {
+                    typingTimer = null;
+                    typingText = false;
+                    updateControls();
+                    if (clipboardStatus && index >= characters.length) {
+                        clipboardStatus.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.send_keys_sent', true)); ?>;
+                    }
+                    return;
+                }
+                var character = characters[index++];
+                var codePoint = character.codePointAt(0);
+                var keysym = character === '\n' ? 0xff0d
+                    : (character === '\t' ? 0xff09
+                        : (codePoint <= 0xff ? codePoint : (0x01000000 | codePoint)));
+                rfb.sendKey(keysym, character === '\n' ? 'Enter' : (character === '\t' ? 'Tab' : null));
+                typingTimer = window.setTimeout(typeNext, 8);
+            };
+            typeNext();
+        });
+    }
     if (copyClipboard && clipboardText) {
         copyClipboard.addEventListener('click', function () {
             var copied = function () {
@@ -818,6 +962,48 @@ $vf_build_password = (string) ($action_result['password'] ?? '');
                     : <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.fullscreen', true)); ?>;
             });
         }
+    }
+    if (qualitySelect) {
+        try {
+            var savedQuality = window.localStorage.getItem('virtfusion-vnc-quality');
+            if (qualityPresets[savedQuality]) {
+                qualitySelect.value = savedQuality;
+            }
+        } catch (error) {}
+        qualitySelect.addEventListener('change', function () {
+            var preset = qualityPresets[qualitySelect.value] || qualityPresets.balanced;
+            if (rfb) {
+                rfb.qualityLevel = preset.quality;
+                rfb.compressionLevel = preset.compression;
+            }
+            try {
+                window.localStorage.setItem('virtfusion-vnc-quality', qualitySelect.value);
+            } catch (error) {}
+        });
+    }
+    if (screenshotButton) {
+        screenshotButton.addEventListener('click', function () {
+            if (!rfb || connectionState !== 'connected' || typeof rfb.toBlob !== 'function') {
+                return;
+            }
+            rfb.toBlob(function (blob) {
+                if (!blob) {
+                    statusElement.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.screenshot_failed', true)); ?>;
+                    return;
+                }
+                var url = URL.createObjectURL(blob);
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = 'virtfusion-vnc-' + new Date().toISOString().replace(/[:.]/g, '-') + '.png';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.setTimeout(function () {
+                    URL.revokeObjectURL(url);
+                }, 1000);
+                statusElement.textContent = <?php echo json_encode(Language::_('VirtfusionDirectProvisioningMod.vnc.screenshot_saved', true)); ?>;
+            }, 'image/png');
+        });
     }
     if (closeButton) {
         closeButton.addEventListener('click', function (event) {

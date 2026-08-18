@@ -1429,7 +1429,8 @@ assertSameValue(
     'A VNC WebSocket URL on another host must be rejected.'
 );
 $vnc_template = file_get_contents(__DIR__ . '/../views/default/action_result.pdt');
-foreach (['sendCtrlAltDel', 'scaleViewport', 'viewOnly', 'resizeSession', 'clipboardPasteFrom', 'requestFullscreen'] as $vnc_feature) {
+foreach (['sendCtrlAltDel', 'sendKey', 'scaleViewport', 'viewOnly', 'resizeSession', 'clipboardPasteFrom',
+    'qualityLevel', 'compressionLevel', 'toBlob', 'requestFullscreen'] as $vnc_feature) {
     assertSameValue(
         true,
         strpos($vnc_template, $vnc_feature) !== false,
@@ -1440,6 +1441,17 @@ assertSameValue(
     true,
     strpos($vnc_template, "addEventListener('clipboard'") !== false,
     'The embedded VNC console must receive remote clipboard updates.'
+);
+assertSameValue(
+    true,
+    strpos($vnc_template, 'virtfusionSendKeys') !== false
+        && strpos($vnc_template, 'Array.from(clipboardText.value.replace') !== false
+        && strpos($vnc_template, '0x01000000 | codePoint') !== false
+        && strpos($vnc_template, 'window.setTimeout(typeNext, 8)') !== false
+        && strpos($vnc_template, 'maxlength="4096"') !== false
+        && strpos($vnc_template, 'data-vf-vnc-key="ctrl_alt_f2"') !== false
+        && strpos($vnc_template, 'window.setTimeout(connect, 3000)') !== false,
+    'The rescue console must type clipboard text as paced key events, expose rescue key combinations, and reconnect after an unexpected disconnect.'
 );
 assertSameValue(
     true,
