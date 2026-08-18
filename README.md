@@ -120,7 +120,7 @@ These names are used only when `autoBuild=true`:
 | `email` | Enable or disable the VirtFusion build email. |
 | `swap` | Swap value passed to VirtFusion. |
 
-When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. The package module's **Has IPv6** field is copied into each new service as `virtfusion_ipv6_available`; legacy `ipv6` Configurable Options are ignored and hidden.
+When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. The package module's **IPv6 Available** field is copied into each new service as `virtfusion_ipv6_available`; legacy `ipv6` Configurable Options are ignored and hidden.
 
 Staff can change this capability for an individual service under Advanced Options. When the service has IPv6, clients may choose to enable it during installation or reinstallation. The client cannot change whether the service has the capability, and IPv6 already enabled in VirtFusion is never disabled by a reinstall.
 

@@ -2180,11 +2180,13 @@ class VirtfusionDirectProvisioningMod extends Module
             Language::_('VirtfusionDirectProvisioningMod.package_fields.ipv6', true),
             'virtfusion_direct_provisioning_mod_ipv6'
         );
-        $ipv6->attach($fields->fieldHidden('meta[ipv6]', '0'));
-        $ipv6->attach($fields->fieldCheckbox(
+        $ipv6->attach($fields->fieldSelect(
             'meta[ipv6]',
-            '1',
-            $ipv6_value === null || $ipv6_value === '' || $this->boolValue($ipv6_value),
+            [
+                '1' => Language::_('VirtfusionDirectProvisioningMod.ipv6_options.yes', true),
+                '0' => Language::_('VirtfusionDirectProvisioningMod.ipv6_options.no', true)
+            ],
+            $ipv6_value === null || $ipv6_value === '' ? '1' : ($this->boolValue($ipv6_value) ? '1' : '0'),
             ['id' => 'virtfusion_direct_provisioning_mod_ipv6']
         ));
         $ipv6->attach($fields->tooltip(
@@ -6406,11 +6408,13 @@ class VirtfusionDirectProvisioningMod extends Module
             Language::_('VirtfusionDirectProvisioningMod.service_fields.ipv6', true),
             'virtfusion_direct_provisioning_mod_service_ipv6'
         );
-        $ipv6->attach($fields->fieldHidden(self::IPV6_AVAILABLE_FIELD, '0'));
-        $ipv6->attach($fields->fieldCheckbox(
+        $ipv6->attach($fields->fieldSelect(
             self::IPV6_AVAILABLE_FIELD,
-            '1',
-            $ipv6_available,
+            [
+                '1' => Language::_('VirtfusionDirectProvisioningMod.ipv6_options.yes', true),
+                '0' => Language::_('VirtfusionDirectProvisioningMod.ipv6_options.no', true)
+            ],
+            $ipv6_available ? '1' : '0',
             ['id' => 'virtfusion_direct_provisioning_mod_service_ipv6']
         ));
         $ipv6->attach($fields->tooltip(

@@ -199,8 +199,10 @@ $lang['VirtfusionDirectProvisioningMod.traffic_block.retry_confirmed'] = 'No mat
 // Service Fields
 $lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';
 $lang['VirtfusionDirectProvisioningMod.service_fields.label'] = 'Label';
-$lang['VirtfusionDirectProvisioningMod.service_fields.ipv6'] = 'Has IPv6';
+$lang['VirtfusionDirectProvisioningMod.service_fields.ipv6'] = 'IPv6 Available';
 $lang['VirtfusionDirectProvisioningMod.service_fields.ipv6.help_text'] = 'Allow the client to enable IPv6 while installing or reinstalling this service. IPv6 that is already enabled will not be disabled.';
+$lang['VirtfusionDirectProvisioningMod.ipv6_options.yes'] = 'Yes';
+$lang['VirtfusionDirectProvisioningMod.ipv6_options.no'] = 'No';
 
 
 // Manage
@@ -360,7 +362,7 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block
 $lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
-$lang['VirtfusionDirectProvisioningMod.package_fields.ipv6'] = 'Has IPv6';
+$lang['VirtfusionDirectProvisioningMod.package_fields.ipv6'] = 'IPv6 Available';
 $lang['VirtfusionDirectProvisioningMod.package_fields.ipv6.help_text'] = 'New services created from this package may enable IPv6. Staff can change this capability per service under Advanced Options.';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Block Size (GB)';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'The default Traffic Block capacity provisioned by this package.';

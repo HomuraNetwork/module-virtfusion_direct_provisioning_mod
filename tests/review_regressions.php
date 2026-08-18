@@ -1184,9 +1184,8 @@ $client_service_info_template = file_get_contents(__DIR__ . '/../views/default/c
 $server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
 assertSameValue(
     true,
-    strpos($module_source, "fieldCheckbox(\n            'meta[ipv6]'") !== false
-        && strpos($module_source, "fieldHidden('meta[ipv6]', '0')") !== false
-        && strpos($module_source, "fieldHidden(self::IPV6_AVAILABLE_FIELD, '0')") !== false
+    strpos($module_source, "fieldSelect(\n            'meta[ipv6]'") !== false
+        && strpos($module_source, "fieldSelect(\n            self::IPV6_AVAILABLE_FIELD") !== false
         && strpos($module_source, "isset(\$vars['staff_id']) && array_key_exists(self::IPV6_AVAILABLE_FIELD, \$vars)") !== false
         && strpos($module_source, "'key' => self::IPV6_AVAILABLE_FIELD") !== false
         && strpos($module_source, "fieldCheckbox(\n                'virtfusion_enable_ipv6'") !== false
