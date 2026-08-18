@@ -122,7 +122,7 @@ $lang['VirtfusionDirectProvisioningMod.!error.service_fields.migration'] = 'The 
 $lang['VirtfusionDirectProvisioningMod.!error.api.action'] = 'The VirtFusion action failed unexpectedly. Review the module log for the non-sensitive exception details.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.service_type.valid'] = 'Select a valid VirtFusion product type.';
 $lang['VirtfusionDirectProvisioningMod.!error.meta.traffic_block_gb.valid'] = 'Enter a positive whole number for the Traffic Block size in GB.';
-$lang['VirtfusionDirectProvisioningMod.!error.meta.allow_ipv6.valid'] = 'Select whether services may manage IPv6.';
+$lang['VirtfusionDirectProvisioningMod.!error.meta.ipv6.valid'] = 'Select whether services created from this package have IPv6 available.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.parent'] = 'A Traffic Block requires an active, provisioned parent server service.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.amount'] = 'The Traffic Block size must be a positive whole number of GB.';
 $lang['VirtfusionDirectProvisioningMod.!error.traffic_block.server_id'] = 'The parent service does not contain a valid VirtFusion server ID.';
@@ -199,6 +199,8 @@ $lang['VirtfusionDirectProvisioningMod.traffic_block.retry_confirmed'] = 'No mat
 // Service Fields
 $lang['VirtfusionDirectProvisioningMod.service_fields.server_id'] = 'Server ID';
 $lang['VirtfusionDirectProvisioningMod.service_fields.label'] = 'Label';
+$lang['VirtfusionDirectProvisioningMod.service_fields.ipv6'] = 'Has IPv6';
+$lang['VirtfusionDirectProvisioningMod.service_fields.ipv6.help_text'] = 'Allow the client to enable IPv6 while installing or reinstalling this service. IPv6 that is already enabled will not be disabled.';
 
 
 // Manage
@@ -250,7 +252,7 @@ $lang['VirtfusionDirectProvisioningMod.tabManage.install_button'] = 'Install';
 $lang['VirtfusionDirectProvisioningMod.tabManage.reinstall_button'] = 'Reinstall';
 $lang['VirtfusionDirectProvisioningMod.tabManage.install_started'] = 'The operating system installation has started.';
 $lang['VirtfusionDirectProvisioningMod.tabManage.reinstall_started'] = 'The operating system reinstall has started.';
-$lang['VirtfusionDirectProvisioningMod.tabManage.ipv6_title'] = 'Enable IPv6';
+$lang['VirtfusionDirectProvisioningMod.tabManage.ipv6_title'] = 'IPv6';
 $lang['VirtfusionDirectProvisioningMod.tabManage.ipv6_build_help'] = 'Configure IPv6 networking during this installation.';
 $lang['VirtfusionDirectProvisioningMod.tabManage.ipv6_locked_help'] = 'IPv6 is already enabled and will remain enabled after reinstalling.';
 $lang['VirtfusionDirectProvisioningMod.password_result.heading'] = 'Password Reset Complete';
@@ -358,8 +360,8 @@ $lang['VirtfusionDirectProvisioningMod.package_fields.service_type.traffic_block
 $lang['VirtfusionDirectProvisioningMod.package_fields.hypervisor_group_id'] = 'Hypervisor Group ID';
 $lang['VirtfusionDirectProvisioningMod.package_fields.default_ipv4'] = 'Default IPv4';
 $lang['VirtfusionDirectProvisioningMod.package_fields.package_id'] = 'Package ID';
-$lang['VirtfusionDirectProvisioningMod.package_fields.allow_ipv6'] = 'Allow IPv6 Management';
-$lang['VirtfusionDirectProvisioningMod.package_fields.allow_ipv6.help_text'] = 'Allow services using this package to enable IPv6 during installation or reinstallation. Existing packages default to enabled.';
+$lang['VirtfusionDirectProvisioningMod.package_fields.ipv6'] = 'Has IPv6';
+$lang['VirtfusionDirectProvisioningMod.package_fields.ipv6.help_text'] = 'New services created from this package may enable IPv6. Staff can change this capability per service under Advanced Options.';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb'] = 'Block Size (GB)';
 $lang['VirtfusionDirectProvisioningMod.package_fields.traffic_block_gb.help_text'] = 'The default Traffic Block capacity provisioned by this package.';
 
@@ -373,6 +375,8 @@ $lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'ipv4';
 // Client Fields
 $lang['VirtfusionDirectProvisioningMod.option_fields.hostname.label'] = 'Hostname';
 $lang['VirtfusionDirectProvisioningMod.option_fields.hostname.tooltip'] = 'Please enter the name of your server using a fully qualified domain name. For example server.mydomain.com or web.mydomain.com';
+$lang['VirtfusionDirectProvisioningMod.option_fields.enable_ipv6'] = 'Enable IPv6';
+$lang['VirtfusionDirectProvisioningMod.option_fields.enable_ipv6.tooltip'] = 'Enable IPv6 during the initial automatic installation. You can also enable it during a later installation or reinstallation.';
 
 $lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses'] = 'Extra IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses.tooltip'] = 'This field must be selecting if downgrading the number of extra IPs.';

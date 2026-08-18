@@ -120,9 +120,9 @@ These names are used only when `autoBuild=true`:
 | `email` | Enable or disable the VirtFusion build email. |
 | `swap` | Swap value passed to VirtFusion. |
 
-When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. IPv6 is controlled by the package-level **Allow IPv6 Management** setting rather than a Configurable Option; legacy `ipv6` options are ignored and hidden.
+When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. The package module's **Has IPv6** field is copied into each new service as `virtfusion_ipv6_available`; legacy `ipv6` Configurable Options are ignored and hidden.
 
-Manual install and reinstall forms expose IPv6 only when the package permits it. Packages created before this setting was added default to enabled. Once VirtFusion reports IPv6 as enabled, subsequent reinstalls keep it enabled and do not offer a disable control. A built service with available but disabled IPv6 can choose between continuing in VirtFusion or reinstalling with IPv6 enabled from the Network section.
+Staff can change this capability for an individual service under Advanced Options. When the service has IPv6, clients may choose to enable it during installation or reinstallation. The client cannot change whether the service has the capability, and IPv6 already enabled in VirtFusion is never disabled by a reinstall.
 
 VNC is not a Configurable Option. It is enabled only when the client or administrator opens the console from the service Manage page. The noVNC popup supports reconnect, full screen, fit-to-window, view-only mode, remote display resizing, Ctrl+Alt+Del, and clipboard exchange. Closing it through the provided button also disables VNC.
 
