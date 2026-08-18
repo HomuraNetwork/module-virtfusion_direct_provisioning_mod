@@ -28,8 +28,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
 .vf-os-modal .modal-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .vf-os-modal .modal-footer { flex: 0 0 auto; }
 .vf-os-selection { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
-.vf-os-selection-status { display: flex; align-items: center; gap: 0.5rem; min-height: 1.5rem; color: #6c757d; font-size: 0.875rem; }
-.vf-os-selection-status.is-complete { color: #198754; }
+.vf-os-selection-status { display: flex; align-items: center; gap: 0.5rem; min-height: 1.5rem; color: #dc3545; font-size: 0.875rem; }
 </style>
 <?php if ($vf_is_reinstall) { ?>
 <div class="vf-server-action-item">
@@ -85,9 +84,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                                 </select>
                             </div>
                         </div>
-                        <div class="vf-os-selection-status mt-3" data-vf-os-selection-status aria-live="polite">
-                            <i class="fas fa-info-circle" aria-hidden="true" data-vf-os-selection-icon></i>
-                            <span data-vf-os-selection-text><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.os_selection_empty'); ?></span>
+                        <div class="vf-os-selection-status mt-3" data-vf-os-selection-status role="alert" hidden>
+                            <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                            <span data-vf-os-selection-text></span>
                         </div>
                     </div>
                     <?php include __DIR__ . '/os_build_options.pdt'; ?>
@@ -104,7 +103,8 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                         data-vf-os-submit
                         data-vf-confirm="<?php echo $this->Html->safe(Language::_('VirtfusionDirectProvisioningMod.confirm.reinstall', true)); ?>"
                         data-vf-confirm-danger="true"
-                        disabled
+                        data-vf-task-lockable
+                        <?php echo $tasks_locked ? 'disabled' : ''; ?>
                     >
                         <i class="fas fa-sync-alt" aria-hidden="true"></i>
                         <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.reinstall_button'); ?>
@@ -147,14 +147,14 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
                         </select>
                     </div>
                 </div>
-                <div class="vf-os-selection-status mt-3" data-vf-os-selection-status aria-live="polite">
-                    <i class="fas fa-info-circle" aria-hidden="true" data-vf-os-selection-icon></i>
-                    <span data-vf-os-selection-text><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.os_selection_empty'); ?></span>
+                <div class="vf-os-selection-status mt-3" data-vf-os-selection-status role="alert" hidden>
+                    <i class="fas fa-exclamation-circle" aria-hidden="true"></i>
+                    <span data-vf-os-selection-text></span>
                 </div>
             </div>
             <?php include __DIR__ . '/os_build_options.pdt'; ?>
             <div class="d-flex justify-content-end mt-3">
-                <button type="submit" name="action" value="build" class="btn btn-primary" data-vf-os-submit disabled>
+                <button type="submit" name="action" value="build" class="btn btn-primary" data-vf-os-submit data-vf-task-lockable <?php echo $tasks_locked ? 'disabled' : ''; ?>>
                     <i class="fas fa-play" aria-hidden="true"></i>
                     <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.install_button'); ?>
                 </button>
@@ -175,13 +175,13 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     }
     var category = installer.querySelector('[data-vf-os-category]');
     var template = installer.querySelector('[data-vf-os-template]');
-    var submit = installer.querySelector('[data-vf-os-submit]');
     var catalogElement = installer.querySelector('[data-vf-os-catalog]');
     var openButton = document.querySelector('[data-vf-os-open="<?php echo $vf_os_prefix; ?>"]');
     var hostname = installer.querySelector('[data-vf-hostname]');
     var form = installer.querySelector('form');
     var authModeInputs = installer.querySelectorAll('[data-vf-auth-mode]');
     var keyAuthControls = installer.querySelectorAll('[data-vf-key-auth-control]');
+    var passwordAuthControls = installer.querySelectorAll('[data-vf-password-auth-control]');
     var sshKeyCheckboxes = installer.querySelectorAll('input[name="ssh_key_ids[]"]');
     var importToggle = installer.querySelector('[data-vf-ssh-import-toggle]');
     var importPanel = installer.querySelector('[data-vf-ssh-import-panel]');
@@ -189,7 +189,6 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     var publicKey = installer.querySelector('[data-vf-ssh-public-key]');
     var ipv6Toggle = installer.querySelector('[data-vf-ipv6-toggle]');
     var selectionStatus = installer.querySelector('[data-vf-os-selection-status]');
-    var selectionIcon = installer.querySelector('[data-vf-os-selection-icon]');
     var selectionText = installer.querySelector('[data-vf-os-selection-text]');
     var initialHostname = hostname ? hostname.value : '';
     var initialImport = importToggle ? importToggle.checked : false;
@@ -214,28 +213,26 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         template.appendChild(placeholder);
     }
 
-    function syncOperatingSystemSelection() {
+    function hideOperatingSystemError() {
         if (!selectionStatus || !selectionText) {
             return;
         }
-        var complete = template.value !== '';
-        selectionStatus.classList.toggle('is-complete', complete);
-        if (selectionIcon) {
-            selectionIcon.classList.toggle('fa-info-circle', !complete);
-            selectionIcon.classList.toggle('fa-check-circle', complete);
+        selectionStatus.hidden = true;
+        selectionText.textContent = '';
+    }
+
+    function showOperatingSystemError(message) {
+        if (!selectionStatus || !selectionText) {
+            return;
         }
-        if (complete && template.options[template.selectedIndex]) {
-            selectionText.textContent = template.options[template.selectedIndex].textContent;
-        } else {
-            selectionText.textContent = category.value === '' ? noOsSelectedLabel : versionRequiredLabel;
-        }
+        selectionText.textContent = message;
+        selectionStatus.hidden = false;
     }
 
     function resetInstaller() {
         category.value = '';
         resetTemplates(true);
         template.disabled = true;
-        submit.disabled = true;
         if (hostname) {
             hostname.value = initialHostname;
         }
@@ -260,7 +257,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             }
         });
         syncAuthenticationMode();
-        syncOperatingSystemSelection();
+        hideOperatingSystemError();
         installer.removeAttribute('data-vf-dirty');
     }
 
@@ -284,6 +281,22 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
         return selected && selected.getAttribute('data-vf-auth-mode') === 'password';
     }
 
+    function clearSshAuthentication() {
+        sshKeyCheckboxes.forEach(function (checkbox) {
+            checkbox.checked = false;
+        });
+        if (importToggle) {
+            importToggle.checked = false;
+            importToggle.setCustomValidity('');
+        }
+        [keyName, publicKey].forEach(function (field) {
+            if (field) {
+                field.value = '';
+                field.setCustomValidity('');
+            }
+        });
+    }
+
     function syncAuthenticationMode() {
         var usePassword = usingPasswordLogin();
         authModeInputs.forEach(function (input) {
@@ -293,8 +306,10 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             }
         });
         keyAuthControls.forEach(function (control) {
-            control.classList.toggle('text-muted', usePassword);
-            control.setAttribute('aria-disabled', usePassword ? 'true' : 'false');
+            control.hidden = usePassword;
+        });
+        passwordAuthControls.forEach(function (control) {
+            control.hidden = !usePassword;
         });
         sshKeyCheckboxes.forEach(function (checkbox) {
             checkbox.disabled = usePassword;
@@ -370,14 +385,18 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
             template.appendChild(option);
         });
         template.disabled = !group || !group.templates || group.templates.length === 0;
-        submit.disabled = true;
-        syncOperatingSystemSelection();
+        hideOperatingSystemError();
         markDirty();
     });
     template.addEventListener('change', function () {
-        submit.disabled = template.value === '';
-        syncOperatingSystemSelection();
+        hideOperatingSystemError();
         markDirty();
+    });
+    category.addEventListener('invalid', function () {
+        showOperatingSystemError(noOsSelectedLabel);
+    });
+    template.addEventListener('invalid', function () {
+        showOperatingSystemError(versionRequiredLabel);
     });
     if (hostname) {
         hostname.addEventListener('input', markDirty);
@@ -394,6 +413,9 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     authModeInputs.forEach(function (input) {
         input.addEventListener('change', function () {
             clearAuthenticationError();
+            if (usingPasswordLogin()) {
+                clearSshAuthentication();
+            }
             syncAuthenticationMode();
             markDirty();
         });
@@ -432,7 +454,7 @@ foreach (($server_info->os_templates ?? []) as $vf_template_group) {
     }
 
     syncAuthenticationMode();
-    syncOperatingSystemSelection();
+    hideOperatingSystemError();
 
     if (openButton) {
         openButton.addEventListener('click', function () {

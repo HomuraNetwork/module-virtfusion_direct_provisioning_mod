@@ -12,10 +12,12 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
 .vf-auth-choice-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 1.8rem; height: 1.8rem; color: #495057; background: #e9ecef; border-radius: 50%; }
 .vf-auth-choice-title { display: block; font-weight: 600; }
 .vf-auth-choice-help { display: block; margin-top: 0.2rem; color: #6c757d; font-size: 0.8rem; }
+.vf-network-options { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
+.vf-network-hostname { padding-bottom: 1rem; border-bottom: 1px solid #dee2e6; }
 .vf-ssh-auth-panel { padding: 1rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
 .vf-ssh-key-list { max-height: 9rem; overflow-y: auto; padding: 0.65rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #fff; }
 .vf-ssh-empty { color: #6c757d; font-size: 0.875rem; }
-.vf-ipv6-option { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); column-gap: 0.875rem; align-items: start; padding: 0.9rem; border: 1px solid #dee2e6; border-radius: 0.25rem; background: #f8f9fa; }
+.vf-ipv6-option { display: grid; grid-template-columns: 1.25rem minmax(0, 1fr); column-gap: 1rem; align-items: start; margin-top: 1rem; padding: 0; }
 .vf-ipv6-control { display: flex; align-items: flex-start; justify-content: center; min-width: 0; padding-top: 0.2rem; }
 .vf-ipv6-option .form-check-input { position: static; float: none; flex: 0 0 auto; margin: 0; }
 .vf-ipv6-copy { min-width: 0; }
@@ -24,47 +26,49 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
 }
 </style>
 <div class="row g-3 mt-1" data-vf-os-options>
-    <div class="col-12">
-        <label class="form-label" for="<?php echo $vf_os_prefix; ?>Hostname">
-            <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.hostname'); ?>
-        </label>
-        <input
-            type="text"
-            class="form-control"
-            id="<?php echo $vf_os_prefix; ?>Hostname"
-            name="hostname"
-            value="<?php echo $this->Html->safe($vf_current_hostname); ?>"
-            maxlength="255"
-            pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?){2,}"
-            placeholder="server.example.com"
-            data-vf-hostname
-        >
-    </div>
-
-    <div class="col-12">
-        <label class="vf-ipv6-option mb-0" for="<?php echo $vf_os_prefix; ?>Ipv6">
-            <?php if ($vf_ipv6_enabled) { ?>
-                <input type="hidden" name="ipv6" value="1">
-            <?php } ?>
-            <span class="vf-ipv6-control">
+    <fieldset class="col-12">
+        <legend class="form-label mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.network_settings'); ?></legend>
+        <div class="vf-network-options">
+            <div class="vf-network-hostname">
+                <label class="form-label" for="<?php echo $vf_os_prefix; ?>Hostname">
+                    <?php $this->_('VirtfusionDirectProvisioningMod.tabManage.hostname'); ?>
+                </label>
                 <input
-                    class="form-check-input"
-                    type="checkbox"
-                    id="<?php echo $vf_os_prefix; ?>Ipv6"
-                    name="ipv6"
-                    value="1"
-                    data-vf-ipv6-toggle
-                    <?php echo $vf_ipv6_enabled ? 'checked disabled' : ''; ?>
+                    type="text"
+                    class="form-control"
+                    id="<?php echo $vf_os_prefix; ?>Hostname"
+                    name="hostname"
+                    value="<?php echo $this->Html->safe($vf_current_hostname); ?>"
+                    maxlength="255"
+                    pattern="[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?){2,}"
+                    placeholder="server.example.com"
+                    data-vf-hostname
                 >
-            </span>
-            <span class="vf-ipv6-copy">
-                <span class="d-block fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ipv6_title'); ?></span>
-                <span class="d-block small text-muted"><?php $this->_($vf_ipv6_enabled
-                    ? 'VirtfusionDirectProvisioningMod.tabManage.ipv6_locked_help'
-                    : 'VirtfusionDirectProvisioningMod.tabManage.ipv6_build_help'); ?></span>
-            </span>
-        </label>
-    </div>
+            </div>
+            <label class="vf-ipv6-option mb-0" for="<?php echo $vf_os_prefix; ?>Ipv6">
+                <?php if ($vf_ipv6_enabled) { ?>
+                    <input type="hidden" name="ipv6" value="1">
+                <?php } ?>
+                <span class="vf-ipv6-control">
+                    <input
+                        class="form-check-input"
+                        type="checkbox"
+                        id="<?php echo $vf_os_prefix; ?>Ipv6"
+                        name="ipv6"
+                        value="1"
+                        data-vf-ipv6-toggle
+                        <?php echo $vf_ipv6_enabled ? 'checked disabled' : ''; ?>
+                    >
+                </span>
+                <span class="vf-ipv6-copy">
+                    <span class="d-block fw-semibold"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.ipv6_title'); ?></span>
+                    <span class="d-block small text-muted"><?php $this->_($vf_ipv6_enabled
+                        ? 'VirtfusionDirectProvisioningMod.tabManage.ipv6_locked_help'
+                        : 'VirtfusionDirectProvisioningMod.tabManage.ipv6_build_help'); ?></span>
+                </span>
+            </label>
+        </div>
+    </fieldset>
 
     <fieldset class="col-12">
         <legend class="form-label mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.authentication'); ?></legend>
@@ -119,9 +123,7 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
                             <span class="d-block small text-muted">
                                 <?php if (!empty($vf_ssh_key->fingerprint)) { ?>
                                     <code><?php echo $this->Html->safe($vf_ssh_key->fingerprint); ?></code>
-                                    <span class="mx-1">&middot;</span>
                                 <?php } ?>
-                                #<?php echo (int) $vf_ssh_key->id; ?>
                             </span>
                         </label>
                     </div>
@@ -155,6 +157,12 @@ $vf_ipv6_enabled = !empty($server_info->ipv6_enabled);
                     <textarea class="form-control font-monospace" id="<?php echo $vf_os_prefix; ?>SshPublicKey" name="ssh_public_key" rows="4" maxlength="16384" spellcheck="false" <?php echo $vf_requires_key_import ? 'required' : 'disabled'; ?> data-vf-ssh-public-key></textarea>
                 </div>
             </div>
+        </div>
+    </div>
+    <div class="col-12" data-vf-password-auth-control hidden>
+        <div class="alert alert-warning mb-0" role="note">
+            <div class="fw-semibold mb-1"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.password_login_title'); ?></div>
+            <div class="small"><?php $this->_('VirtfusionDirectProvisioningMod.tabManage.password_login_notice'); ?></div>
         </div>
     </div>
 </div>

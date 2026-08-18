@@ -1481,6 +1481,9 @@ assertSameValue(
         && strpos($os_install_template, 'data-vf-confirm-danger="true"') !== false
         && strpos($os_install_template, 'data-vf-os-selection-status') !== false
         && strpos($os_install_template, 'select_os_first') !== false
+        && strpos($os_install_template, "category.addEventListener('invalid'") !== false
+        && strpos($os_install_template, "template.addEventListener('invalid'") !== false
+        && strpos($os_install_template, 'submit.disabled') === false
         && strpos($os_install_template, '<div class="alert alert-danger">') === false
         && strpos($os_install_template, 'data-vf-os-open') !== false
         && strpos($os_install_template, 'hidden.bs.modal') !== false
@@ -1515,12 +1518,24 @@ assertSameValue(
         && strpos($os_build_options_template, '.vf-ipv6-option .form-check-input { position: static;') !== false
         && strpos($os_build_options_template, 'class="vf-ipv6-control"') !== false
         && strpos($os_build_options_template, 'class="vf-ipv6-copy"') !== false
+        && strpos($os_build_options_template, 'class="vf-network-options"') !== false
+        && strpos($os_build_options_template, 'network_settings') !== false
         && strpos($os_build_options_template, 'checked disabled') !== false
         && strpos($os_build_options_template, 'publicKey') === false
+        && strpos($os_build_options_template, '#<?php echo (int) $vf_ssh_key->id; ?>') === false
         && preg_match('/name="ssh_key_ids\[\]"[^>]*checked/s', $os_build_options_template) === 0
         && preg_match('/name="hostname"[^>]*required/s', $os_build_options_template) === 0
         && strpos($os_install_template, 'sshKeyRequired') !== false,
     'The OS popup must expose monotonic IPv6 and explicit authentication without preselecting a saved key.'
+);
+assertSameValue(
+    true,
+    strpos($os_build_options_template, 'data-vf-password-auth-control') !== false
+        && strpos($os_install_template, 'function clearSshAuthentication()') !== false
+        && strpos($os_install_template, 'control.hidden = usePassword') !== false
+        && strpos($os_install_template, 'checkbox.checked = false') !== false
+        && strpos($os_install_template, 'importToggle.checked = false') !== false,
+    'Password login must hide and clear SSH key controls while presenting its safety notice.'
 );
 assertSameValue(
     true,
