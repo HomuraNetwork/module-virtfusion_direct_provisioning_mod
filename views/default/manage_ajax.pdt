@@ -89,7 +89,7 @@
         }
     }
 
-    function updateAddressList(current, family, addresses) {
+    function updateAddressList(current, family, addresses, mainAddress) {
         var list = current.querySelector('[data-vf-network-list="' + family + '"]');
         var empty = current.querySelector('[data-vf-network-empty="' + family + '"]');
         if (!list) {
@@ -97,14 +97,34 @@
         }
         list.replaceChildren();
         (Array.isArray(addresses) ? addresses : []).forEach(function (address) {
-            var item = document.createElement('li');
-            var code = document.createElement('code');
-            item.className = 'mb-2';
-            code.className = 'text-break';
-            code.textContent = String(address);
-            item.appendChild(code);
+            var template = family === 'ipv4'
+                ? current.querySelector('[data-vf-ipv4-remove-template]')
+                : null;
+            var item;
+            if (template && template.content && template.content.firstElementChild) {
+                item = template.content.firstElementChild.cloneNode(true);
+                item.setAttribute('data-vf-network-address', String(address));
+                item.querySelector('[data-vf-ip-address]').textContent = String(address);
+                item.querySelector('input[name="ip_address"]').value = String(address);
+                var isMain = String(address) === String(mainAddress || '');
+                item.querySelector('[data-vf-ip-main]').hidden = !isMain;
+                item.querySelector('[data-vf-confirm]').setAttribute(
+                    'data-vf-confirm',
+                    template.getAttribute(isMain ? 'data-vf-remove-main-confirm' : 'data-vf-remove-confirm') || ''
+                );
+            } else {
+                item = document.createElement('li');
+                var code = document.createElement('code');
+                item.className = 'mb-2';
+                code.className = 'text-break';
+                code.textContent = String(address);
+                item.appendChild(code);
+            }
             list.appendChild(item);
         });
+        if (family === 'ipv4') {
+            list.setAttribute('data-vf-network-main-ip', mainAddress || '');
+        }
         list.hidden = list.children.length === 0;
         if (empty) {
             empty.hidden = list.children.length > 0;
@@ -149,7 +169,12 @@
             trafficBar.setAttribute('aria-valuenow', trafficAvailable ? String(trafficPercent) : '0');
         }
 
-        updateAddressList(current, 'ipv4', state.network && state.network.ipv4);
+        updateAddressList(
+            current,
+            'ipv4',
+            state.network && state.network.ipv4,
+            state.network && state.network.mainIpv4
+        );
         updateAddressList(current, 'ipv6', state.network && state.network.ipv6);
         setText(current, '[data-vf-network-speed="in"]', state.network && state.network.in);
         setText(current, '[data-vf-network-speed="out"]', state.network && state.network.out);

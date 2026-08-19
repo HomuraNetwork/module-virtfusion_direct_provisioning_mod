@@ -79,7 +79,6 @@ $lang['VirtfusionDirectProvisioningMod.!error.meta[package_id].valid'] = 'Invali
 $lang['VirtfusionDirectProvisioningMod.!error.server_id.valid'] = 'Invalid server ID.';
 $lang['VirtfusionDirectProvisioningMod.!error.label.valid'] = 'Invalid service label.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.numeric'] = 'The %1$s configurable option must be numeric.';
-$lang['VirtfusionDirectProvisioningMod.!error.configoption.os_template.required'] = 'Select a valid operatingSystemId when Auto Build is enabled.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.minimum'] = 'The ipv4 quantity must be at least 1.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.package_minimum'] = 'The ipv4 quantity cannot be lower than the package Default IPv4 value.';
 $lang['VirtfusionDirectProvisioningMod.!error.configoption.ipv4.additional_minimum'] = 'additionalIpv4 must be zero or greater.';
@@ -146,14 +145,10 @@ $lang['VirtfusionDirectProvisioningMod.!error.resource.partial'] = 'VirtFusion d
 $lang['VirtfusionDirectProvisioningMod.!error.service_extra.package'] = 'The selected package is not an available service extra for this parent service.';
 $lang['VirtfusionDirectProvisioningMod.!error.rebuild.template'] = 'Select an operating system currently available for this server.';
 
-// Client Errors
-$lang['VirtfusionDirectProvisioningMod.client.!error.host.valid'] = 'The hostname appears to be invalid.';
-
 // Service info
 $lang['VirtfusionDirectProvisioningMod.service_info.server_id'] = 'Server ID';
 $lang['VirtfusionDirectProvisioningMod.service_info.main_ip'] = 'Main IP Address';
 $lang['VirtfusionDirectProvisioningMod.service_info.base_ips'] = 'Base IP Addresses';
-$lang['VirtfusionDirectProvisioningMod.service_info.extra_ips'] = 'Extra IP Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.secondary_ipv4'] = 'Other IPv4 Addresses';
 $lang['VirtfusionDirectProvisioningMod.service_info.label'] = 'Label';
 $lang['VirtfusionDirectProvisioningMod.service_info.overview'] = 'Overview';
@@ -366,7 +361,9 @@ $lang['VirtfusionDirectProvisioningMod.ipAddresses.none'] = 'None assigned';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.refreshed'] = 'IP addresses refreshed.';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.removed'] = 'IP address removed.';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm'] = 'Remove this IP address?';
-$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_invalid'] = 'The selected additional IP address is unavailable.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_main_confirm'] = 'Remove the main IP address? This is an administrator override and may make the server unreachable.';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.main_badge'] = 'Main';
+$lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_invalid'] = 'The selected IPv4 address is unavailable.';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_forbidden'] = 'This service does not allow client IP removal.';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.remove_failed'] = 'VirtFusion could not remove the IP address.';
 $lang['VirtfusionDirectProvisioningMod.ipAddresses.update_failed'] = 'The IP was removed remotely, but Blesta could not update the service record.';
@@ -389,15 +386,5 @@ $lang['VirtfusionDirectProvisioningMod.service_extra.period_notice'] = 'This is 
 
 // Option Fields
 $lang['VirtfusionDirectProvisioningMod.option.extra_ip'] = 'ipv4';
-
-// Client Fields
-$lang['VirtfusionDirectProvisioningMod.option_fields.hostname.label'] = 'Hostname';
-$lang['VirtfusionDirectProvisioningMod.option_fields.hostname.tooltip'] = 'Please enter the name of your server using a fully qualified domain name. For example server.mydomain.com or web.mydomain.com';
-$lang['VirtfusionDirectProvisioningMod.option_fields.enable_ipv6'] = 'Enable IPv6';
-$lang['VirtfusionDirectProvisioningMod.option_fields.enable_ipv6.tooltip'] = 'Enable IPv6 during the initial automatic installation. You can also enable it during a later installation or reinstallation.';
-
-$lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses'] = 'Extra IP Addresses';
-$lang['VirtfusionDirectProvisioningMod.option_fields.extra_ip_addresses.tooltip'] = 'This field must be selecting if downgrading the number of extra IPs.';
-
 
 // Cron Tasks

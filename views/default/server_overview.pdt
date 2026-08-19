@@ -63,7 +63,7 @@ $vf_resources = [
                 <?php echo $this->Html->safe($server_info->status ?? $vf_empty); ?>
             </span>
             <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
-                <button type="submit" name="action" value="refresh_ips" class="btn btn-sm btn-outline-secondary" data-vf-state-refresh title="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" <?php echo $server_busy ? 'disabled' : ''; ?>><i class="fas fa-sync-alt" aria-hidden="true"></i></button>
+                <button type="submit" name="action" value="<?php echo !empty($is_admin) ? 'refresh_ips' : 'refresh_state'; ?>" class="btn btn-sm btn-outline-secondary" data-vf-state-refresh title="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.tabManage.refresh_state'); ?>" <?php echo $server_busy ? 'disabled' : ''; ?>><i class="fas fa-sync-alt" aria-hidden="true"></i></button>
             <?php $this->Form->end(); ?>
         </div>
     </div>

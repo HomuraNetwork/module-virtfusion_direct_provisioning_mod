@@ -11,7 +11,33 @@ $vf_show_ipv6 = $vf_ipv6_manageable || $vf_ipv6_enabled;
 $vf_ipv6_display = $vf_ipv6_enabled
     ? ($vf_network->ipv6_blocks ?? [])
     : ($vf_ipv6_manageable ? ($vf_network->ipv6_available_blocks ?? []) : []);
-$vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClientOs';
+$vf_is_admin = !empty($is_admin);
+$vf_os_prefix = $vf_is_admin ? 'virtfusionAdminOs' : 'virtfusionClientOs';
+$vf_saved_main = trim((string) ($service_fields->virtfusion_primary_ipv4 ?? ''));
+$vf_ipv4_display = array_values(array_unique((array) ($vf_network->ipv4 ?? [])));
+$vf_display_main = in_array($vf_saved_main, $vf_ipv4_display, true) ? $vf_saved_main : '';
+if ($vf_display_main === '' && !empty($vf_ipv4_display)) {
+    $vf_display_main = $vf_ipv4_display[0];
+    foreach ($vf_ipv4_display as $vf_address) {
+        $vf_packed_address = @inet_pton($vf_address);
+        $vf_packed_main = @inet_pton($vf_display_main);
+        if ($vf_packed_address !== false && $vf_packed_main !== false
+            && strcmp($vf_packed_address, $vf_packed_main) < 0) {
+            $vf_display_main = $vf_address;
+        }
+    }
+}
+if ($vf_display_main !== '') {
+    $vf_ipv4_display = array_merge(
+        [$vf_display_main],
+        array_values(array_filter($vf_ipv4_display, function ($address) use ($vf_display_main) {
+            return $address !== $vf_display_main;
+        }))
+    );
+}
+$vf_main_ipv4 = (string) ($vf_ipv4_display[0] ?? '');
+$vf_remove_confirm = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_confirm', true);
+$vf_remove_main_confirm = Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_main_confirm', true);
 ?>
 <div class="card mb-3">
     <div class="card-header">
@@ -21,12 +47,59 @@ $vf_os_prefix = isset($admin_server_url) ? 'virtfusionAdminOs' : 'virtfusionClie
         <div class="row g-3">
             <div class="<?php echo $vf_show_ipv6 ? 'col-md-6' : 'col-12'; ?>">
                 <div class="small text-muted mb-2"><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.ipv4'); ?></div>
-                    <span class="text-muted" data-vf-network-empty="ipv4" <?php echo empty($vf_network->ipv4) ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
-                    <ul class="list-unstyled mb-0" data-vf-network-list="ipv4" <?php echo empty($vf_network->ipv4) ? 'hidden' : ''; ?>>
-                        <?php foreach ($vf_network->ipv4 as $vf_address) { ?>
-                            <li class="mb-2"><code class="text-break"><?php echo $this->Html->safe($vf_address); ?></code></li>
+                    <span class="text-muted" data-vf-network-empty="ipv4" <?php echo empty($vf_ipv4_display) ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.none'); ?></span>
+                    <ul class="list-unstyled mb-0" data-vf-network-list="ipv4" data-vf-network-main-ip="<?php echo $this->Html->safe($vf_main_ipv4); ?>" <?php echo empty($vf_ipv4_display) ? 'hidden' : ''; ?>>
+                        <?php foreach ($vf_ipv4_display as $vf_address) { ?>
+                            <li class="mb-2 d-flex align-items-center justify-content-between gap-2" data-vf-network-address="<?php echo $this->Html->safe($vf_address); ?>">
+                                <span class="d-flex flex-wrap align-items-center gap-2">
+                                    <code class="text-break" data-vf-ip-address><?php echo $this->Html->safe($vf_address); ?></code>
+                                    <span class="badge bg-secondary badge-secondary" data-vf-ip-main <?php echo $vf_address === $vf_main_ipv4 ? '' : 'hidden'; ?>><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.main_badge'); ?></span>
+                                </span>
+                                <?php if ($vf_is_admin) { ?>
+                                    <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                                        <?php $this->Form->fieldHidden('ip_address', $vf_address); ?>
+                                        <button
+                                            type="submit"
+                                            name="action"
+                                            value="remove_ip"
+                                            class="btn btn-sm btn-outline-danger"
+                                            title="<?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>"
+                                            aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>"
+                                            data-vf-confirm="<?php echo $this->Html->safe($vf_address === $vf_main_ipv4 ? $vf_remove_main_confirm : $vf_remove_confirm); ?>"
+                                            data-vf-confirm-danger="true"
+                                        ><i class="fas fa-trash-alt" aria-hidden="true"></i></button>
+                                    <?php $this->Form->end(); ?>
+                                <?php } ?>
+                            </li>
                         <?php } ?>
                     </ul>
+                    <?php if ($vf_is_admin) { ?>
+                        <template
+                            data-vf-ipv4-remove-template
+                            data-vf-remove-confirm="<?php echo $this->Html->safe($vf_remove_confirm); ?>"
+                            data-vf-remove-main-confirm="<?php echo $this->Html->safe($vf_remove_main_confirm); ?>"
+                        >
+                            <li class="mb-2 d-flex align-items-center justify-content-between gap-2" data-vf-network-address="">
+                                <span class="d-flex flex-wrap align-items-center gap-2">
+                                    <code class="text-break" data-vf-ip-address></code>
+                                    <span class="badge bg-secondary badge-secondary" data-vf-ip-main hidden><?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.main_badge'); ?></span>
+                                </span>
+                                <?php $this->Form->create($_SERVER['REQUEST_URI']); ?>
+                                    <?php $this->Form->fieldHidden('ip_address', ''); ?>
+                                    <button
+                                        type="submit"
+                                        name="action"
+                                        value="remove_ip"
+                                        class="btn btn-sm btn-outline-danger"
+                                        title="<?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>"
+                                        aria-label="<?php $this->_('VirtfusionDirectProvisioningMod.ipAddresses.remove'); ?>"
+                                        data-vf-confirm=""
+                                        data-vf-confirm-danger="true"
+                                    ><i class="fas fa-trash-alt" aria-hidden="true"></i></button>
+                                <?php $this->Form->end(); ?>
+                            </li>
+                        </template>
+                    <?php } ?>
             </div>
             <?php if ($vf_show_ipv6) { ?>
             <div class="col-md-6">

@@ -498,6 +498,33 @@ assertSameValue(
     $network_groups['extra'],
     'IPv4 addresses beyond the package default must be treated as extras.'
 );
+assertSameValue(
+    ['192.0.2.10', '192.0.2.13', '192.0.2.11'],
+    callPrivate($module, 'orderIpv4Addresses', [[
+        '192.0.2.13',
+        '192.0.2.10',
+        '192.0.2.11'
+    ], '192.0.2.10']),
+    'The stored main IPv4 must remain first while the remote order of every other address is retained.'
+);
+assertSameValue(
+    ['192.0.2.3', '192.0.2.20', '192.0.2.10'],
+    callPrivate($module, 'orderIpv4Addresses', [[
+        '192.0.2.20',
+        '192.0.2.3',
+        '192.0.2.10'
+    ]]),
+    'A new or replaced main IPv4 must be the numerically smallest remote address.'
+);
+assertSameValue(
+    ['192.0.2.3', '192.0.2.20', '192.0.2.10'],
+    callPrivate($module, 'orderIpv4Addresses', [[
+        '192.0.2.20',
+        '192.0.2.3',
+        '192.0.2.10'
+    ], '192.0.2.99']),
+    'A stored main IPv4 that disappeared remotely must be replaced by the numerically smallest current address.'
+);
 $legacy_service = (object) ['fields' => [
     (object) ['key' => 'virtfusion_server_id', 'value' => '42', 'encrypted' => 0],
     (object) ['key' => 'virtfusion_ip', 'value' => '192.0.2.10', 'encrypted' => 0],
@@ -540,16 +567,10 @@ assertSameValue('192.0.2.12', $official_meta['additional_num_ips']['value'], 'Of
 assertSameValue(false, isset($official_meta['virtfusion_primary_ipv4']), 'Official sync must remove the mod IP key.');
 assertSameValue('built', $official_meta['virtfusion_build_state']['value'], 'Official sync must preserve safe mod state for rollback.');
 
-assertSameValue(false, callPrivate($module, 'shouldAutoBuild'), 'Auto build must use the safe disabled default.');
-assertSameValue(
-    true,
-    callPrivate($module, 'shouldAutoBuild', [['autoBuild' => 'true']]),
-    'The canonical autoBuild option must explicitly enable Auto Build.'
-);
 assertSameValue(
     false,
-    callPrivate($module, 'shouldAutoBuild', [['virtfusion-auto_build' => 'true']]),
-    'Legacy Auto Build option names must not be accepted.'
+    $module_reflection->hasMethod('shouldAutoBuild'),
+    'Automatic provisioning builds must not remain available.'
 );
 assertSameValue(
     false,
@@ -1095,14 +1116,10 @@ assertSameValue(
 assertSameValue('built', $build_module->Services->fields['virtfusion_build_state']['value'], 'Manual installation must persist build state.');
 assertSameValue(true, $build_module->Services->fields['virtfusion_password']['encrypted'], 'The new build password must stay encrypted.');
 $server_package = (object) ['meta' => (object) ['virtfusion-service_type' => 'server']];
-$add_rules = callPrivate($module, 'getServiceRules', [
-    ['configoptions' => ['autoBuild' => 'true']],
-    false,
-    $server_package
-]);
-assertSameValue(true, isset($add_rules['virtfusion_hostname']), 'Auto Build creation must require a hostname.');
+$add_rules = callPrivate($module, 'getServiceRules', [[], false, $server_package]);
+assertSameValue(false, isset($add_rules['virtfusion_hostname']), 'Service creation must not request a hostname.');
 $edit_rules = callPrivate($module, 'getServiceRules', [[], true, null]);
-assertSameValue(false, isset($edit_rules['virtfusion_hostname']), 'Service edits must not require a build hostname.');
+assertSameValue(false, isset($edit_rules['virtfusion_hostname']), 'Service edits must not request a hostname.');
 
 $create = callPrivate($module, 'applyCreateConfigOptions', [
     ['packageId' => 10, 'userId' => 20, 'hypervisorId' => 30],
@@ -1235,6 +1252,23 @@ $network_template = file_get_contents(__DIR__ . '/../views/default/network_addre
 $client_service_info_template = file_get_contents(__DIR__ . '/../views/default/client_service_info.pdt');
 $api_source = file_get_contents(__DIR__ . '/../apis/virtfusion_api.php');
 $server_api_source = file_get_contents(__DIR__ . '/../apis/commands/virtfusion_server.php');
+$add_service_source = '';
+if (preg_match('/public function addService\(.*?public function editService\(/s', $module_source, $matches)) {
+    $add_service_source = $matches[0];
+}
+assertSameValue(
+    true,
+    $add_service_source !== ''
+        && strpos($add_service_source, '->build(') === false
+        && strpos($add_service_source, "'awaiting_install'") !== false
+        && strpos($add_service_source, 'virtfusion_hostname') === false
+        && strpos($module_source, 'shouldAutoBuild') === false
+        && strpos($module_source, 'AUTO_BUILD_OPTION') === false
+        && strpos($module_source, "fieldText(\n                'virtfusion_hostname'") === false
+        && strpos($module_source, 'getHostnameValidationJS') === false
+        && strpos($language_source, 'option_fields.hostname') === false,
+    'Provisioning must only create an unbuilt server, with hostname and installation choices available exclusively on Manage.'
+);
 assertSameValue(
     true,
     strpos($api_source, "(int) (\$info['http_code'] ?? 0) === 422") !== false
@@ -1248,12 +1282,11 @@ assertSameValue(
         && strpos($module_source, "fieldSelect(\n            self::IPV6_AVAILABLE_FIELD") !== false
         && strpos($module_source, "isset(\$vars['staff_id']) && array_key_exists(self::IPV6_AVAILABLE_FIELD, \$vars)") !== false
         && strpos($module_source, "'key' => self::IPV6_AVAILABLE_FIELD") !== false
-        && strpos($module_source, "fieldCheckbox(\n                'virtfusion_enable_ipv6'") !== false
-        && strpos($module_source, "\$enable_ipv6 = \$virtfusion_has_ipv6") !== false
+        && strpos($module_source, "'virtfusion_enable_ipv6'") === false
         && strpos($module_source, "\$configured === null || \$configured === ''") !== false
         && strpos($module_source, "isset(\$create_config_options['ipv6'])") === false
-        && strpos($module_source, "in_array(\$name, ['vnc', 'ipv6'], true)") !== false,
-    'IPv6 capability must be copied from a default-enabled package field into staff-managed service metadata while legacy Configurable Options remain hidden.'
+        && strpos($module_source, "'vnc',\n            'ipv6'") !== false,
+    'IPv6 capability must be copied from the package into staff-managed service metadata while selection remains on the Manage installation form.'
 );
 assertSameValue(
     true,
@@ -1530,7 +1563,7 @@ assertSameValue(
     strpos($client_manage_template, 'server_actions.pdt') === false
         && strpos($admin_manage_template, 'server_actions.pdt') === false
         && strpos($server_overview_template, 'server_actions.pdt') !== false
-        && strpos($server_overview_template, 'value="refresh_ips"') !== false
+        && strpos($server_overview_template, "!empty(\$is_admin) ? 'refresh_ips' : 'refresh_state'") !== false
         && strpos($client_manage_template, 'server_os_management.pdt') > strpos($client_manage_template, 'network_addresses.pdt')
         && strpos($client_manage_template, 'server_more_features.pdt') > strpos($client_manage_template, 'server_os_management.pdt')
         && strpos($server_actions_template, 'data-vf-action-row="power"') !== false
@@ -1710,6 +1743,25 @@ assertSameValue(
     'Manage network must display normalized IP lists and inbound/outbound port speed.'
 );
 assertSameValue(
+    true,
+    strpos($module_source, 'array_slice($extra_ips, -$diff_qty)') !== false
+        && strpos($module_source, '$details_saved = $this->persistRebuildDetails(') !== false
+        && strpos($module_source, 'virtfusion_extra_ip_to_remove') === false
+        && strpos($language_source, 'option_fields.extra_ip_addresses') === false
+        && strpos($network_template, 'data-vf-ipv4-remove-template') !== false
+        && strpos($network_template, 'if ($vf_is_admin)') !== false
+        && strpos($network_template, 'remove_main_confirm') !== false
+        && strpos($manage_ajax_template, "input[name=\"ip_address\"]") !== false
+        && strpos($manage_ajax_template, 'template.content.firstElementChild.cloneNode(true)') !== false
+        && strpos($server_overview_template, "!empty(\$is_admin) ? 'refresh_ips' : 'refresh_state'") !== false,
+    'Only administrators may select an IPv4 to remove, while automatic downgrades remove extra addresses from the end of VirtFusion order without an Advanced Options selector.'
+);
+assertSameValue(
+    true,
+    strpos($module_source, "if (\$client) {\n            return Language::_('VirtfusionDirectProvisioningMod.ipAddresses.remove_forbidden'") !== false,
+    'Forged client requests must not be able to remove IPv4 addresses.'
+);
+assertSameValue(
     false,
     strpos($client_service_info_template, 'ip_data') !== false
         || strpos($client_service_info_template, 'virtfusion_primary_ipv4') !== false,
@@ -1783,13 +1835,14 @@ $resource_module->PackageOptions = new class {
         ];
     }
 };
-$hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1, true]);
-assertSameValue(true, strpos($hidden_options, '10') !== false, 'No-auto-build forms must hide the OS option.');
-assertSameValue(true, strpos($hidden_options, '11') !== false, 'No-auto-build forms must hide the VNC option.');
-assertSameValue(false, strpos($hidden_options, '12') !== false, 'Backup plan must remain available without auto build.');
+$hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1]);
+assertSameValue(true, strpos($hidden_options, '10') !== false, 'Service forms must hide the legacy OS option.');
+assertSameValue(true, strpos($hidden_options, '11') !== false, 'Service forms must hide the legacy VNC option.');
+assertSameValue(true, strpos($hidden_options, '13') !== false, 'Service forms must hide legacy autoBuild.');
+assertSameValue(false, strpos($hidden_options, '12') !== false, 'Backup plan must remain available during creation.');
 
-$edit_hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1, true, true]);
-assertSameValue(true, strpos($edit_hidden_options, '13') !== false, 'Service edits must hide autoBuild.');
+$edit_hidden_options = callPrivate($resource_module, 'provisioningOptionVisibilityHtml', [1, true]);
+assertSameValue(true, strpos($edit_hidden_options, '13') !== false, 'Service edits must hide legacy autoBuild.');
 assertSameValue(true, strpos($edit_hidden_options, '14') !== false, 'Service edits must hide create-only networkSpeed.');
 assertSameValue(false, strpos($edit_hidden_options, '12') !== false, 'Service edits must keep backupPlanId available.');
 assertSameValue(false, strpos($edit_hidden_options, '15') !== false, 'Service edits must keep the storage option editable.');

@@ -60,7 +60,7 @@ The module adds these Module Options:
 | Package ID | Server | VirtFusion package ID used to create the server. |
 | Block Size (GB) | Traffic Block | Default positive whole-number capacity purchased by this package. |
 
-Auto Build, operating system, backup plan, port speed, and server resource choices belong in Blesta **Configurable Options**, not Module Options.
+Backup plan, port speed, and server resource choices belong in Blesta **Configurable Options**, not Module Options. New services are always created unbuilt; customers install an operating system from the service Manage page.
 
 ## Configurable Options
 
@@ -72,7 +72,6 @@ Configurable Option names use the VirtFusion API field names. The module does no
 
 | Name | Suggested type | Use |
 | --- | --- | --- |
-| `autoBuild` | Dropdown | Create only. `true` calls the Build API; `false` creates the server without building. If omitted, the default is `false`. |
 | `networkSpeed` | Quantity or Dropdown | Create only. Module-provided combined speed applied to both `networkSpeedInbound` and `networkSpeedOutbound`. Prefer values such as `100 Mbps` or `1 Gbps`; bare numbers are treated as raw API values. |
 | `additionalIpv4` | Quantity | Adds IPv4 addresses to the Module Option **Default IPv4** quantity. Ignored when an absolute `ipv4` value is supplied. |
 | `additionalTraffic` | Quantity or Dropdown | Adds GB to the selected VirtFusion package's base traffic. Ignored when an absolute `traffic` value is supplied. |
@@ -80,7 +79,7 @@ Configurable Option names use the VirtFusion API field names. The module does no
 | `cpuThrottle` | Quantity or Dropdown | CPU throttle percentage from 0 to 99, applied after creation and changeable later. |
 | `addon_traffic` | Quantity or Dropdown | Traffic Block capacity in GB. For Traffic Block products this overrides `traffic` and the package **Block Size (GB)**. |
 
-`autoBuild` and all Build API options are hidden after service creation. To make a package always build, attach an `autoBuild` option whose only value is `true`. Omit it for a no-build package.
+Legacy `autoBuild`, `operatingSystemId`, `sshKeys`, `email`, and `swap` options are ignored and hidden on all service forms. Installation settings are selected from the service Manage page after provisioning.
 
 ### Create Server API options
 
@@ -109,18 +108,7 @@ Use `additionalIpv4` for a normally priced Extra IP quantity. Use `ipv4` only wh
 
 `networkSpeed`, `networkSpeedInbound`, `networkSpeedOutbound`, placement, profiles, and storage layout are create-only. They are hidden on service-edit forms because the current VirtFusion API does not provide matching edit operations.
 
-### Build Server API options
-
-These names are used only when `autoBuild=true`:
-
-| Name | Use |
-| --- | --- |
-| `operatingSystemId` | Required VirtFusion operating-system template ID. |
-| `sshKeys` | Comma-separated VirtFusion SSH-key IDs. |
-| `email` | Enable or disable the VirtFusion build email. |
-| `swap` | Swap value passed to VirtFusion. |
-
-When `autoBuild` is absent or `false`, the order form hides hostname, `operatingSystemId`, `sshKeys`, `email`, and `swap`. Blesta still stores the VirtFusion server ID so the unbuilt server can be managed later. The package module's **IPv6 Available** field is copied into each new service as `virtfusion_ipv6_available`; legacy `ipv6` Configurable Options are ignored and hidden.
+Blesta stores the VirtFusion server ID immediately after creation so the unbuilt server can be managed from the client or administrator Manage page. The package module's **IPv6 Available** field is copied into each new service as `virtfusion_ipv6_available`; legacy `ipv6` Configurable Options are ignored and hidden.
 
 Staff can change this capability for an individual service under Advanced Options. When the service has IPv6, clients may choose to enable it during installation or reinstallation. The client cannot change whether the service has the capability, and IPv6 already enabled in VirtFusion is never disabled by a reinstall.
 
